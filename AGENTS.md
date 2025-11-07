@@ -1,3 +1,4 @@
+**Feature List**
 Identity & Rejoin
 - Backend: Issue UUID; map token→name, optional seat/table; in-memory only.
 - Frontend: One-time name prompt; store token; auto-attach; on load, reopen current table if seated.
@@ -44,3 +45,21 @@ Notes:
 - Seats taken mid-hand do not receive cards until the next hand (poker-correct, keeps dealing simple).
 - No queue/waitlist; Join is disabled when full; users wait in lobby until a seat frees.
 - Equal starting stacks on every sit; no top-up, no rebuy; stacks diverge naturally across hands.
+
+**Technical Stack**
+Backend Go (WebSocket + HTTP static SPA); in-memory state; structured logs.
+Frontend React + Vite + TypeScript; WebSocket manager; minimal lobby/table UI.
+
+**Build / Lint / Test**
+Backend build: `go build ./cmd/server`; run: `go run ./cmd/server`.
+Backend tests: `go test ./...`; single: `go test -run TestName ./pkg/path`.
+Backend lint: `golangci-lint run`; format: `go fmt ./...` & `go vet ./...`.
+Frontend install: `npm install`; dev: `npm run dev`; build: `npm run build`.
+Frontend tests: `npm run test`; single: `npm run test -- -t "pattern"`; lint: `npm run lint`; format: `npm run format`.
+
+**Style & Naming**
+Go: imports grouped std/third/internal; exported PascalCase; private lowerCamel; constants PascalCase (acronyms ALLCAPS); wrap errors `fmt.Errorf("ctx: %w", err)`; no panic; small focused packages; avoid global mutable state.
+React/TS: functional components + hooks; explicit interfaces/types; no default exports; semantic JSX; narrow props; error codes→toast; pure logic outside components; Prettier/ESLint fix;
+
+**TDD**
+write failing test, minimal green, refactor, repeat.
