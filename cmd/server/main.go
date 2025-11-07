@@ -12,19 +12,49 @@ import (
 )
 
 func main() {
+	// Read configuration from environment variables
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	logLevel := os.Getenv("LOG_LEVEL")
+	if logLevel == "" {
+		logLevel = "info"
+	}
+
+	// Parse log level
+	var level slog.Level
+	switch logLevel {
+	case "debug":
+		level = slog.LevelDebug
+	case "info":
+		level = slog.LevelInfo
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	default:
+		level = slog.LevelInfo
+	}
+
 	// Set up structured logging with JSON format
-	handler := slog.NewJSONHandler(os.Stdout, nil)
+	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: level,
+	})
 	logger := slog.New(handler)
 	slog.SetDefault(logger)
 
-	logger.Info("starting poker application")
+	// Log the configuration on startup
+	logger.Info("starting poker application", "port", port, "log_level", logLevel)
 
 	// Create and start the server
 	srv := server.NewServer(logger)
 
 	// Start server in a goroutine
+	addr := "127.0.0.1:" + port
 	go func() {
-		if err := srv.Start("127.0.0.1:8080"); err != nil {
+		if err := srv.Start(addr); err != nil {
 			logger.Error("server error", "error", err)
 		}
 	}()

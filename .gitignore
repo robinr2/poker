@@ -52,3 +52,4 @@ Thumbs.db
 
 # Generated files
 *.gen.go
+web/static/

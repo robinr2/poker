@@ -30,7 +30,10 @@ func NewServer(logger *slog.Logger) *Server {
 		logger: logger,
 		upgrader: &websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
-				// Allow all origins for development
+				// CheckOrigin: true allows all origins for development.
+				// SECURITY: In production, this must be restricted to specific origins
+				// to prevent Cross-Site WebSocket Hijacking (CSWSH) attacks.
+				// Use a whitelist of allowed origins in production.
 				return true
 			},
 		},
@@ -94,8 +97,6 @@ func (s *Server) serveStaticHandler() http.HandlerFunc {
 		indexPath := "web/static/index.html"
 		if _, err := os.Stat(indexPath); err == nil {
 			s.logger.Debug("serving SPA fallback", "indexPath", indexPath)
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.WriteHeader(http.StatusOK)
 			http.ServeFile(w, r, indexPath)
 			return
 		}
