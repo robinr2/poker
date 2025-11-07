@@ -14,12 +14,12 @@ import (
 
 // Server represents the HTTP server with router and WebSocket support.
 type Server struct {
-	router      chi.Router
-	logger      *slog.Logger
-	upgrader    *websocket.Upgrader
-	httpServer  *http.Server
-	hub         *Hub
-	mu          sync.RWMutex
+	router     chi.Router
+	logger     *slog.Logger
+	upgrader   *websocket.Upgrader
+	httpServer *http.Server
+	hub        *Hub
+	mu         sync.RWMutex
 }
 
 // NewServer creates and returns a new Server instance.
@@ -61,7 +61,7 @@ func (s *Server) RegisterRoutes() {
 func (s *Server) serveStaticFiles() {
 	// Create a handler for serving static files
 	staticHandler := s.serveStaticHandler()
-	
+
 	// Mount the handler for both root and all subpaths
 	s.router.Get("/", staticHandler)
 	s.router.Get("/*", staticHandler)
@@ -73,26 +73,26 @@ func (s *Server) serveStaticHandler() http.HandlerFunc {
 		// Get the requested file path
 		path := r.URL.Path
 		s.logger.Debug("static handler", "path", path)
-		
+
 		// Handle root path
 		if path == "/" {
 			path = "/index.html"
 		}
-		
+
 		// Try to open the file from web/static
 		filePath := "web/static" + path
 		s.logger.Debug("checking file", "filePath", filePath)
 		fileInfo, err := os.Stat(filePath)
-		
+
 		if err == nil && !fileInfo.IsDir() {
 			// File exists and is not a directory, serve it
 			s.logger.Debug("serving file", "filePath", filePath)
 			http.ServeFile(w, r, filePath)
 			return
 		}
-		
+
 		s.logger.Debug("file not found, trying SPA fallback", "err", err)
-		
+
 		// File doesn't exist, try to serve index.html (SPA fallback)
 		indexPath := "web/static/index.html"
 		if _, err := os.Stat(indexPath); err == nil {
@@ -100,7 +100,7 @@ func (s *Server) serveStaticHandler() http.HandlerFunc {
 			http.ServeFile(w, r, indexPath)
 			return
 		}
-		
+
 		s.logger.Debug("no SPA fallback available")
 		// No index.html fallback available
 		http.Error(w, "404 page not found", http.StatusNotFound)
@@ -117,7 +117,7 @@ func (s *Server) Start(addr string) error {
 	s.mu.Unlock()
 
 	s.logger.Info("starting server", "addr", addr)
-	
+
 	err := s.httpServer.ListenAndServe()
 	if err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("server error: %w", err)
@@ -142,4 +142,3 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func (s *Server) Router() chi.Router {
 	return s.router
 }
-

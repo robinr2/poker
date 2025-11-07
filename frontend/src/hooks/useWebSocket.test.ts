@@ -1,7 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useWebSocket } from './useWebSocket';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
 import type { WebSocketService } from '../services/WebSocketService';
+
+import { useWebSocket } from './useWebSocket';
 
 // Mock instance that will be reused across tests
 let mockServiceInstance: Partial<WebSocketService>;
@@ -23,7 +25,7 @@ vi.mock('../services/WebSocketService', () => {
 function createMockService(): Partial<WebSocketService> {
   mockStatusCallbacks = [];
   mockMessageCallbacks = [];
-  
+
   return {
     connect: vi.fn().mockResolvedValue(undefined),
     disconnect: vi.fn(),
@@ -58,7 +60,7 @@ describe('useWebSocket', () => {
 
   it('should initialize with disconnected status', () => {
     const { result } = renderHook(() => useWebSocket('ws://localhost:8080/ws'));
-    
+
     expect(result.current.status).toBe('disconnected');
   });
 
@@ -71,7 +73,9 @@ describe('useWebSocket', () => {
   });
 
   it('should disconnect on unmount', async () => {
-    const { unmount } = renderHook(() => useWebSocket('ws://localhost:8080/ws'));
+    const { unmount } = renderHook(() =>
+      useWebSocket('ws://localhost:8080/ws')
+    );
 
     await waitFor(() => {
       expect(mockServiceInstance.connect).toHaveBeenCalled();
@@ -84,12 +88,12 @@ describe('useWebSocket', () => {
 
   it('should update status when connection status changes', async () => {
     mockServiceInstance.getStatus.mockReturnValue('connecting');
-    
+
     const { result } = renderHook(() => useWebSocket('ws://localhost:8080/ws'));
 
     // Simulate status change
     act(() => {
-      mockStatusCallbacks.forEach(cb => cb('connecting'));
+      mockStatusCallbacks.forEach((cb) => cb('connecting'));
     });
 
     await waitFor(() => {
@@ -99,14 +103,14 @@ describe('useWebSocket', () => {
 
   it('should update lastMessage when a message is received', async () => {
     mockServiceInstance.getStatus.mockReturnValue('connected');
-    
+
     const { result } = renderHook(() => useWebSocket('ws://localhost:8080/ws'));
 
     const testMessage = JSON.stringify({ type: 'test', data: 'hello' });
 
     // Simulate message received
     act(() => {
-      mockMessageCallbacks.forEach(cb => cb(testMessage));
+      mockMessageCallbacks.forEach((cb) => cb(testMessage));
     });
 
     await waitFor(() => {
@@ -116,7 +120,7 @@ describe('useWebSocket', () => {
 
   it('should send message through service', async () => {
     mockServiceInstance.getStatus.mockReturnValue('connected');
-    
+
     const { result } = renderHook(() => useWebSocket('ws://localhost:8080/ws'));
 
     await waitFor(() => {
@@ -142,7 +146,7 @@ describe('useWebSocket', () => {
 
     // Simulate connection attempt
     act(() => {
-      mockStatusCallbacks.forEach(cb => cb('connecting'));
+      mockStatusCallbacks.forEach((cb) => cb('connecting'));
     });
 
     await waitFor(() => {
@@ -151,7 +155,7 @@ describe('useWebSocket', () => {
 
     // Simulate successful connection
     act(() => {
-      mockStatusCallbacks.forEach(cb => cb('connected'));
+      mockStatusCallbacks.forEach((cb) => cb('connected'));
     });
 
     await waitFor(() => {
@@ -161,7 +165,7 @@ describe('useWebSocket', () => {
 
   it('should handle received messages correctly', async () => {
     mockServiceInstance.getStatus.mockReturnValue('connected');
-    
+
     const { result } = renderHook(() => useWebSocket('ws://localhost:8080/ws'));
 
     const messages = [
@@ -171,8 +175,8 @@ describe('useWebSocket', () => {
 
     // Simulate multiple messages
     act(() => {
-      messages.forEach(msg => {
-        mockMessageCallbacks.forEach(cb => cb(msg));
+      messages.forEach((msg) => {
+        mockMessageCallbacks.forEach((cb) => cb(msg));
       });
     });
 
@@ -182,41 +186,43 @@ describe('useWebSocket', () => {
     });
   });
 
-   it('should provide sendMessage function that works when connected', async () => {
-     mockServiceInstance.getStatus.mockReturnValue('connected');
-     
-     const { result } = renderHook(() => useWebSocket('ws://localhost:8080/ws'));
+  it('should provide sendMessage function that works when connected', async () => {
+    mockServiceInstance.getStatus.mockReturnValue('connected');
 
-     await waitFor(() => {
-       expect(mockServiceInstance.connect).toHaveBeenCalled();
-     });
+    const { result } = renderHook(() => useWebSocket('ws://localhost:8080/ws'));
 
-     const testMessage = JSON.stringify({ type: 'action', data: 'test' });
-     
-     act(() => {
-       result.current.sendMessage(testMessage);
-     });
+    await waitFor(() => {
+      expect(mockServiceInstance.connect).toHaveBeenCalled();
+    });
 
-     expect(mockServiceInstance.send).toHaveBeenCalledWith(testMessage);
-   });
+    const testMessage = JSON.stringify({ type: 'action', data: 'test' });
 
-   it('should unsubscribe from callbacks on unmount to prevent memory leaks', async () => {
-     const { unmount } = renderHook(() => useWebSocket('ws://localhost:8080/ws'));
+    act(() => {
+      result.current.sendMessage(testMessage);
+    });
 
-     await waitFor(() => {
-       expect(mockServiceInstance.connect).toHaveBeenCalled();
-     });
+    expect(mockServiceInstance.send).toHaveBeenCalledWith(testMessage);
+  });
 
-     // Verify callbacks are registered
-     expect(mockStatusCallbacks.length).toBe(1);
-     expect(mockMessageCallbacks.length).toBe(1);
+  it('should unsubscribe from callbacks on unmount to prevent memory leaks', async () => {
+    const { unmount } = renderHook(() =>
+      useWebSocket('ws://localhost:8080/ws')
+    );
 
-     // Unmount component
-     unmount();
+    await waitFor(() => {
+      expect(mockServiceInstance.connect).toHaveBeenCalled();
+    });
 
-     // Verify callbacks are cleaned up
-     expect(mockStatusCallbacks.length).toBe(0);
-     expect(mockMessageCallbacks.length).toBe(0);
-     expect(mockServiceInstance.disconnect).toHaveBeenCalled();
-   });
- });
+    // Verify callbacks are registered
+    expect(mockStatusCallbacks.length).toBe(1);
+    expect(mockMessageCallbacks.length).toBe(1);
+
+    // Unmount component
+    unmount();
+
+    // Verify callbacks are cleaned up
+    expect(mockStatusCallbacks.length).toBe(0);
+    expect(mockMessageCallbacks.length).toBe(0);
+    expect(mockServiceInstance.disconnect).toHaveBeenCalled();
+  });
+});

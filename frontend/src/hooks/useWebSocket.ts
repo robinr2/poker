@@ -1,5 +1,9 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { WebSocketService, type ConnectionStatus } from '../services/WebSocketService';
+
+import {
+  WebSocketService,
+  type ConnectionStatus,
+} from '../services/WebSocketService';
 
 interface UseWebSocketReturn {
   status: ConnectionStatus;

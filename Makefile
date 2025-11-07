@@ -1,5 +1,6 @@
 .PHONY: dev-backend dev-frontend build-frontend build-backend build test clean install-tools help
 .PHONY: docker-dev docker-down docker-build docker-test docker-clean docker-logs
+.PHONY: lint lint-fix format format-check
 
 # Default target
 help:
@@ -13,6 +14,10 @@ help:
 	@echo "  build-backend    - Build Go binary to bin/poker"
 	@echo "  build            - Build both frontend and backend"
 	@echo "  test             - Run all tests (Go + Frontend)"
+	@echo "  lint             - Run all linters (Go + Frontend)"
+	@echo "  lint-fix         - Fix ESLint issues in frontend"
+	@echo "  format           - Format code with Prettier"
+	@echo "  format-check     - Check code formatting with Prettier"
 	@echo "  clean            - Remove bin/ and web/static/"
 	@echo "  install-tools    - Install development tools (if any)"
 	@echo ""
@@ -47,6 +52,22 @@ build: build-frontend build-backend
 test:
 	go test ./internal/... -v
 	cd frontend && npm test
+
+# Run all linters
+lint:
+	./scripts/lint.sh
+
+# Fix ESLint issues
+lint-fix:
+	cd frontend && npm run lint:fix
+
+# Format code with Prettier
+format:
+	cd frontend && npm run format
+
+# Check code formatting with Prettier
+format-check:
+	cd frontend && npm run format:check
 
 # Clean build artifacts
 clean:

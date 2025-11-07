@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
 import { WebSocketService } from './WebSocketService';
 
 describe('WebSocketService', () => {
@@ -49,12 +50,12 @@ describe('WebSocketService', () => {
     }
   }
 
-   beforeEach(() => {
-     // Replace global WebSocket with mock
-     createdMockSockets = [];
-     originalWebSocket = global.WebSocket as typeof WebSocket;
-     global.WebSocket = MockWebSocket as typeof WebSocket;
-   });
+  beforeEach(() => {
+    // Replace global WebSocket with mock
+    createdMockSockets = [];
+    originalWebSocket = global.WebSocket as typeof WebSocket;
+    global.WebSocket = MockWebSocket as typeof WebSocket;
+  });
 
   afterEach(() => {
     // Restore original WebSocket
@@ -65,38 +66,38 @@ describe('WebSocketService', () => {
   describe('connect', () => {
     it('should establish a WebSocket connection', async () => {
       vi.useFakeTimers();
-      
+
       service = new WebSocketService('ws://localhost:8080/ws');
       const connectPromise = service.connect();
 
       expect(service.getStatus()).toBe('connecting');
-      
+
       // Get the mock socket that was just created
       const mockSocket = createdMockSockets[0];
       expect(mockSocket).toBeDefined();
-      
+
       // Simulate connection opening
       mockSocket.simulateOpen();
-      
+
       await connectPromise;
       expect(service.getStatus()).toBe('connected');
-      
+
       vi.useRealTimers();
     });
 
     it('should fail if connection cannot be established', async () => {
       vi.useFakeTimers();
-      
+
       service = new WebSocketService('ws://localhost:8080/ws');
       const connectPromise = service.connect();
 
       const mockSocket = createdMockSockets[0];
-      
+
       // Simulate connection error
       mockSocket.simulateError();
-      
+
       await expect(connectPromise).rejects.toThrow();
-      
+
       vi.useRealTimers();
     });
 
@@ -110,12 +111,12 @@ describe('WebSocketService', () => {
   describe('disconnect', () => {
     it('should close the WebSocket connection', async () => {
       vi.useFakeTimers();
-      
+
       service = new WebSocketService('ws://localhost:8080/ws');
-      
+
       const connectPromise = service.connect();
       const mockSocket = createdMockSockets[0];
-      
+
       mockSocket.simulateOpen();
 
       await connectPromise;
@@ -123,7 +124,7 @@ describe('WebSocketService', () => {
 
       service.disconnect();
       expect(service.getStatus()).toBe('disconnected');
-      
+
       vi.useRealTimers();
     });
 
@@ -136,27 +137,27 @@ describe('WebSocketService', () => {
   describe('send', () => {
     it('should send a message through the WebSocket', async () => {
       vi.useFakeTimers();
-      
+
       service = new WebSocketService('ws://localhost:8080/ws');
-      
+
       const connectPromise = service.connect();
       const mockSocket = createdMockSockets[0];
-      
+
       mockSocket.simulateOpen();
 
       await connectPromise;
-      
+
       const testMessage = JSON.stringify({ type: 'test', data: 'hello' });
       service.send(testMessage);
 
       expect(mockSocket.messages).toContain(testMessage);
-      
+
       vi.useRealTimers();
     });
 
     it('should throw if trying to send when not connected', () => {
       service = new WebSocketService('ws://localhost:8080/ws');
-      
+
       const testMessage = JSON.stringify({ type: 'test', data: 'hello' });
       expect(() => service.send(testMessage)).toThrow();
     });
@@ -165,7 +166,7 @@ describe('WebSocketService', () => {
   describe('onMessage', () => {
     it('should call callback when a message is received', async () => {
       vi.useFakeTimers();
-      
+
       service = new WebSocketService('ws://localhost:8080/ws');
       const messageCallback = vi.fn();
 
@@ -173,7 +174,7 @@ describe('WebSocketService', () => {
 
       const connectPromise = service.connect();
       const mockSocket = createdMockSockets[0];
-      
+
       mockSocket.simulateOpen();
 
       await connectPromise;
@@ -182,141 +183,141 @@ describe('WebSocketService', () => {
       mockSocket.simulateMessage(testData);
 
       expect(messageCallback).toHaveBeenCalledWith(testData);
-      
+
       vi.useRealTimers();
     });
 
-     it('should support multiple message listeners', async () => {
-       vi.useFakeTimers();
-       
-       service = new WebSocketService('ws://localhost:8080/ws');
-       const callback1 = vi.fn();
-       const callback2 = vi.fn();
+    it('should support multiple message listeners', async () => {
+      vi.useFakeTimers();
 
-       service.onMessage(callback1);
-       service.onMessage(callback2);
+      service = new WebSocketService('ws://localhost:8080/ws');
+      const callback1 = vi.fn();
+      const callback2 = vi.fn();
 
-       const connectPromise = service.connect();
-       const mockSocket = createdMockSockets[0];
-       
-       mockSocket.simulateOpen();
+      service.onMessage(callback1);
+      service.onMessage(callback2);
 
-       await connectPromise;
+      const connectPromise = service.connect();
+      const mockSocket = createdMockSockets[0];
 
-       const testData = JSON.stringify({ type: 'test' });
-       mockSocket.simulateMessage(testData);
+      mockSocket.simulateOpen();
 
-       expect(callback1).toHaveBeenCalledWith(testData);
-       expect(callback2).toHaveBeenCalledWith(testData);
-       
-       vi.useRealTimers();
-     });
+      await connectPromise;
 
-     it('should return unsubscribe function that removes callback', async () => {
-       vi.useFakeTimers();
-       
-       service = new WebSocketService('ws://localhost:8080/ws');
-       const callback1 = vi.fn();
-       const callback2 = vi.fn();
+      const testData = JSON.stringify({ type: 'test' });
+      mockSocket.simulateMessage(testData);
 
-       const unsubscribe1 = service.onMessage(callback1);
-       service.onMessage(callback2);
+      expect(callback1).toHaveBeenCalledWith(testData);
+      expect(callback2).toHaveBeenCalledWith(testData);
 
-       const connectPromise = service.connect();
-       const mockSocket = createdMockSockets[0];
-       
-       mockSocket.simulateOpen();
+      vi.useRealTimers();
+    });
 
-       await connectPromise;
+    it('should return unsubscribe function that removes callback', async () => {
+      vi.useFakeTimers();
 
-       // First message - both callbacks should fire
-       const testData1 = JSON.stringify({ type: 'test1' });
-       mockSocket.simulateMessage(testData1);
+      service = new WebSocketService('ws://localhost:8080/ws');
+      const callback1 = vi.fn();
+      const callback2 = vi.fn();
 
-       expect(callback1).toHaveBeenCalledWith(testData1);
-       expect(callback2).toHaveBeenCalledWith(testData1);
+      const unsubscribe1 = service.onMessage(callback1);
+      service.onMessage(callback2);
 
-       // Unsubscribe callback1
-       unsubscribe1();
+      const connectPromise = service.connect();
+      const mockSocket = createdMockSockets[0];
 
-       // Second message - only callback2 should fire
-       const testData2 = JSON.stringify({ type: 'test2' });
-       mockSocket.simulateMessage(testData2);
+      mockSocket.simulateOpen();
 
-       expect(callback1).toHaveBeenCalledTimes(1);
-       expect(callback2).toHaveBeenCalledTimes(2);
-       expect(callback2).toHaveBeenLastCalledWith(testData2);
-       
-       vi.useRealTimers();
-     });
-   });
+      await connectPromise;
 
-   describe('onStatusChange', () => {
-     it('should call callback when connection status changes', async () => {
-       vi.useFakeTimers();
-       
-       service = new WebSocketService('ws://localhost:8080/ws');
-       const statusCallback = vi.fn();
+      // First message - both callbacks should fire
+      const testData1 = JSON.stringify({ type: 'test1' });
+      mockSocket.simulateMessage(testData1);
 
-       service.onStatusChange(statusCallback);
+      expect(callback1).toHaveBeenCalledWith(testData1);
+      expect(callback2).toHaveBeenCalledWith(testData1);
 
-       const connectPromise = service.connect();
-       expect(statusCallback).toHaveBeenCalledWith('connecting');
+      // Unsubscribe callback1
+      unsubscribe1();
 
-       const mockSocket = createdMockSockets[0];
-       
-       mockSocket.simulateOpen();
+      // Second message - only callback2 should fire
+      const testData2 = JSON.stringify({ type: 'test2' });
+      mockSocket.simulateMessage(testData2);
 
-       await connectPromise;
-       expect(statusCallback).toHaveBeenCalledWith('connected');
+      expect(callback1).toHaveBeenCalledTimes(1);
+      expect(callback2).toHaveBeenCalledTimes(2);
+      expect(callback2).toHaveBeenLastCalledWith(testData2);
 
-       service.disconnect();
-       expect(statusCallback).toHaveBeenCalledWith('disconnected');
-       
-       vi.useRealTimers();
-     });
+      vi.useRealTimers();
+    });
+  });
 
-     it('should return unsubscribe function that removes callback', async () => {
-       vi.useFakeTimers();
-       
-       service = new WebSocketService('ws://localhost:8080/ws');
-       const callback1 = vi.fn();
-       const callback2 = vi.fn();
+  describe('onStatusChange', () => {
+    it('should call callback when connection status changes', async () => {
+      vi.useFakeTimers();
 
-       const unsubscribe1 = service.onStatusChange(callback1);
-       service.onStatusChange(callback2);
+      service = new WebSocketService('ws://localhost:8080/ws');
+      const statusCallback = vi.fn();
 
-       const connectPromise = service.connect();
-       expect(callback1).toHaveBeenCalledWith('connecting');
-       expect(callback2).toHaveBeenCalledWith('connecting');
+      service.onStatusChange(statusCallback);
 
-       const mockSocket = createdMockSockets[0];
-       
-       mockSocket.simulateOpen();
+      const connectPromise = service.connect();
+      expect(statusCallback).toHaveBeenCalledWith('connecting');
 
-       await connectPromise;
+      const mockSocket = createdMockSockets[0];
 
-       expect(callback1).toHaveBeenCalledWith('connected');
-       expect(callback2).toHaveBeenCalledWith('connected');
+      mockSocket.simulateOpen();
 
-       // Unsubscribe callback1
-       unsubscribe1();
+      await connectPromise;
+      expect(statusCallback).toHaveBeenCalledWith('connected');
 
-       service.disconnect();
+      service.disconnect();
+      expect(statusCallback).toHaveBeenCalledWith('disconnected');
 
-       // After disconnect, only callback2 should be called
-       expect(callback1).toHaveBeenCalledTimes(2);
-       expect(callback2).toHaveBeenCalledTimes(3);
-       expect(callback2).toHaveBeenLastCalledWith('disconnected');
-       
-       vi.useRealTimers();
-     });
-   });
+      vi.useRealTimers();
+    });
+
+    it('should return unsubscribe function that removes callback', async () => {
+      vi.useFakeTimers();
+
+      service = new WebSocketService('ws://localhost:8080/ws');
+      const callback1 = vi.fn();
+      const callback2 = vi.fn();
+
+      const unsubscribe1 = service.onStatusChange(callback1);
+      service.onStatusChange(callback2);
+
+      const connectPromise = service.connect();
+      expect(callback1).toHaveBeenCalledWith('connecting');
+      expect(callback2).toHaveBeenCalledWith('connecting');
+
+      const mockSocket = createdMockSockets[0];
+
+      mockSocket.simulateOpen();
+
+      await connectPromise;
+
+      expect(callback1).toHaveBeenCalledWith('connected');
+      expect(callback2).toHaveBeenCalledWith('connected');
+
+      // Unsubscribe callback1
+      unsubscribe1();
+
+      service.disconnect();
+
+      // After disconnect, only callback2 should be called
+      expect(callback1).toHaveBeenCalledTimes(2);
+      expect(callback2).toHaveBeenCalledTimes(3);
+      expect(callback2).toHaveBeenLastCalledWith('disconnected');
+
+      vi.useRealTimers();
+    });
+  });
 
   describe('auto-reconnect', () => {
     it('should attempt to reconnect with exponential backoff', async () => {
       vi.useFakeTimers();
-      
+
       service = new WebSocketService('ws://localhost:8080/ws');
       const statusCallback = vi.fn();
       service.onStatusChange(statusCallback);
@@ -326,7 +327,7 @@ describe('WebSocketService', () => {
       expect(statusCallback).toHaveBeenCalledWith('connecting');
 
       const mockSocket = createdMockSockets[0];
-      
+
       // Simulate connection error
       mockSocket.simulateError();
 
@@ -346,7 +347,7 @@ describe('WebSocketService', () => {
 
     it('should cap reconnection backoff at 30 seconds', async () => {
       vi.useFakeTimers();
-      
+
       service = new WebSocketService('ws://localhost:8080/ws');
       const statusCallback = vi.fn();
       service.onStatusChange(statusCallback);
@@ -355,10 +356,10 @@ describe('WebSocketService', () => {
       for (let i = 0; i < 3; i++) {
         const promise = service.connect().catch(() => {});
         const mockSocket = createdMockSockets[createdMockSockets.length - 1];
-        
+
         mockSocket.simulateError();
         vi.advanceTimersByTime(100);
-        
+
         await promise;
       }
 
@@ -371,16 +372,16 @@ describe('WebSocketService', () => {
   describe('getStatus', () => {
     it('should return the current connection status', async () => {
       vi.useFakeTimers();
-      
+
       service = new WebSocketService('ws://localhost:8080/ws');
-      
+
       expect(service.getStatus()).toBe('disconnected');
 
       const connectPromise = service.connect();
       expect(service.getStatus()).toBe('connecting');
 
       const mockSocket = createdMockSockets[0];
-      
+
       mockSocket.simulateOpen();
 
       await connectPromise;
@@ -388,7 +389,7 @@ describe('WebSocketService', () => {
 
       service.disconnect();
       expect(service.getStatus()).toBe('disconnected');
-      
+
       vi.useRealTimers();
     });
   });

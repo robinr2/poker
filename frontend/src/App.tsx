@@ -1,36 +1,36 @@
-import { useWebSocket } from './hooks/useWebSocket'
-import './App.css'
+import { useWebSocket } from './hooks/useWebSocket';
+import './App.css';
 
 function App() {
-  const { status, lastMessage } = useWebSocket('ws://localhost:8080/ws')
+  const { status, lastMessage } = useWebSocket('ws://localhost:8080/ws');
 
   const getStatusColor = (): string => {
     switch (status) {
       case 'connected':
-        return '#10b981'
+        return '#10b981';
       case 'connecting':
-        return '#f59e0b'
+        return '#f59e0b';
       case 'error':
-        return '#ef4444'
+        return '#ef4444';
       case 'disconnected':
       default:
-        return '#6b7280'
+        return '#6b7280';
     }
-  }
+  };
 
   const getStatusText = (): string => {
     switch (status) {
       case 'connected':
-        return 'Connected'
+        return 'Connected';
       case 'connecting':
-        return 'Connecting...'
+        return 'Connecting...';
       case 'error':
-        return 'Error'
+        return 'Error';
       case 'disconnected':
       default:
-        return 'Disconnected'
+        return 'Disconnected';
     }
-  }
+  };
 
   return (
     <div className="app">
@@ -48,14 +48,18 @@ function App() {
       <main className="app-main">
         <div className="status-card">
           <h2>WebSocket Status</h2>
-          <p>Status: <strong>{status}</strong></p>
+          <p>
+            Status: <strong>{status}</strong>
+          </p>
           {lastMessage && (
-            <p>Last Message: <code>{lastMessage.substring(0, 100)}</code></p>
+            <p>
+              Last Message: <code>{lastMessage.substring(0, 100)}</code>
+            </p>
           )}
         </div>
       </main>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

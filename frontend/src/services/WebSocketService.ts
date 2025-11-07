@@ -1,4 +1,8 @@
-export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
+export type ConnectionStatus =
+  | 'connecting'
+  | 'connected'
+  | 'disconnected'
+  | 'error';
 
 type MessageCallback = (data: string) => void;
 type StatusCallback = (status: ConnectionStatus) => void;
@@ -48,7 +52,7 @@ export class WebSocketService {
       };
 
       this.ws.onmessage = (event: MessageEvent) => {
-        this.messageCallbacks.forEach(callback => callback(event.data));
+        this.messageCallbacks.forEach((callback) => callback(event.data));
       };
 
       this.ws.onerror = () => {
@@ -63,9 +67,9 @@ export class WebSocketService {
           }
         }
       };
-     } catch {
-       this.handleConnectionError();
-     }
+    } catch {
+      this.handleConnectionError();
+    }
   }
 
   private handleConnectionError(): void {
@@ -84,7 +88,10 @@ export class WebSocketService {
 
   private scheduleReconnect(): void {
     // Calculate exponential backoff: 1s, 2s, 4s, 8s, 16s, capped at 30s
-    const backoffMs = Math.min(1000 * Math.pow(2, this.reconnectAttempt), 30000);
+    const backoffMs = Math.min(
+      1000 * Math.pow(2, this.reconnectAttempt),
+      30000
+    );
     this.reconnectAttempt++;
 
     this.reconnectTimer = setTimeout(() => {
@@ -118,21 +125,21 @@ export class WebSocketService {
     this.ws.send(data);
   }
 
-   onMessage(callback: MessageCallback): () => void {
-     this.messageCallbacks.push(callback);
-     return () => {
-       const index = this.messageCallbacks.indexOf(callback);
-       if (index > -1) this.messageCallbacks.splice(index, 1);
-     };
-   }
+  onMessage(callback: MessageCallback): () => void {
+    this.messageCallbacks.push(callback);
+    return () => {
+      const index = this.messageCallbacks.indexOf(callback);
+      if (index > -1) this.messageCallbacks.splice(index, 1);
+    };
+  }
 
-   onStatusChange(callback: StatusCallback): () => void {
-     this.statusCallbacks.push(callback);
-     return () => {
-       const index = this.statusCallbacks.indexOf(callback);
-       if (index > -1) this.statusCallbacks.splice(index, 1);
-     };
-   }
+  onStatusChange(callback: StatusCallback): () => void {
+    this.statusCallbacks.push(callback);
+    return () => {
+      const index = this.statusCallbacks.indexOf(callback);
+      if (index > -1) this.statusCallbacks.splice(index, 1);
+    };
+  }
 
   getStatus(): ConnectionStatus {
     return this.status;
@@ -141,7 +148,7 @@ export class WebSocketService {
   private setStatus(newStatus: ConnectionStatus): void {
     if (this.status !== newStatus) {
       this.status = newStatus;
-      this.statusCallbacks.forEach(callback => callback(newStatus));
+      this.statusCallbacks.forEach((callback) => callback(newStatus));
     }
   }
 }

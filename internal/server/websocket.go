@@ -10,19 +10,19 @@ import (
 
 // Hub manages active WebSocket clients.
 type Hub struct {
-	clients   map[*Client]bool
-	broadcast chan []byte
-	register  chan *Client
+	clients    map[*Client]bool
+	broadcast  chan []byte
+	register   chan *Client
 	unregister chan *Client
-	logger    *slog.Logger
-	mu        sync.RWMutex
+	logger     *slog.Logger
+	mu         sync.RWMutex
 }
 
 // Client represents a WebSocket connection.
 type Client struct {
-	hub      *Hub
-	conn     *websocket.Conn
-	send     chan []byte
+	hub  *Hub
+	conn *websocket.Conn
+	send chan []byte
 }
 
 // NewHub creates and returns a new Hub instance.

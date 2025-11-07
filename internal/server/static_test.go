@@ -13,13 +13,13 @@ import (
 
 func TestStaticFileServing(t *testing.T) {
 	logger := slog.Default()
-	
+
 	// Save the original working directory
 	originalWd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
-	
+
 	// Change to the workspace root for tests
 	wsRoot := filepath.Join(originalWd, "..", "..")
 	if err := os.Chdir(wsRoot); err != nil {

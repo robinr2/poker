@@ -79,4 +79,3 @@ func main() {
 	logger.Info("server shutdown complete")
 	os.Exit(0)
 }
-
