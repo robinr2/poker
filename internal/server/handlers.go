@@ -11,8 +11,8 @@ import (
 type TableInfo struct {
 	ID            string `json:"id"`
 	Name          string `json:"name"`
-	SeatsOccupied int    `json:"seatsOccupied"`
-	MaxSeats      int    `json:"maxSeats"`
+	SeatsOccupied int    `json:"seats_occupied"`
+	MaxSeats      int    `json:"max_seats"`
 }
 
 // WebSocketMessage represents a generic WebSocket message structure

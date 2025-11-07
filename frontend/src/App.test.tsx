@@ -296,4 +296,88 @@ describe('App', () => {
       });
     });
   });
+
+  describe('TestApp_LobbyView_Integration', () => {
+    it('should render LobbyView after session created', async () => {
+      render(<App />);
+
+      const input = screen.getByPlaceholderText(
+        'Your name'
+      ) as HTMLInputElement;
+      const button = screen.getByRole('button', { name: 'Join Game' });
+
+      fireEvent.change(input, { target: { value: 'Alice' } });
+
+      await waitFor(() => {
+        expect(createdMockSockets.length).toBeGreaterThan(0);
+      });
+
+      fireEvent.click(button);
+
+      const mockSocket = createdMockSockets[0];
+
+      const sessionMessage = JSON.stringify({
+        type: 'session_created',
+        payload: { token: 'token-lobby', name: 'Alice' },
+      });
+
+      mockSocket.simulateMessage(sessionMessage);
+
+      await waitFor(() => {
+        expect(screen.getByText('Lobby')).toBeInTheDocument();
+      });
+    });
+
+    it('should display tables from lobby_state message', async () => {
+      localStorage.setItem('poker_session_token', 'lobby-token');
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(createdMockSockets.length).toBeGreaterThan(0);
+      });
+
+      const mockSocket = createdMockSockets[createdMockSockets.length - 1];
+
+      // Send session_restored first
+      const sessionMessage = JSON.stringify({
+        type: 'session_restored',
+        payload: { name: 'Alice' },
+      });
+      mockSocket.simulateMessage(sessionMessage);
+
+      // Wait for lobby to render
+      await waitFor(() => {
+        expect(screen.getByText('Lobby')).toBeInTheDocument();
+      });
+
+      // Send lobby_state with tables (payload is array, not object)
+      const lobbyMessage = JSON.stringify({
+        type: 'lobby_state',
+        payload: [
+          {
+            id: 'table-1',
+            name: 'Table 1',
+            seats_occupied: 2,
+            max_seats: 6,
+          },
+          {
+            id: 'table-2',
+            name: 'Table 2',
+            seats_occupied: 4,
+            max_seats: 6,
+          },
+        ],
+      });
+
+      mockSocket.simulateMessage(lobbyMessage);
+
+      await waitFor(() => {
+        expect(screen.getByText('Table 1')).toBeInTheDocument();
+        expect(screen.getByText('Table 2')).toBeInTheDocument();
+        expect(screen.getByText('2/6')).toBeInTheDocument();
+        expect(screen.getByText('4/6')).toBeInTheDocument();
+      });
+    });
+  });
 });
