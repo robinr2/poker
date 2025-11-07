@@ -14,17 +14,19 @@ import (
 
 // Server represents the HTTP server with router and WebSocket support.
 type Server struct {
-	router     chi.Router
-	logger     *slog.Logger
-	upgrader   *websocket.Upgrader
-	httpServer *http.Server
-	hub        *Hub
-	mu         sync.RWMutex
+	router         chi.Router
+	logger         *slog.Logger
+	upgrader       *websocket.Upgrader
+	httpServer     *http.Server
+	hub            *Hub
+	sessionManager *SessionManager
+	mu             sync.RWMutex
 }
 
 // NewServer creates and returns a new Server instance.
 func NewServer(logger *slog.Logger) *Server {
 	hub := NewHub(logger)
+	sessionManager := NewSessionManager(logger)
 	s := &Server{
 		router: chi.NewRouter(),
 		logger: logger,
@@ -37,7 +39,8 @@ func NewServer(logger *slog.Logger) *Server {
 				return true
 			},
 		},
-		hub: hub,
+		hub:            hub,
+		sessionManager: sessionManager,
 	}
 	s.RegisterRoutes()
 

@@ -20,9 +20,10 @@ type Hub struct {
 
 // Client represents a WebSocket connection.
 type Client struct {
-	hub  *Hub
-	conn *websocket.Conn
-	send chan []byte
+	hub   *Hub
+	conn  *websocket.Conn
+	send  chan []byte
+	Token string
 }
 
 // NewHub creates and returns a new Hub instance.
