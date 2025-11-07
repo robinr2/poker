@@ -62,6 +62,12 @@
   font-size: 0.875rem;
 }
 
+.player-name {
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: #d1d5db;
+}
+
 .app-main {
   flex: 1;
 }

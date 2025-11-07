@@ -393,4 +393,115 @@ describe('WebSocketService', () => {
       vi.useRealTimers();
     });
   });
+
+  describe('TestWebSocketService_TokenInURL', () => {
+    it('should append token as query parameter to URL', async () => {
+      vi.useFakeTimers();
+
+      service = new WebSocketService(
+        'ws://localhost:8080/ws',
+        'test-token-123'
+      );
+      const connectPromise = service.connect();
+
+      const mockSocket = createdMockSockets[0];
+      expect(mockSocket.url).toBe(
+        'ws://localhost:8080/ws?token=test-token-123'
+      );
+
+      mockSocket.simulateOpen();
+      await connectPromise;
+
+      vi.useRealTimers();
+    });
+
+    it('should work without token parameter', async () => {
+      vi.useFakeTimers();
+
+      service = new WebSocketService('ws://localhost:8080/ws');
+      const connectPromise = service.connect();
+
+      const mockSocket = createdMockSockets[0];
+      expect(mockSocket.url).toBe('ws://localhost:8080/ws');
+
+      mockSocket.simulateOpen();
+      await connectPromise;
+
+      vi.useRealTimers();
+    });
+
+    it('should append token to URL with existing query parameters', async () => {
+      vi.useFakeTimers();
+
+      service = new WebSocketService(
+        'ws://localhost:8080/ws?foo=bar',
+        'token-456'
+      );
+      const connectPromise = service.connect();
+
+      const mockSocket = createdMockSockets[0];
+      expect(mockSocket.url).toBe(
+        'ws://localhost:8080/ws?foo=bar&token=token-456'
+      );
+
+      mockSocket.simulateOpen();
+      await connectPromise;
+
+      vi.useRealTimers();
+    });
+  });
+
+  describe('TestWebSocketService_SessionMessages', () => {
+    it('should handle session_created message', async () => {
+      vi.useFakeTimers();
+
+      service = new WebSocketService('ws://localhost:8080/ws');
+      const messageCallback = vi.fn();
+      service.onMessage(messageCallback);
+
+      const connectPromise = service.connect();
+      const mockSocket = createdMockSockets[0];
+
+      mockSocket.simulateOpen();
+
+      await connectPromise;
+
+      const sessionMessage = JSON.stringify({
+        type: 'session_created',
+        payload: { token: 'uuid-123', name: 'Alice' },
+      });
+
+      mockSocket.simulateMessage(sessionMessage);
+
+      expect(messageCallback).toHaveBeenCalledWith(sessionMessage);
+
+      vi.useRealTimers();
+    });
+
+    it('should handle session_restored message', async () => {
+      vi.useFakeTimers();
+
+      service = new WebSocketService('ws://localhost:8080/ws');
+      const messageCallback = vi.fn();
+      service.onMessage(messageCallback);
+
+      const connectPromise = service.connect();
+      const mockSocket = createdMockSockets[0];
+
+      mockSocket.simulateOpen();
+
+      await connectPromise;
+
+      const sessionMessage = JSON.stringify({
+        type: 'session_restored',
+        payload: { name: 'Bob', tableID: 'table-1', seatIndex: 2 },
+      });
+
+      mockSocket.simulateMessage(sessionMessage);
+
+      expect(messageCallback).toHaveBeenCalledWith(sessionMessage);
+
+      vi.useRealTimers();
+    });
+  });
 });

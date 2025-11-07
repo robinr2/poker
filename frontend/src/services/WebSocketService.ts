@@ -19,8 +19,18 @@ export class WebSocketService {
   private connectResolve: (() => void) | null = null;
   private connectReject: ((reason?: unknown) => void) | null = null;
 
-  constructor(url: string) {
-    this.url = url;
+  constructor(url: string, token?: string) {
+    this.url = this.appendTokenToUrl(url, token);
+  }
+
+  private appendTokenToUrl(url: string, token?: string): string {
+    if (!token) {
+      return url;
+    }
+
+    // Check if URL already has query parameters
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}token=${token}`;
   }
 
   async connect(): Promise<void> {
