@@ -1,9 +1,11 @@
 package server
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -90,14 +92,46 @@ func (s *Server) HandleWebSocket(hub *Hub) http.HandlerFunc {
 
 		s.logger.Info("new websocket connection", "remote_addr", conn.RemoteAddr())
 
+		// Extract token from query parameter
+		token := r.URL.Query().Get("token")
+		shouldCloseOnInvalidToken := false
+		if token != "" {
+			// Try to validate the token
+			session, err := s.sessionManager.GetSession(token)
+			if err != nil {
+				s.logger.Warn("invalid token provided", "token", token, "error", err)
+				// Send error message and mark for immediate closure after sending
+				client.SendError("Invalid or expired token", s.logger)
+				shouldCloseOnInvalidToken = true
+			} else {
+				// Token is valid, set client token and prepare to send session_restored
+				client.Token = token
+				s.logger.Info("valid token provided", "token", token)
+
+				// Send session_restored message after registration
+				go func() {
+					client.SendSessionRestored(session, s.logger)
+				}()
+			}
+		}
+
 		// Start client goroutines
-		go client.readPump()
+		go client.readPump(s.sessionManager, s.logger)
 		go client.writePump()
+
+		// If token was invalid, close the connection after a short delay to let message be sent
+		if shouldCloseOnInvalidToken {
+			go func() {
+				time.Sleep(10 * time.Millisecond)
+				client.conn.Close()
+				hub.unregister <- client
+			}()
+		}
 	}
 }
 
 // readPump reads messages from the WebSocket connection.
-func (c *Client) readPump() {
+func (c *Client) readPump(sm *SessionManager, logger *slog.Logger) {
 	defer func() {
 		c.hub.unregister <- c
 		c.conn.Close()
@@ -112,8 +146,26 @@ func (c *Client) readPump() {
 			return
 		}
 
-		// Broadcast message to all clients
-		c.hub.broadcast <- message
+		// Parse the message as JSON
+		var wsMsg WebSocketMessage
+		err = json.Unmarshal(message, &wsMsg)
+		if err != nil {
+			c.SendError("Invalid JSON message", logger)
+			continue
+		}
+
+		// Route message by type
+		switch wsMsg.Type {
+		case "set_name":
+			err := c.HandleSetName(sm, logger, wsMsg.Payload)
+			if err != nil {
+				c.SendError(err.Error(), logger)
+				logger.Warn("failed to handle set_name", "error", err)
+			}
+		default:
+			c.SendError("Unknown message type: "+wsMsg.Type, logger)
+			logger.Warn("unknown message type", "type", wsMsg.Type)
+		}
 	}
 }
 
