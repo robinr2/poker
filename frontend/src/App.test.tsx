@@ -100,12 +100,12 @@ describe('App', () => {
       render(<App />);
 
       await waitFor(() => {
-        // Wait for at least 2 sockets (initial undefined, then with token)
-        expect(createdMockSockets.length).toBeGreaterThanOrEqual(2);
+        // Wait for at least 1 socket to be created with the token
+        expect(createdMockSockets.length).toBeGreaterThanOrEqual(1);
       });
 
-      // The second socket should have the token
-      const mockSocket = createdMockSockets[1];
+      // The socket should have the token in the URL
+      const mockSocket = createdMockSockets[createdMockSockets.length - 1];
       expect(mockSocket.url).toContain('saved-token-xyz');
     });
 

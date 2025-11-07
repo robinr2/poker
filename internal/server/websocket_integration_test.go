@@ -545,3 +545,173 @@ func TestInvalidJSONMessage(t *testing.T) {
 		t.Errorf("expected message type 'error', got %q", msg.Type)
 	}
 }
+
+// TestWebSocketSendsLobbyStateOnConnect verifies client receives lobby_state after connection
+func TestWebSocketSendsLobbyStateOnConnect(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+
+	// Create a test HTTP server with the WebSocket handler
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.HandleWebSocket(hub)(w, r)
+	}))
+	defer testServer.Close()
+
+	// Convert http:// to ws://
+	wsURL := "ws" + strings.TrimPrefix(testServer.URL, "http")
+
+	// Connect without token
+	dialer := websocket.Dialer{}
+	ws, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer ws.Close()
+
+	// Send set_name message
+	sendMessage(t, ws, "set_name", SetNamePayload{Name: "TestPlayer"})
+
+	// Receive session_created message
+	msg1 := readMessage(t, ws)
+	if msg1.Type != "session_created" {
+		t.Errorf("expected first message to be 'session_created', got %q", msg1.Type)
+	}
+
+	// Receive lobby_state message
+	msg2 := readMessage(t, ws)
+	if msg2.Type != "lobby_state" {
+		t.Errorf("expected second message to be 'lobby_state', got %q", msg2.Type)
+	}
+
+	// Verify payload is an array
+	var lobbyState []interface{}
+	err = json.Unmarshal(msg2.Payload, &lobbyState)
+	if err != nil {
+		t.Fatalf("failed to parse lobby_state payload: %v", err)
+	}
+
+	if len(lobbyState) != 4 {
+		t.Errorf("expected 4 tables in lobby state, got %d", len(lobbyState))
+	}
+}
+
+// TestLobbyStateMessageFormat verifies JSON structure of lobby_state message
+func TestLobbyStateMessageFormat(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+
+	// Create a test HTTP server with the WebSocket handler
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.HandleWebSocket(hub)(w, r)
+	}))
+	defer testServer.Close()
+
+	// Convert http:// to ws://
+	wsURL := "ws" + strings.TrimPrefix(testServer.URL, "http")
+
+	// Connect without token
+	dialer := websocket.Dialer{}
+	ws, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer ws.Close()
+
+	// Send set_name message
+	sendMessage(t, ws, "set_name", SetNamePayload{Name: "TestPlayer"})
+
+	// Read session_created
+	_ = readMessage(t, ws)
+
+	// Read lobby_state message
+	msg := readMessage(t, ws)
+	if msg.Type != "lobby_state" {
+		t.Errorf("expected message type 'lobby_state', got %q", msg.Type)
+	}
+
+	// Parse as array of table info
+	var tables []map[string]interface{}
+	err = json.Unmarshal(msg.Payload, &tables)
+	if err != nil {
+		t.Fatalf("failed to parse lobby_state payload: %v", err)
+	}
+
+	if len(tables) != 4 {
+		t.Errorf("expected 4 tables, got %d", len(tables))
+	}
+
+	// Verify first table has required fields
+	firstTable := tables[0]
+	if id, ok := firstTable["id"].(string); !ok || id == "" {
+		t.Error("expected table to have 'id' field")
+	}
+
+	if name, ok := firstTable["name"].(string); !ok || name == "" {
+		t.Error("expected table to have 'name' field")
+	}
+
+	if maxSeats, ok := firstTable["maxSeats"].(float64); !ok || maxSeats != 6 {
+		t.Error("expected table to have 'maxSeats' field with value 6")
+	}
+
+	if seatsOccupied, ok := firstTable["seatsOccupied"].(float64); !ok {
+		t.Error("expected table to have 'seatsOccupied' field")
+	} else if seatsOccupied < 0 || seatsOccupied > 6 {
+		t.Errorf("expected seatsOccupied to be between 0 and 6, got %v", seatsOccupied)
+	}
+}
+
+// TestWebSocketSendsLobbyStateOnRestore verifies lobby_state sent after session_restored
+func TestWebSocketSendsLobbyStateOnRestore(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+
+	// Create a session
+	session, err := server.sessionManager.CreateSession("Player")
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	// Create a test HTTP server with the WebSocket handler
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.HandleWebSocket(hub)(w, r)
+	}))
+	defer testServer.Close()
+
+	// Convert http:// to ws://
+	wsURL := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session.Token
+
+	// Connect with valid token
+	dialer := websocket.Dialer{}
+	ws, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer ws.Close()
+
+	// Receive session_restored message
+	msg1 := readMessage(t, ws)
+	if msg1.Type != "session_restored" {
+		t.Errorf("expected first message to be 'session_restored', got %q", msg1.Type)
+	}
+
+	// Receive lobby_state message
+	msg2 := readMessage(t, ws)
+	if msg2.Type != "lobby_state" {
+		t.Errorf("expected second message to be 'lobby_state', got %q", msg2.Type)
+	}
+
+	// Verify payload is an array
+	var lobbyState []interface{}
+	err = json.Unmarshal(msg2.Payload, &lobbyState)
+	if err != nil {
+		t.Fatalf("failed to parse lobby_state payload: %v", err)
+	}
+
+	if len(lobbyState) != 4 {
+		t.Errorf("expected 4 tables in lobby state, got %d", len(lobbyState))
+	}
+}

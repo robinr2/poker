@@ -7,6 +7,14 @@ import (
 	"net/http"
 )
 
+// TableInfo represents table information for the lobby view
+type TableInfo struct {
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	SeatsOccupied int    `json:"seatsOccupied"`
+	MaxSeats      int    `json:"maxSeats"`
+}
+
 // WebSocketMessage represents a generic WebSocket message structure
 type WebSocketMessage struct {
 	Type    string          `json:"type"`
@@ -37,7 +45,7 @@ type ErrorPayload struct {
 }
 
 // HandleSetName processes a set_name message and creates a session for the client
-func (c *Client) HandleSetName(sm *SessionManager, logger *slog.Logger, payload []byte) error {
+func (c *Client) HandleSetName(sm *SessionManager, server *Server, logger *slog.Logger, payload []byte) error {
 	var setNamePayload SetNamePayload
 	err := json.Unmarshal(payload, &setNamePayload)
 	if err != nil {
@@ -76,6 +84,10 @@ func (c *Client) HandleSetName(sm *SessionManager, logger *slog.Logger, payload 
 	logger.Info("session created via websocket", "token", session.Token, "name", session.Name)
 
 	c.send <- responseBytes
+
+	// Send lobby_state after session_created
+	c.SendLobbyState(server, logger)
+
 	return nil
 }
 
@@ -133,6 +145,31 @@ func (c *Client) SendError(message string, logger *slog.Logger) error {
 	return nil
 }
 
+// SendLobbyState sends the current lobby state to the client
+func (c *Client) SendLobbyState(server *Server, logger *slog.Logger) error {
+	lobbyState := server.GetLobbyState()
+
+	payloadBytes, err := json.Marshal(lobbyState)
+	if err != nil {
+		return fmt.Errorf("failed to marshal lobby state: %w", err)
+	}
+
+	response := WebSocketMessage{
+		Type:    "lobby_state",
+		Payload: json.RawMessage(payloadBytes),
+	}
+
+	responseBytes, err := json.Marshal(response)
+	if err != nil {
+		return fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	logger.Info("lobby_state sent to client")
+
+	c.send <- responseBytes
+	return nil
+}
+
 // HealthCheckHandler returns an HTTP handler function for the health check endpoint.
 func HealthCheckHandler(logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -145,4 +182,55 @@ func HealthCheckHandler(logger *slog.Logger) http.HandlerFunc {
 
 		json.NewEncoder(w).Encode(response)
 	}
+}
+
+// GetLobbyState returns a slice of TableInfo for all tables in the server
+// Thread-safe method using RLock on Server.mu
+func (s *Server) GetLobbyState() []TableInfo {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	lobbyState := make([]TableInfo, 0, len(s.tables))
+	for _, table := range s.tables {
+		if table == nil {
+			continue
+		}
+		tableInfo := TableInfo{
+			ID:            table.ID,
+			Name:          table.Name,
+			MaxSeats:      table.MaxSeats,
+			SeatsOccupied: table.GetOccupiedSeatCount(),
+		}
+		lobbyState = append(lobbyState, tableInfo)
+	}
+	return lobbyState
+}
+
+// broadcastLobbyState sends the current lobby state to all connected clients
+func (s *Server) broadcastLobbyState() error {
+	lobbyState := s.GetLobbyState()
+
+	payloadBytes, err := json.Marshal(lobbyState)
+	if err != nil {
+		return fmt.Errorf("failed to marshal lobby state: %w", err)
+	}
+
+	response := WebSocketMessage{
+		Type:    "lobby_state",
+		Payload: json.RawMessage(payloadBytes),
+	}
+
+	responseBytes, err := json.Marshal(response)
+	if err != nil {
+		return fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	// Send to hub.broadcast channel (non-blocking)
+	select {
+	case s.hub.broadcast <- responseBytes:
+	default:
+		// Channel full, skip broadcast
+	}
+
+	return nil
 }

@@ -111,12 +111,14 @@ func (s *Server) HandleWebSocket(hub *Hub) http.HandlerFunc {
 				// Send session_restored message after registration
 				go func() {
 					client.SendSessionRestored(session, s.logger)
+					// Send lobby_state after session_restored
+					client.SendLobbyState(s, s.logger)
 				}()
 			}
 		}
 
 		// Start client goroutines
-		go client.readPump(s.sessionManager, s.logger)
+		go client.readPump(s.sessionManager, s, s.logger)
 		go client.writePump()
 
 		// If token was invalid, close the connection after a short delay to let message be sent
@@ -131,7 +133,7 @@ func (s *Server) HandleWebSocket(hub *Hub) http.HandlerFunc {
 }
 
 // readPump reads messages from the WebSocket connection.
-func (c *Client) readPump(sm *SessionManager, logger *slog.Logger) {
+func (c *Client) readPump(sm *SessionManager, server *Server, logger *slog.Logger) {
 	defer func() {
 		c.hub.unregister <- c
 		c.conn.Close()
@@ -157,7 +159,7 @@ func (c *Client) readPump(sm *SessionManager, logger *slog.Logger) {
 		// Route message by type
 		switch wsMsg.Type {
 		case "set_name":
-			err := c.HandleSetName(sm, logger, wsMsg.Payload)
+			err := c.HandleSetName(sm, server, logger, wsMsg.Payload)
 			if err != nil {
 				c.SendError(err.Error(), logger)
 				logger.Warn("failed to handle set_name", "error", err)

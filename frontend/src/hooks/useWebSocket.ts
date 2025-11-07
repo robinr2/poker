@@ -11,10 +11,24 @@ interface UseWebSocketReturn {
   lastMessage: string | null;
 }
 
-export function useWebSocket(url: string, token?: string): UseWebSocketReturn {
+interface UseWebSocketOptions {
+  onMessage?: (message: string) => void;
+}
+
+export function useWebSocket(
+  url: string,
+  token?: string,
+  options?: UseWebSocketOptions
+): UseWebSocketReturn {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [lastMessage, setLastMessage] = useState<string | null>(null);
   const serviceRef = useRef<WebSocketService | null>(null);
+  const onMessageRef = useRef(options?.onMessage);
+
+  // Update the ref when the callback changes
+  useEffect(() => {
+    onMessageRef.current = options?.onMessage;
+  }, [options?.onMessage]);
 
   // Initialize and connect
   useEffect(() => {
@@ -30,6 +44,11 @@ export function useWebSocket(url: string, token?: string): UseWebSocketReturn {
 
     // Set up message listener and store unsubscribe function
     const unsubscribeMessage = service.onMessage((data) => {
+      // Call the callback immediately if provided
+      if (onMessageRef.current) {
+        onMessageRef.current(data);
+      }
+      // Also update state for components that need it
       setLastMessage(data);
     });
 

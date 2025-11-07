@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 
 import { NamePrompt } from './components/NamePrompt';
 import { useWebSocket } from './hooks/useWebSocket';
@@ -13,45 +13,52 @@ interface SessionMessage {
 const WS_URL = 'ws://localhost:8080/ws';
 
 function App() {
-  const [savedToken, setSavedToken] = useState<string | null>(null);
   const [playerName, setPlayerName] = useState<string | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
-
-  // Initialize session on mount
+  const [initialToken] = useState<string | null>(() => SessionService.getToken());
+  
+  // Use refs to avoid stale closures in the message handler
+  const playerNameRef = useRef(playerName);
+  const showPromptRef = useRef(showPrompt);
+  
   useEffect(() => {
-    const token = SessionService.getToken();
-    setSavedToken(token);
-    setShowPrompt(!token); // Show prompt if no token
-  }, []);
-
-  const { status, lastMessage, sendMessage } = useWebSocket(
-    WS_URL,
-    savedToken || undefined
-  );
-
-  // Handle incoming messages
+    playerNameRef.current = playerName;
+    showPromptRef.current = showPrompt;
+  }, [playerName, showPrompt]);
+  
   useEffect(() => {
-    if (!lastMessage) return;
+    setShowPrompt(!initialToken); // Show prompt if no token
+  }, [initialToken]);
 
+  // Handle incoming WebSocket messages - use useCallback with empty deps
+  // since we use refs for current values
+  const handleMessage = useCallback((rawMessage: string) => {
     try {
-      const message: SessionMessage = JSON.parse(lastMessage);
+      const message: SessionMessage = JSON.parse(rawMessage);
 
       if (message.type === 'session_created' && message.payload) {
         const token = message.payload.token as string;
         const name = message.payload.name as string;
         SessionService.setToken(token);
-        setSavedToken(token);
         setPlayerName(name);
         setShowPrompt(false);
       } else if (message.type === 'session_restored' && message.payload) {
         const name = message.payload.name as string;
         setPlayerName(name);
         setShowPrompt(false);
+      } else if (message.type === 'lobby_state') {
+        // Lobby state will be handled in Phase 3
       }
     } catch (error) {
       console.error('Failed to parse message:', error);
     }
-  }, [lastMessage]);
+  }, []); // Empty deps - we use refs for current values
+
+  const { status, lastMessage, sendMessage } = useWebSocket(
+    WS_URL,
+    initialToken || undefined,
+    { onMessage: handleMessage }
+  );
 
   const handleNameSubmit = (name: string): void => {
     try {
