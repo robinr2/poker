@@ -1,7 +1,7 @@
 ---
 description: Research context and return findings to parent agent
 mode: subagent
-model: Claude Sonnet 4.5 (copilot)
+model: github-copilot/claude-sonnet-4.5
 tools:
   write: false
   edit: false

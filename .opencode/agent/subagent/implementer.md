@@ -1,7 +1,7 @@
 ---
 description: Execute implementation tasks delegated by the CONDUCTOR agent.
 mode: subagent
-model: Claude Haiku 4.5 (copilot)
+model: github-copilot/claude-haiku-4.5
 tools:
   write: true
   edit: true
