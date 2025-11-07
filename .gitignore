@@ -25,7 +25,6 @@ node_modules/
 
 # Docker volumes
 docker-volumes/
-.dockerignore
 
 # Environment files
 .env
@@ -53,3 +52,4 @@ Thumbs.db
 # Generated files
 *.gen.go
 web/static/
+tmp/

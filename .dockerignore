@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+vendor/
+
+# Build artifacts
+frontend/dist/
+web/static/dist/
+bin/
+tmp/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Development
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test files and coverage
+*_test.go
+*.test
+frontend/**/*.test.ts
+frontend/**/*.test.tsx
+coverage/
+.nyc_output/
+
+# Documentation (keep critical ones)
+*.md
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Docker files
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Air config
+.air.toml
+
+# Scripts
+scripts/
+
+# Misc
+.gitkeep
+plans/
+AGENTS.md

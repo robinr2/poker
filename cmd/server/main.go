@@ -52,7 +52,8 @@ func main() {
 	srv := server.NewServer(logger)
 
 	// Start server in a goroutine
-	addr := "127.0.0.1:" + port
+	// Bind to 0.0.0.0 to be accessible from Docker containers and external hosts
+	addr := "0.0.0.0:" + port
 	go func() {
 		if err := srv.Start(addr); err != nil {
 			logger.Error("server error", "error", err)
