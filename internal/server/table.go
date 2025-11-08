@@ -1,7 +1,9 @@
 package server
 
 import (
+	"crypto/rand"
 	"fmt"
+	"math/big"
 	"sync"
 )
 
@@ -246,4 +248,68 @@ func (t *Table) GetBlindPositions(dealerSeat int) (int, int, error) {
 	bigBlind := activePlayers[bbIndex]
 
 	return smallBlind, bigBlind, nil
+}
+
+// ShuffleDeck shuffles a deck of cards in place using crypto/rand and Fisher-Yates algorithm
+// Returns error if random number generation fails
+func ShuffleDeck(deck []Card) error {
+	// Fisher-Yates shuffle using cryptographically secure random
+	for i := len(deck) - 1; i > 0; i-- {
+		// Generate random number from 0 to i (inclusive) using crypto/rand
+		max := big.NewInt(int64(i + 1))
+		randomBig, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			return fmt.Errorf("failed to generate random number: %w", err)
+		}
+
+		j := int(randomBig.Int64())
+
+		// Swap deck[i] with deck[j]
+		deck[i], deck[j] = deck[j], deck[i]
+	}
+
+	return nil
+}
+
+// DealHoleCards deals 2 cards to each active player from the deck
+// Only seats with Status == "active" receive cards
+// Updates h.HoleCards and removes cards from h.Deck
+// Returns error if unable to shuffle or if not enough cards in deck
+func (h *Hand) DealHoleCards(seats [6]Seat) error {
+	// Identify active seats
+	activeSeats := []int{}
+	for i := 0; i < 6; i++ {
+		if seats[i].Status == "active" {
+			activeSeats = append(activeSeats, i)
+		}
+	}
+
+	// Check if we have enough cards in deck (2 per active player)
+	cardsNeeded := len(activeSeats) * 2
+	if len(h.Deck) < cardsNeeded {
+		return fmt.Errorf("insufficient cards in deck: have %d, need %d", len(h.Deck), cardsNeeded)
+	}
+
+	// Initialize HoleCards map if needed
+	if h.HoleCards == nil {
+		h.HoleCards = make(map[int][]Card)
+	}
+
+	// Deal 2 cards to each active seat
+	cardIndex := 0
+	for _, seatNum := range activeSeats {
+		// Deal 2 cards
+		holeCards := make([]Card, 2)
+		holeCards[0] = h.Deck[cardIndex]
+		holeCards[1] = h.Deck[cardIndex+1]
+		cardIndex += 2
+
+		// Store in HoleCards map
+		h.HoleCards[seatNum] = holeCards
+	}
+
+	// Remove dealt cards from deck
+	h.Deck = h.Deck[cardIndex:]
+
+	return nil
 }

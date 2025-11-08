@@ -972,3 +972,447 @@ func TestGetBlindPositionsInvalidDealer(t *testing.T) {
 		t.Errorf("expected error message 'dealer seat 2 is not active', got '%s'", err.Error())
 	}
 }
+
+// TestShuffleDeck verifies deck remains 52 cards after shuffle and cards are randomized
+func TestShuffleDeck(t *testing.T) {
+	deck := NewDeck()
+
+	// Verify deck has 52 cards before shuffle
+	if len(deck) != 52 {
+		t.Errorf("expected 52 cards before shuffle, got %d", len(deck))
+	}
+
+	// Store original deck order
+	originalOrder := make([]Card, len(deck))
+	copy(originalOrder, deck)
+
+	// Shuffle the deck
+	err := ShuffleDeck(deck)
+	if err != nil {
+		t.Fatalf("expected no error shuffling deck, got %v", err)
+	}
+
+	// Verify deck still has 52 cards after shuffle
+	if len(deck) != 52 {
+		t.Errorf("expected 52 cards after shuffle, got %d", len(deck))
+	}
+
+	// Verify all cards are still present (by converting to map)
+	originalMap := make(map[string]bool)
+	for _, card := range originalOrder {
+		originalMap[card.String()] = true
+	}
+
+	shuffledMap := make(map[string]bool)
+	for _, card := range deck {
+		shuffledMap[card.String()] = true
+	}
+
+	// Check that all original cards are present in shuffled deck
+	for cardStr := range originalMap {
+		if !shuffledMap[cardStr] {
+			t.Errorf("card %s missing from shuffled deck", cardStr)
+		}
+	}
+
+	// Verify no new cards were added
+	if len(shuffledMap) != 52 {
+		t.Errorf("expected 52 unique cards in shuffled deck, got %d", len(shuffledMap))
+	}
+}
+
+// TestShuffleDeckRandomization verifies shuffle produces different results on multiple shuffles
+func TestShuffleDeckRandomization(t *testing.T) {
+	// Perform multiple shuffles and check they're different
+	// (with 52 cards, getting the exact same order twice is extremely unlikely)
+	results := make([][]string, 5)
+	for i := 0; i < 5; i++ {
+		deck := NewDeck()
+		err := ShuffleDeck(deck)
+		if err != nil {
+			t.Fatalf("shuffle %d: expected no error, got %v", i, err)
+		}
+		for _, card := range deck {
+			results[i] = append(results[i], card.String())
+		}
+	}
+
+	// Compare shuffles - at least some should be different
+	differentFound := false
+	for i := 0; i < 4; i++ {
+		for j := i + 1; j < 5; j++ {
+			if !shufflesEqual(results[i], results[j]) {
+				differentFound = true
+				break
+			}
+		}
+		if differentFound {
+			break
+		}
+	}
+
+	if !differentFound {
+		t.Error("expected shuffle to produce different results on multiple shuffles")
+	}
+}
+
+// Helper function to check if two shuffle results are identical
+func shufflesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// TestDealHoleCardsToActivePlayers verifies only "active" seats get 2 cards each
+func TestDealHoleCardsToActivePlayers(t *testing.T) {
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            0,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+	}
+
+	// Set up seats: 0, 2, 4 active; 1, 3, 5 waiting
+	seats := [6]Seat{}
+	token0 := "player-0"
+	token2 := "player-2"
+	token4 := "player-4"
+
+	seats[0].Index = 0
+	seats[0].Token = &token0
+	seats[0].Status = "active"
+	seats[0].Stack = 1000
+
+	seats[1].Index = 1
+	seats[1].Token = nil
+	seats[1].Status = "empty"
+	seats[1].Stack = 0
+
+	seats[2].Index = 2
+	seats[2].Token = &token2
+	seats[2].Status = "active"
+	seats[2].Stack = 1000
+
+	seats[3].Index = 3
+	seats[3].Token = nil
+	seats[3].Status = "empty"
+	seats[3].Stack = 0
+
+	seats[4].Index = 4
+	seats[4].Token = &token4
+	seats[4].Status = "active"
+	seats[4].Stack = 1000
+
+	seats[5].Index = 5
+	seats[5].Token = nil
+	seats[5].Status = "empty"
+	seats[5].Stack = 0
+
+	// Deal hole cards
+	err := hand.DealHoleCards(seats)
+	if err != nil {
+		t.Fatalf("expected no error dealing hole cards, got %v", err)
+	}
+
+	// Verify only active seats (0, 2, 4) have hole cards
+	for seatIdx := 0; seatIdx < 6; seatIdx++ {
+		cards, exists := hand.HoleCards[seatIdx]
+
+		if seats[seatIdx].Status == "active" {
+			if !exists {
+				t.Errorf("seat %d (active): expected hole cards, got none", seatIdx)
+			}
+			if len(cards) != 2 {
+				t.Errorf("seat %d (active): expected 2 cards, got %d", seatIdx, len(cards))
+			}
+		} else {
+			if exists {
+				t.Errorf("seat %d (empty/waiting): expected no hole cards, got %d", seatIdx, len(cards))
+			}
+		}
+	}
+
+	// Verify HoleCards map has exactly 3 entries (one per active player)
+	if len(hand.HoleCards) != 3 {
+		t.Errorf("expected 3 entries in HoleCards map, got %d", len(hand.HoleCards))
+	}
+}
+
+// TestDealHoleCardsSkipsWaiting verifies "waiting" seats get no cards
+func TestDealHoleCardsSkipsWaiting(t *testing.T) {
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            0,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+	}
+
+	// Set up seats: 0 active, 1 and 2 waiting
+	seats := [6]Seat{}
+	token0 := "player-0"
+	token1 := "player-1"
+	token2 := "player-2"
+
+	seats[0].Index = 0
+	seats[0].Token = &token0
+	seats[0].Status = "active"
+	seats[0].Stack = 1000
+
+	seats[1].Index = 1
+	seats[1].Token = &token1
+	seats[1].Status = "waiting"
+	seats[1].Stack = 1000
+
+	seats[2].Index = 2
+	seats[2].Token = &token2
+	seats[2].Status = "waiting"
+	seats[2].Stack = 1000
+
+	// Deal hole cards
+	err := hand.DealHoleCards(seats)
+	if err != nil {
+		t.Fatalf("expected no error dealing hole cards, got %v", err)
+	}
+
+	// Verify only seat 0 (active) has hole cards
+	if cards, exists := hand.HoleCards[0]; !exists || len(cards) != 2 {
+		t.Errorf("seat 0 (active): expected 2 cards, got %d", len(cards))
+	}
+
+	// Verify waiting seats don't have hole cards
+	if _, exists := hand.HoleCards[1]; exists {
+		t.Error("seat 1 (waiting): expected no hole cards, but found some")
+	}
+
+	if _, exists := hand.HoleCards[2]; exists {
+		t.Error("seat 2 (waiting): expected no hole cards, but found some")
+	}
+
+	// Verify HoleCards map has exactly 1 entry
+	if len(hand.HoleCards) != 1 {
+		t.Errorf("expected 1 entry in HoleCards map, got %d", len(hand.HoleCards))
+	}
+}
+
+// TestDealHoleCardsReducesDeck verifies deck size decreases by (2 × active_players)
+func TestDealHoleCardsReducesDeck(t *testing.T) {
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            0,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+	}
+
+	initialDeckSize := len(hand.Deck)
+
+	// Set up seats: 0, 1, 2 active (3 players)
+	seats := [6]Seat{}
+	token0 := "player-0"
+	token1 := "player-1"
+	token2 := "player-2"
+
+	seats[0].Index = 0
+	seats[0].Token = &token0
+	seats[0].Status = "active"
+	seats[0].Stack = 1000
+
+	seats[1].Index = 1
+	seats[1].Token = &token1
+	seats[1].Status = "active"
+	seats[1].Stack = 1000
+
+	seats[2].Index = 2
+	seats[2].Token = &token2
+	seats[2].Status = "active"
+	seats[2].Stack = 1000
+
+	// Deal hole cards
+	err := hand.DealHoleCards(seats)
+	if err != nil {
+		t.Fatalf("expected no error dealing hole cards, got %v", err)
+	}
+
+	// Verify deck reduced by 2 × 3 = 6 cards
+	expectedDeckSize := initialDeckSize - 6
+	if len(hand.Deck) != expectedDeckSize {
+		t.Errorf("expected deck size %d after dealing to 3 players, got %d", expectedDeckSize, len(hand.Deck))
+	}
+}
+
+// TestDealHoleCardsEmptySeats verifies empty seats get no cards
+func TestDealHoleCardsEmptySeats(t *testing.T) {
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            0,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+	}
+
+	// Set up seats: only seat 0 active, rest empty
+	seats := [6]Seat{}
+	token0 := "player-0"
+
+	seats[0].Index = 0
+	seats[0].Token = &token0
+	seats[0].Status = "active"
+	seats[0].Stack = 1000
+
+	for i := 1; i < 6; i++ {
+		seats[i].Index = i
+		seats[i].Token = nil
+		seats[i].Status = "empty"
+		seats[i].Stack = 0
+	}
+
+	// Deal hole cards
+	err := hand.DealHoleCards(seats)
+	if err != nil {
+		t.Fatalf("expected no error dealing hole cards, got %v", err)
+	}
+
+	// Verify only seat 0 has cards
+	for seatIdx := 0; seatIdx < 6; seatIdx++ {
+		_, exists := hand.HoleCards[seatIdx]
+		if seatIdx == 0 {
+			if !exists {
+				t.Errorf("seat 0 (active): expected hole cards, got none")
+			}
+		} else {
+			if exists {
+				t.Errorf("seat %d (empty): expected no hole cards, but found some", seatIdx)
+			}
+		}
+	}
+
+	// Verify deck reduced by 2 cards (only 1 active player)
+	expectedDeckSize := 52 - 2
+	if len(hand.Deck) != expectedDeckSize {
+		t.Errorf("expected deck size %d after dealing to 1 player, got %d", expectedDeckSize, len(hand.Deck))
+	}
+}
+
+// TestDealHoleCardsAllPlayersActive verifies dealing to all 6 active seats
+func TestDealHoleCardsAllPlayersActive(t *testing.T) {
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            0,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+	}
+
+	// Set up all 6 seats as active
+	seats := [6]Seat{}
+	for i := 0; i < 6; i++ {
+		token := "player-" + string(rune('0'+i))
+		seats[i].Index = i
+		seats[i].Token = &token
+		seats[i].Status = "active"
+		seats[i].Stack = 1000
+	}
+
+	// Deal hole cards
+	err := hand.DealHoleCards(seats)
+	if err != nil {
+		t.Fatalf("expected no error dealing hole cards, got %v", err)
+	}
+
+	// Verify all 6 seats have 2 cards each
+	for seatIdx := 0; seatIdx < 6; seatIdx++ {
+		cards, exists := hand.HoleCards[seatIdx]
+		if !exists {
+			t.Errorf("seat %d: expected hole cards, got none", seatIdx)
+		}
+		if len(cards) != 2 {
+			t.Errorf("seat %d: expected 2 cards, got %d", seatIdx, len(cards))
+		}
+	}
+
+	// Verify HoleCards map has exactly 6 entries
+	if len(hand.HoleCards) != 6 {
+		t.Errorf("expected 6 entries in HoleCards map, got %d", len(hand.HoleCards))
+	}
+
+	// Verify deck reduced by 12 cards (6 active × 2 cards each)
+	expectedDeckSize := 52 - 12
+	if len(hand.Deck) != expectedDeckSize {
+		t.Errorf("expected deck size %d after dealing to 6 players, got %d", expectedDeckSize, len(hand.Deck))
+	}
+}
+
+// TestDealHoleCardsInsufficientCards verifies error when deck has fewer cards than needed
+func TestDealHoleCardsInsufficientCards(t *testing.T) {
+	// Create a small deck with only 3 cards
+	smallDeck := []Card{
+		{Rank: "A", Suit: "s"},
+		{Rank: "K", Suit: "h"},
+		{Rank: "Q", Suit: "d"},
+	}
+
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            0,
+		Deck:           smallDeck,
+		HoleCards:      make(map[int][]Card),
+	}
+
+	// Set up 3 active players (would need 6 cards total)
+	seats := [6]Seat{}
+	token0 := "player-0"
+	token1 := "player-1"
+	token2 := "player-2"
+
+	seats[0].Index = 0
+	seats[0].Token = &token0
+	seats[0].Status = "active"
+	seats[0].Stack = 1000
+
+	seats[1].Index = 1
+	seats[1].Token = &token1
+	seats[1].Status = "active"
+	seats[1].Stack = 1000
+
+	seats[2].Index = 2
+	seats[2].Token = &token2
+	seats[2].Status = "active"
+	seats[2].Stack = 1000
+
+	// Try to deal hole cards - should fail due to insufficient cards
+	err := hand.DealHoleCards(seats)
+	if err == nil {
+		t.Fatal("expected error when deck has insufficient cards, got nil")
+	}
+
+	// Verify error message mentions insufficient cards
+	expectedMsg := "insufficient cards in deck: have 3, need 6"
+	if err.Error() != expectedMsg {
+		t.Errorf("expected error message '%s', got '%s'", expectedMsg, err.Error())
+	}
+
+	// Verify no cards were dealt
+	if len(hand.HoleCards) != 0 {
+		t.Errorf("expected no hole cards dealt on error, got %d entries in HoleCards map", len(hand.HoleCards))
+	}
+
+	// Verify deck is unchanged
+	if len(hand.Deck) != 3 {
+		t.Errorf("expected deck to remain 3 cards after error, got %d", len(hand.Deck))
+	}
+}
