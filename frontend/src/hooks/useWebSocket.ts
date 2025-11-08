@@ -22,6 +22,7 @@ interface TableSeat {
   playerName: string | null;
   status: string;
   stack?: number;
+  cardCount?: number;
 }
 
 interface TableState {
@@ -35,6 +36,7 @@ interface GameState {
   bigBlindSeat: number | null;
   holeCards: [string, string] | null;
   pot: number;
+  handInProgress?: boolean;
 }
 
 interface HandStartedPayload {
@@ -151,12 +153,71 @@ export function useWebSocket(
           // Handle table_state message with seat information
           const payload = message.payload as {
             tableId: string;
-            seats: TableSeat[];
+            seats: Array<{
+              index: number;
+              playerName: string | null;
+              status: string;
+              stack?: number;
+              cardCount?: number;
+            }>;
+            handInProgress?: boolean;
+            dealerSeat?: number;
+            smallBlindSeat?: number;
+            bigBlindSeat?: number;
+            pot?: number;
+            holeCards?: { [seatIndex: string]: Card[] };
           };
+          
+          // Update table state with all seat information
+          console.log('[DEBUG] table_state payload:', JSON.stringify(payload, null, 2));
           setTableState({
             tableId: payload.tableId,
             seats: payload.seats,
           });
+
+          // Update game state with new fields if present
+          if (
+            payload.dealerSeat !== undefined ||
+            payload.smallBlindSeat !== undefined ||
+            payload.bigBlindSeat !== undefined ||
+            payload.pot !== undefined ||
+            payload.holeCards !== undefined
+          ) {
+            setGameState((prev) => {
+              const updated = { ...prev };
+              
+              // Update game state positions if present
+              if (payload.dealerSeat !== undefined) {
+                updated.dealerSeat = payload.dealerSeat;
+              }
+              if (payload.smallBlindSeat !== undefined) {
+                updated.smallBlindSeat = payload.smallBlindSeat;
+              }
+              if (payload.bigBlindSeat !== undefined) {
+                updated.bigBlindSeat = payload.bigBlindSeat;
+              }
+              if (payload.pot !== undefined) {
+                updated.pot = payload.pot;
+              }
+
+              // Update hole cards if present
+              if (payload.holeCards) {
+                const holeCardsEntries = Object.entries(payload.holeCards);
+                if (holeCardsEntries.length > 0) {
+                  const [, cards] = holeCardsEntries[0];
+                  if (cards && cards.length === 2) {
+                    const cardStrings: [string, string] = [
+                      cards[0].Rank + cards[0].Suit,
+                      cards[1].Rank + cards[1].Suit,
+                    ];
+                    updated.holeCards = cardStrings;
+                  }
+                }
+              }
+
+              return updated;
+            });
+          }
         } else if (message.type === 'hand_started' && message.payload) {
           // Handle hand_started message
           // Payload can be either a string (needs parsing) or already an object

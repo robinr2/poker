@@ -357,199 +357,409 @@ describe('useWebSocket', () => {
     });
   });
 
-  describe('TestUseWebSocketHook_TableState', () => {
-    it('should expose tableState in hook return value', () => {
-      const { result } = renderHook(() =>
-        useWebSocket('ws://localhost:8080/ws')
-      );
+   describe('TestUseWebSocketHook_TableState', () => {
+     it('should expose tableState in hook return value', () => {
+       const { result } = renderHook(() =>
+         useWebSocket('ws://localhost:8080/ws')
+       );
 
-      expect(result.current.tableState).toBeDefined();
-      expect(result.current.tableState).toEqual(null);
-    });
+       expect(result.current.tableState).toBeDefined();
+       expect(result.current.tableState).toEqual(null);
+     });
 
-    it('should update tableState when table_state message is received', async () => {
-      mockServiceInstance.getStatus.mockReturnValue('connected');
+     it('should update tableState when table_state message is received', async () => {
+       mockServiceInstance.getStatus.mockReturnValue('connected');
 
-      const { result } = renderHook(() =>
-        useWebSocket('ws://localhost:8080/ws')
-      );
+       const { result } = renderHook(() =>
+         useWebSocket('ws://localhost:8080/ws')
+       );
 
-      const tableStateMessage = JSON.stringify({
-        type: 'table_state',
-        payload: {
-          tableId: 'table-1',
-          seats: [
-            {
-              index: 0,
-              playerName: 'Player1',
-              status: 'occupied',
-            },
-            {
-              index: 1,
-              playerName: null,
-              status: 'empty',
-            },
-          ],
-        },
-      });
+       const tableStateMessage = JSON.stringify({
+         type: 'table_state',
+         payload: {
+           tableId: 'table-1',
+           seats: [
+             {
+               index: 0,
+               playerName: 'Player1',
+               status: 'occupied',
+               stack: 1000,
+             },
+             {
+               index: 1,
+               playerName: null,
+               status: 'empty',
+             },
+           ],
+         },
+       });
 
-      // Simulate message received
-      act(() => {
-        mockMessageCallbacks.forEach((cb) => cb(tableStateMessage));
-      });
+       // Simulate message received
+       act(() => {
+         mockMessageCallbacks.forEach((cb) => cb(tableStateMessage));
+       });
 
-      await waitFor(() => {
-        expect(result.current.tableState).not.toBeNull();
-        expect(result.current.tableState?.tableId).toBe('table-1');
-        expect(result.current.tableState?.seats.length).toBe(2);
-        expect(result.current.tableState?.seats[0]).toEqual({
-          index: 0,
-          playerName: 'Player1',
-          status: 'occupied',
-        });
-        expect(result.current.tableState?.seats[1]).toEqual({
-          index: 1,
-          playerName: null,
-          status: 'empty',
-        });
-      });
-    });
+       await waitFor(() => {
+         expect(result.current.tableState).not.toBeNull();
+         expect(result.current.tableState?.tableId).toBe('table-1');
+         expect(result.current.tableState?.seats.length).toBe(2);
+         expect(result.current.tableState?.seats[0]).toEqual({
+           index: 0,
+           playerName: 'Player1',
+           status: 'occupied',
+           stack: 1000,
+         });
+         expect(result.current.tableState?.seats[1]).toEqual({
+           index: 1,
+           playerName: null,
+           status: 'empty',
+         });
+       });
+     });
 
-    it('should handle table_state updates with multiple players', async () => {
-      mockServiceInstance.getStatus.mockReturnValue('connected');
+     it('should handle table_state updates with multiple players', async () => {
+       mockServiceInstance.getStatus.mockReturnValue('connected');
 
-      const { result } = renderHook(() =>
-        useWebSocket('ws://localhost:8080/ws')
-      );
+       const { result } = renderHook(() =>
+         useWebSocket('ws://localhost:8080/ws')
+       );
 
-      const tableStateMessage = JSON.stringify({
-        type: 'table_state',
-        payload: {
-          tableId: 'table-1',
-          seats: [
-            {
-              index: 0,
-              playerName: 'Alice',
-              status: 'occupied',
-            },
-            {
-              index: 1,
-              playerName: 'Bob',
-              status: 'occupied',
-            },
-            {
-              index: 2,
-              playerName: null,
-              status: 'empty',
-            },
-            {
-              index: 3,
-              playerName: null,
-              status: 'empty',
-            },
-            {
-              index: 4,
-              playerName: null,
-              status: 'empty',
-            },
-            {
-              index: 5,
-              playerName: null,
-              status: 'empty',
-            },
-          ],
-        },
-      });
+       const tableStateMessage = JSON.stringify({
+         type: 'table_state',
+         payload: {
+           tableId: 'table-1',
+           seats: [
+             {
+               index: 0,
+               playerName: 'Alice',
+               status: 'occupied',
+             },
+             {
+               index: 1,
+               playerName: 'Bob',
+               status: 'occupied',
+             },
+             {
+               index: 2,
+               playerName: null,
+               status: 'empty',
+             },
+             {
+               index: 3,
+               playerName: null,
+               status: 'empty',
+             },
+             {
+               index: 4,
+               playerName: null,
+               status: 'empty',
+             },
+             {
+               index: 5,
+               playerName: null,
+               status: 'empty',
+             },
+           ],
+         },
+       });
 
-      act(() => {
-        mockMessageCallbacks.forEach((cb) => cb(tableStateMessage));
-      });
+       act(() => {
+         mockMessageCallbacks.forEach((cb) => cb(tableStateMessage));
+       });
 
-      await waitFor(() => {
-        expect(result.current.tableState?.seats.length).toBe(6);
-        expect(result.current.tableState?.seats[0].playerName).toBe('Alice');
-        expect(result.current.tableState?.seats[1].playerName).toBe('Bob');
-        expect(result.current.tableState?.seats[2].playerName).toBeNull();
-      });
-    });
+       await waitFor(() => {
+         expect(result.current.tableState?.seats.length).toBe(6);
+         expect(result.current.tableState?.seats[0].playerName).toBe('Alice');
+         expect(result.current.tableState?.seats[1].playerName).toBe('Bob');
+         expect(result.current.tableState?.seats[2].playerName).toBeNull();
+       });
+     });
 
-    it('should update tableState when seat becomes occupied', async () => {
-      mockServiceInstance.getStatus.mockReturnValue('connected');
+     it('should update tableState when seat becomes occupied', async () => {
+       mockServiceInstance.getStatus.mockReturnValue('connected');
 
-      const { result } = renderHook(() =>
-        useWebSocket('ws://localhost:8080/ws')
-      );
+       const { result } = renderHook(() =>
+         useWebSocket('ws://localhost:8080/ws')
+       );
 
-      // First state - seat empty
-      const firstMessage = JSON.stringify({
-        type: 'table_state',
-        payload: {
-          tableId: 'table-1',
-          seats: [
-            {
-              index: 0,
-              playerName: null,
-              status: 'empty',
-            },
-          ],
-        },
-      });
+       // First state - seat empty
+       const firstMessage = JSON.stringify({
+         type: 'table_state',
+         payload: {
+           tableId: 'table-1',
+           seats: [
+             {
+               index: 0,
+               playerName: null,
+               status: 'empty',
+             },
+           ],
+         },
+       });
 
-      act(() => {
-        mockMessageCallbacks.forEach((cb) => cb(firstMessage));
-      });
+       act(() => {
+         mockMessageCallbacks.forEach((cb) => cb(firstMessage));
+       });
 
-      await waitFor(() => {
-        expect(result.current.tableState?.seats[0].playerName).toBeNull();
-      });
+       await waitFor(() => {
+         expect(result.current.tableState?.seats[0].playerName).toBeNull();
+       });
 
-      // Second state - seat occupied
-      const secondMessage = JSON.stringify({
-        type: 'table_state',
-        payload: {
-          tableId: 'table-1',
-          seats: [
-            {
-              index: 0,
-              playerName: 'NewPlayer',
-              status: 'occupied',
-            },
-          ],
-        },
-      });
+       // Second state - seat occupied
+       const secondMessage = JSON.stringify({
+         type: 'table_state',
+         payload: {
+           tableId: 'table-1',
+           seats: [
+             {
+               index: 0,
+               playerName: 'NewPlayer',
+               status: 'occupied',
+             },
+           ],
+         },
+       });
 
-      act(() => {
-        mockMessageCallbacks.forEach((cb) => cb(secondMessage));
-      });
+       act(() => {
+         mockMessageCallbacks.forEach((cb) => cb(secondMessage));
+       });
 
-      await waitFor(() => {
-        expect(result.current.tableState?.seats[0].playerName).toBe(
-          'NewPlayer'
-        );
-        expect(result.current.tableState?.seats[0].status).toBe('occupied');
-      });
-    });
+       await waitFor(() => {
+         expect(result.current.tableState?.seats[0].playerName).toBe(
+           'NewPlayer'
+         );
+         expect(result.current.tableState?.seats[0].status).toBe('occupied');
+       });
+     });
 
-    it('should not update tableState for non-table_state messages', async () => {
-      mockServiceInstance.getStatus.mockReturnValue('connected');
+     it('should not update tableState for non-table_state messages', async () => {
+       mockServiceInstance.getStatus.mockReturnValue('connected');
 
-      const { result } = renderHook(() =>
-        useWebSocket('ws://localhost:8080/ws')
-      );
+       const { result } = renderHook(() =>
+         useWebSocket('ws://localhost:8080/ws')
+       );
 
-      const otherMessage = JSON.stringify({
-        type: 'session_created',
-        payload: { token: 'test', name: 'Alice' },
-      });
+       const otherMessage = JSON.stringify({
+         type: 'session_created',
+         payload: { token: 'test', name: 'Alice' },
+       });
 
-      act(() => {
-        mockMessageCallbacks.forEach((cb) => cb(otherMessage));
-      });
+       act(() => {
+         mockMessageCallbacks.forEach((cb) => cb(otherMessage));
+       });
 
-      await waitFor(() => {
-        // tableState should remain null
-        expect(result.current.tableState).toBeNull();
-      });
-    });
-  });
+       await waitFor(() => {
+         // tableState should remain null
+         expect(result.current.tableState).toBeNull();
+       });
+     });
+
+     it('table_state updates stack values for seats', async () => {
+       mockServiceInstance.getStatus.mockReturnValue('connected');
+
+       const { result } = renderHook(() =>
+         useWebSocket('ws://localhost:8080/ws')
+       );
+
+       const tableStateMessage = JSON.stringify({
+         type: 'table_state',
+         payload: {
+           tableId: 'table-1',
+           seats: [
+             {
+               index: 0,
+               playerName: 'Alice',
+               status: 'occupied',
+               stack: 5000,
+             },
+             {
+               index: 1,
+               playerName: 'Bob',
+               status: 'occupied',
+               stack: 3500,
+             },
+             {
+               index: 2,
+               playerName: null,
+               status: 'empty',
+             },
+           ],
+         },
+       });
+
+       act(() => {
+         mockMessageCallbacks.forEach((cb) => cb(tableStateMessage));
+       });
+
+       await waitFor(() => {
+         expect(result.current.tableState?.seats[0].stack).toBe(5000);
+         expect(result.current.tableState?.seats[1].stack).toBe(3500);
+         expect(result.current.tableState?.seats[2].stack).toBeUndefined();
+       });
+     });
+
+     it('table_state updates game state when hand is active', async () => {
+       mockServiceInstance.getStatus.mockReturnValue('connected');
+
+       const { result } = renderHook(() =>
+         useWebSocket('ws://localhost:8080/ws')
+       );
+
+       const tableStateMessage = JSON.stringify({
+         type: 'table_state',
+         payload: {
+           tableId: 'table-1',
+           seats: [
+             { index: 0, playerName: 'Alice', status: 'occupied', stack: 5000 },
+             { index: 1, playerName: 'Bob', status: 'occupied', stack: 3500 },
+           ],
+           handInProgress: true,
+           dealerSeat: 0,
+           smallBlindSeat: 1,
+           bigBlindSeat: 0,
+           pot: 150,
+         },
+       });
+
+       act(() => {
+         mockMessageCallbacks.forEach((cb) => cb(tableStateMessage));
+       });
+
+       await waitFor(() => {
+         expect(result.current.gameState.dealerSeat).toBe(0);
+         expect(result.current.gameState.smallBlindSeat).toBe(1);
+         expect(result.current.gameState.bigBlindSeat).toBe(0);
+         expect(result.current.gameState.pot).toBe(150);
+       });
+     });
+
+     it('table_state sets hole cards from payload', async () => {
+       mockServiceInstance.getStatus.mockReturnValue('connected');
+
+       const { result } = renderHook(() =>
+         useWebSocket('ws://localhost:8080/ws')
+       );
+
+       const tableStateMessage = JSON.stringify({
+         type: 'table_state',
+         payload: {
+           tableId: 'table-1',
+           seats: [
+             { index: 0, playerName: 'Alice', status: 'occupied', stack: 5000 },
+           ],
+           holeCards: {
+             '0': [
+               { Rank: 'A', Suit: 's' },
+               { Rank: 'K', Suit: 'h' },
+             ],
+           },
+         },
+       });
+
+       act(() => {
+         mockMessageCallbacks.forEach((cb) => cb(tableStateMessage));
+       });
+
+       await waitFor(() => {
+         expect(result.current.gameState.holeCards).toEqual(['As', 'Kh']);
+       });
+     });
+
+     it('table_state updates card counts per seat', async () => {
+       mockServiceInstance.getStatus.mockReturnValue('connected');
+
+       const { result } = renderHook(() =>
+         useWebSocket('ws://localhost:8080/ws')
+       );
+
+       const tableStateMessage = JSON.stringify({
+         type: 'table_state',
+         payload: {
+           tableId: 'table-1',
+           seats: [
+             {
+               index: 0,
+               playerName: 'Alice',
+               status: 'occupied',
+               stack: 5000,
+               cardCount: 2,
+             },
+             {
+               index: 1,
+               playerName: 'Bob',
+               status: 'occupied',
+               stack: 3500,
+               cardCount: 2,
+             },
+             {
+               index: 2,
+               playerName: null,
+               status: 'empty',
+             },
+           ],
+         },
+       });
+
+       act(() => {
+         mockMessageCallbacks.forEach((cb) => cb(tableStateMessage));
+       });
+
+       await waitFor(() => {
+         expect(result.current.tableState?.seats[0].cardCount).toBe(2);
+         expect(result.current.tableState?.seats[1].cardCount).toBe(2);
+         expect(result.current.tableState?.seats[2].cardCount).toBeUndefined();
+       });
+     });
+
+     it('table_state preserves game state when fields absent', async () => {
+       mockServiceInstance.getStatus.mockReturnValue('connected');
+
+       const { result } = renderHook(() =>
+         useWebSocket('ws://localhost:8080/ws')
+       );
+
+       // First set initial game state
+       const initialMessage = JSON.stringify({
+         type: 'table_state',
+         payload: {
+           tableId: 'table-1',
+           seats: [
+             { index: 0, playerName: 'Alice', status: 'occupied', stack: 5000 },
+           ],
+           dealerSeat: 0,
+           pot: 100,
+         },
+       });
+
+       act(() => {
+         mockMessageCallbacks.forEach((cb) => cb(initialMessage));
+       });
+
+       await waitFor(() => {
+         expect(result.current.gameState.dealerSeat).toBe(0);
+         expect(result.current.gameState.pot).toBe(100);
+       });
+
+       // Send second message without game state fields
+       const secondMessage = JSON.stringify({
+         type: 'table_state',
+         payload: {
+           tableId: 'table-1',
+           seats: [
+             { index: 0, playerName: 'Alice', status: 'occupied', stack: 4950 },
+           ],
+         },
+       });
+
+       act(() => {
+         mockMessageCallbacks.forEach((cb) => cb(secondMessage));
+       });
+
+       // Game state should be preserved
+       await waitFor(() => {
+         expect(result.current.gameState.dealerSeat).toBe(0);
+         expect(result.current.gameState.pot).toBe(100);
+       });
+     });
+   });
 });

@@ -492,6 +492,10 @@ func (t *Table) StartHand() error {
 			t.mu.Unlock()
 			return fmt.Errorf("failed to broadcast cards_dealt: %w", err)
 		}
+
+		// Broadcast table state to sync card counts for all clients
+		// This ensures players see card backs for opponents
+		t.Server.broadcastTableState(t.ID, nil)
 	}
 
 	return nil

@@ -667,6 +667,9 @@ func (c *Client) SendTableState(server *Server, tableID string, logger *slog.Log
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
+	// DEBUG: Log the payload being sent
+	logger.Info("DEBUG table_state payload", "payload", string(payloadBytes))
+
 	response := WebSocketMessage{
 		Type:    "table_state",
 		Payload: json.RawMessage(payloadBytes),

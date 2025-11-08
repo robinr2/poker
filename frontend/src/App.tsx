@@ -124,6 +124,7 @@ function App() {
         playerName: seat.playerName,
         status: seat.status,
         stack: seat.stack,
+        cardCount: seat.cardCount,
       }));
       setSeats(updatedSeats);
     }

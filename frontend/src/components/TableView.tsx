@@ -3,6 +3,7 @@ interface SeatInfo {
   playerName: string | null;
   status: string;
   stack?: number;
+  cardCount?: number;
 }
 
 interface GameState {
@@ -48,6 +49,12 @@ export function TableView({
   onSendMessage,
 }: TableViewProps) {
   console.log('[TableView] render with gameState:', gameState);
+  console.log('[TableView] currentSeatIndex:', currentSeatIndex);
+  console.log('[TableView] seats:', seats.map(s => ({ 
+    index: s.index, 
+    name: s.playerName, 
+    cardCount: s.cardCount 
+  })));
   
   // Determine if Start Hand button should be visible
   // Show only when: player is seated AND no active hand (pot === 0 or undefined)
@@ -102,15 +109,18 @@ export function TableView({
                 </div>
               )}
 
-              {/* Card Backs for Opponents */}
-              {seat.index !== currentSeatIndex &&
-                seat.playerName &&
-                gameState?.holeCards && (
-                  <div className="opponent-cards">
-                    <span className="card card-back">🂠</span>
-                    <span className="card card-back">🂠</span>
-                  </div>
-                )}
+               {/* Card Backs for Opponents */}
+               {seat.index !== currentSeatIndex &&
+                 seat.playerName &&
+                 seat.cardCount && seat.cardCount > 0 && (
+                   <div className="opponent-cards">
+                     {Array.from({ length: seat.cardCount }).map((_, idx) => (
+                       <span key={idx} className="card card-back">
+                         🂠
+                       </span>
+                     ))}
+                   </div>
+                 )}
 
               {/* Chip Stack Display */}
               {seat.playerName && (
