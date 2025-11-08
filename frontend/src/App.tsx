@@ -17,6 +17,7 @@ interface SeatInfo {
   index: number;
   playerName: string | null;
   status: string;
+  stack?: number;
 }
 
 const WS_URL = 'ws://localhost:8080/ws';
@@ -24,21 +25,23 @@ const WS_URL = 'ws://localhost:8080/ws';
 function App() {
   const [playerName, setPlayerName] = useState<string | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
-  const [initialToken] = useState<string | null>(() => SessionService.getToken());
+  const [initialToken] = useState<string | null>(() =>
+    SessionService.getToken()
+  );
   const [view, setView] = useState<'lobby' | 'table'>('lobby');
   const [currentTableId, setCurrentTableId] = useState<string | null>(null);
   const [currentSeatIndex, setCurrentSeatIndex] = useState<number | null>(null);
   const [seats, setSeats] = useState<SeatInfo[]>([]);
-  
+
   // Use refs to avoid stale closures in the message handler
   const playerNameRef = useRef(playerName);
   const showPromptRef = useRef(showPrompt);
-  
+
   useEffect(() => {
     playerNameRef.current = playerName;
     showPromptRef.current = showPrompt;
   }, [playerName, showPrompt]);
-  
+
   useEffect(() => {
     setShowPrompt(!initialToken); // Show prompt if no token
   }, [initialToken]);
@@ -66,50 +69,65 @@ function App() {
     }
   }, []); // Empty deps - we use refs for current values
 
-   const { status, sendMessage, lobbyState, lastSeatMessage, tableState } = useWebSocket(
-     WS_URL,
-     initialToken || undefined,
-     { onMessage: handleMessage }
-   );
+  const {
+    status,
+    sendMessage,
+    lobbyState,
+    lastSeatMessage,
+    tableState,
+    gameState,
+  } = useWebSocket(WS_URL, initialToken || undefined, {
+    onMessage: handleMessage,
+  });
 
-    // Handle seat messages (seat_assigned and seat_cleared)
-    useEffect(() => {
-      if (lastSeatMessage) {
-        if (lastSeatMessage.type === 'seat_assigned' && lastSeatMessage.payload) {
-          const payload = lastSeatMessage.payload as { tableId: string; seatIndex: number; status?: string };
-          setCurrentTableId(payload.tableId);
-          setCurrentSeatIndex(payload.seatIndex);
-         // Initialize seats array with 6 empty seats
-         const newSeats: SeatInfo[] = [];
-         for (let i = 0; i < 6; i++) {
-           newSeats.push({
-             index: i,
-             playerName: i === payload.seatIndex ? playerNameRef.current : null,
-             status: i === payload.seatIndex ? 'occupied' : 'empty',
-           });
-         }
-         setSeats(newSeats);
-         setView('table');
-       } else if (lastSeatMessage.type === 'seat_cleared') {
-         setView('lobby');
-         setCurrentTableId(null);
-         setCurrentSeatIndex(null);
-         setSeats([]);
-       }
-     }
-   }, [lastSeatMessage]);
+  // Debug: Log gameState changes
+  useEffect(() => {
+    console.log('[App] gameState updated:', gameState);
+  }, [gameState]);
 
-   // Handle table state updates
-   useEffect(() => {
-     if (tableState) {
-       const updatedSeats: SeatInfo[] = tableState.seats.map((seat) => ({
-         index: seat.index,
-         playerName: seat.playerName,
-         status: seat.status,
-       }));
-       setSeats(updatedSeats);
-     }
-   }, [tableState]);
+  // Handle seat messages (seat_assigned and seat_cleared)
+  useEffect(() => {
+    if (lastSeatMessage) {
+      if (lastSeatMessage.type === 'seat_assigned' && lastSeatMessage.payload) {
+        const payload = lastSeatMessage.payload as {
+          tableId: string;
+          seatIndex: number;
+          status?: string;
+        };
+        setCurrentTableId(payload.tableId);
+        setCurrentSeatIndex(payload.seatIndex);
+        // Initialize seats array with 6 empty seats
+        const newSeats: SeatInfo[] = [];
+        for (let i = 0; i < 6; i++) {
+          newSeats.push({
+            index: i,
+            playerName: i === payload.seatIndex ? playerNameRef.current : null,
+            status: i === payload.seatIndex ? 'occupied' : 'empty',
+          });
+        }
+        setSeats(newSeats);
+        setView('table');
+      } else if (lastSeatMessage.type === 'seat_cleared') {
+        setView('lobby');
+        setCurrentTableId(null);
+        setCurrentSeatIndex(null);
+        setSeats([]);
+      }
+    }
+  }, [lastSeatMessage]);
+
+  // Handle table state updates
+  useEffect(() => {
+    if (tableState) {
+      const updatedSeats: SeatInfo[] = tableState.seats.map((seat) => ({
+        index: seat.index,
+        playerName: seat.playerName,
+        status: seat.status,
+        stack: seat.stack,
+      }));
+      setSeats(updatedSeats);
+    }
+  }, [tableState]);
 
   const handleNameSubmit = (name: string): void => {
     try {
@@ -190,20 +208,22 @@ function App() {
       </header>
 
       <main className="app-main">
-         {showPrompt && <NamePrompt onSubmit={handleNameSubmit} />}
+        {showPrompt && <NamePrompt onSubmit={handleNameSubmit} />}
 
-         {!showPrompt && view === 'lobby' && (
-           <LobbyView tables={lobbyState} onJoinTable={handleJoinTable} />
-         )}
-         {!showPrompt && view === 'table' && currentTableId && (
-           <TableView
-             tableId={currentTableId}
-             seats={seats}
-             currentSeatIndex={currentSeatIndex}
-             onLeave={handleLeaveTable}
-           />
-         )}
-       </main>
+        {!showPrompt && view === 'lobby' && (
+          <LobbyView tables={lobbyState} onJoinTable={handleJoinTable} />
+        )}
+        {!showPrompt && view === 'table' && currentTableId && (
+          <TableView
+            tableId={currentTableId}
+            seats={seats}
+            currentSeatIndex={currentSeatIndex}
+            onLeave={handleLeaveTable}
+            gameState={gameState}
+            onSendMessage={sendMessage}
+          />
+        )}
+      </main>
     </div>
   );
 }

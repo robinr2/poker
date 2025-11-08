@@ -246,7 +246,7 @@ describe('useWebSocket', () => {
 
       const lobbyStateMessage = JSON.stringify({
         type: 'lobby_state',
-        payload: JSON.stringify([
+        payload: [
           {
             id: 'table-1',
             name: 'Table 1',
@@ -259,7 +259,7 @@ describe('useWebSocket', () => {
             seats_occupied: 2,
             max_seats: 6,
           },
-        ]),
+        ],
       });
 
       // Simulate message received
@@ -294,14 +294,14 @@ describe('useWebSocket', () => {
       // First message
       const firstMessage = JSON.stringify({
         type: 'lobby_state',
-        payload: JSON.stringify([
+        payload: [
           {
             id: 'table-1',
             name: 'Table 1',
             seats_occupied: 0,
             max_seats: 6,
           },
-        ]),
+        ],
       });
 
       act(() => {
@@ -315,14 +315,14 @@ describe('useWebSocket', () => {
       // Second message with updated seat count
       const secondMessage = JSON.stringify({
         type: 'lobby_state',
-        payload: JSON.stringify([
+        payload: [
           {
             id: 'table-1',
             name: 'Table 1',
             seats_occupied: 3,
             max_seats: 6,
           },
-        ]),
+        ],
       });
 
       act(() => {
@@ -523,7 +523,9 @@ describe('useWebSocket', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.tableState?.seats[0].playerName).toBe('NewPlayer');
+        expect(result.current.tableState?.seats[0].playerName).toBe(
+          'NewPlayer'
+        );
         expect(result.current.tableState?.seats[0].status).toBe('occupied');
       });
     });

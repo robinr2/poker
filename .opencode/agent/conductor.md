@@ -66,7 +66,7 @@ For each phase in the plan, execute this cycle:
 4. **MANDATORY STOP**: Wait for user to:
    - Make the git commit
    - Confirm readiness to proceed to next phase
-   - Request changes or abort
+   - Request changes or abort. If changes are requested, hand the implementation of to `@subagent/implementer.md` and the review to `@subagent/reviewer.md` as usual.
 
 ### 2D. Continue or Complete
 - If more phases remain: Return to step 2A for next phase

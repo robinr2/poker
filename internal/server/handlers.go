@@ -186,21 +186,15 @@ func (c *Client) SendError(message string, logger *slog.Logger) error {
 func (c *Client) SendLobbyState(server *Server, logger *slog.Logger) error {
 	lobbyState := server.GetLobbyState()
 
-	// First marshal the lobby state to JSON
+	// Marshal the lobby state to JSON
 	payloadBytes, err := json.Marshal(lobbyState)
 	if err != nil {
 		return fmt.Errorf("failed to marshal lobby state: %w", err)
 	}
 
-	// Then marshal it again as a JSON string (double-encode)
-	payloadString, err := json.Marshal(string(payloadBytes))
-	if err != nil {
-		return fmt.Errorf("failed to marshal payload string: %w", err)
-	}
-
 	response := WebSocketMessage{
 		Type:    "lobby_state",
-		Payload: json.RawMessage(payloadString),
+		Payload: json.RawMessage(payloadBytes),
 	}
 
 	responseBytes, err := json.Marshal(response)
@@ -701,6 +695,7 @@ func (s *Server) broadcastTableState(tableID string, excludeClient *Client) erro
 func (s *Server) broadcastHandStarted(table *Table) error {
 	// Get all clients at the table
 	clients := s.GetClientsAtTable(table.ID)
+	s.logger.Info("broadcasting hand_started", "tableID", table.ID, "num_clients", len(clients))
 
 	table.mu.RLock()
 	hand := table.CurrentHand
@@ -712,6 +707,8 @@ func (s *Server) broadcastHandStarted(table *Table) error {
 	sbSeat := hand.SmallBlindSeat
 	bbSeat := hand.BigBlindSeat
 	table.mu.RUnlock()
+
+	s.logger.Info("hand_started details", "dealerSeat", dealerSeat, "sbSeat", sbSeat, "bbSeat", bbSeat)
 
 	// Create payload
 	payloadObj := HandStartedPayload{
@@ -736,14 +733,17 @@ func (s *Server) broadcastHandStarted(table *Table) error {
 	}
 
 	// Send to all clients at the table
+	sentCount := 0
 	for _, client := range clients {
 		select {
 		case client.send <- responseBytes:
+			sentCount++
 		default:
 			s.logger.Warn("client send channel full, skipping hand_started message")
 		}
 	}
 
+	s.logger.Info("hand_started broadcast complete", "tableID", table.ID, "sentCount", sentCount)
 	return nil
 }
 
@@ -854,6 +854,46 @@ func (s *Server) broadcastCardsDealt(table *Table) error {
 			s.logger.Warn("client send channel full, skipping cards_dealt message")
 		}
 	}
+
+	return nil
+}
+
+// HandleStartHand processes a start_hand message to manually trigger hand start (temporary testing feature)
+func (c *Client) HandleStartHand(sm *SessionManager, server *Server, logger *slog.Logger, payload []byte) error {
+	// Verify session exists
+	session, err := sm.GetSession(c.Token)
+	if err != nil {
+		return fmt.Errorf("session not found: %w", err)
+	}
+
+	// Verify player is seated at a table
+	if session.TableID == nil || session.SeatIndex == nil {
+		return fmt.Errorf("not_seated")
+	}
+
+	// Get the table reference
+	var table *Table
+	server.mu.RLock()
+	for _, t := range server.tables {
+		if t != nil && t.ID == *session.TableID {
+			table = t
+			break
+		}
+	}
+	server.mu.RUnlock()
+
+	if table == nil {
+		return fmt.Errorf("table not found")
+	}
+
+	// Start the hand (this will handle all broadcasting internally)
+	err = table.StartHand()
+	if err != nil {
+		logger.Warn("failed to start hand", "error", err)
+		return fmt.Errorf("failed to start hand: %w", err)
+	}
+
+	logger.Info("hand started via temporary testing button", "token", c.Token, "tableId", *session.TableID)
 
 	return nil
 }

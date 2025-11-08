@@ -12,15 +12,23 @@
   color: #1f2937;
 }
 
+.table-container {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
 .seats-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(2, 1fr);
   gap: 30px;
-  padding: 40px;
+  padding: 80px 40px;
   background-color: #f3f4f6;
   border-radius: 12px;
   max-width: 600px;
+  position: relative;
 }
 
 .seat {
@@ -35,6 +43,7 @@
   min-height: 120px;
   transition: all 0.2s ease;
   cursor: default;
+  position: relative;
 }
 
 .seat:hover {
@@ -75,6 +84,144 @@
   font-weight: 600;
 }
 
+/* Dealer Button Styling */
+.dealer-badge {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background-color: #fbbf24;
+  border: 2px solid #f59e0b;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: #78350f;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+}
+
+/* Small Blind Badge */
+.sb-badge {
+  position: absolute;
+  top: -12px;
+  left: -12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background-color: #a78bfa;
+  border: 2px solid #8b5cf6;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 0.7rem;
+  color: #5b21b6;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+}
+
+/* Big Blind Badge */
+.bb-badge {
+  position: absolute;
+  top: 12px;
+  right: -12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background-color: #f87171;
+  border: 2px solid #dc2626;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 0.7rem;
+  color: #7f1d1d;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+}
+
+/* Hole Cards Display */
+.hole-cards {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  justify-content: center;
+}
+
+.card {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 50px;
+  border-radius: 4px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border: 1px solid #ddd;
+  background-color: #fff;
+}
+
+.card.face-up {
+  background-color: #fff;
+  border: 2px solid #1f2937;
+}
+
+.card.face-up {
+  color: #1f2937;
+}
+
+/* Card Back Styling */
+.opponent-cards {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  justify-content: center;
+}
+
+.card-back {
+  background-color: #4b5563;
+  border: 2px solid #2d3748;
+  color: #e5e7eb;
+  font-size: 1.5rem;
+}
+
+/* Stack Display */
+.stack {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #059669;
+  margin: 8px 0 0 0;
+  text-align: center;
+}
+
+.seat.own-seat .stack {
+  color: #047857;
+  font-weight: 700;
+}
+
+/* Pot Display */
+.pot-display {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(31, 41, 55, 0.9);
+  color: #fbbf24;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  z-index: 5;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 .leave-button {
   padding: 12px 24px;
   font-size: 1rem;
@@ -97,10 +244,43 @@
   transform: translateY(0);
 }
 
+/* Button Group for Layout */
+.button-group {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* Start Hand Button (Temporary Testing Feature) */
+.start-hand-button {
+  padding: 12px 24px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: white;
+  background-color: #10b981;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.start-hand-button:hover {
+  background-color: #059669;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+.start-hand-button:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(16, 185, 129, 0.3);
+}
+
 @media (max-width: 768px) {
   .seats-grid {
     gap: 20px;
-    padding: 30px;
+    padding: 60px 30px;
     max-width: 100%;
   }
 
@@ -115,5 +295,24 @@
 
   .seat-player {
     font-size: 1rem;
+  }
+
+  .hole-cards {
+    gap: 6px;
+  }
+
+  .card {
+    width: 36px;
+    height: 45px;
+    font-size: 0.95rem;
+  }
+
+  .opponent-cards {
+    gap: 6px;
+  }
+
+  .pot-display {
+    font-size: 1rem;
+    padding: 10px 20px;
   }
 }

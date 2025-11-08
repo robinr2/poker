@@ -1,6 +1,6 @@
-import type { TableInfo } from "./TableCard";
-import { TableCard } from "./TableCard";
-import "../styles/LobbyView.css";
+import type { TableInfo } from './TableCard';
+import { TableCard } from './TableCard';
+import '../styles/LobbyView.css';
 
 interface LobbyViewProps {
   tables: TableInfo[];

@@ -397,3 +397,127 @@ func TestBroadcastCardsDealt(t *testing.T) {
 		t.Fatalf("failed to broadcast cards dealt: %v", err)
 	}
 }
+
+// TestHandleStartHand verifies start_hand message handler successfully starts a hand
+func TestHandleStartHand(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players with sessions
+	// Create sessions
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	sm.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	sm.UpdateSession(token2, &table.ID, &[]int{1}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Create a mock client
+	client := &Client{
+		hub:   hub,
+		Token: token1,
+		send:  make(chan []byte, 256),
+	}
+
+	// Call HandleStartHand
+	payload := []byte("{}")
+	err := client.HandleStartHand(sm, server, logger, payload)
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+
+	// Verify table has an active hand
+	table.mu.RLock()
+	if table.CurrentHand == nil {
+		t.Error("expected CurrentHand to be set")
+	}
+	if table.DealerSeat == nil {
+		t.Error("expected DealerSeat to be set")
+	}
+	table.mu.RUnlock()
+}
+
+// TestHandleStartHandNotSeated verifies error when player is not seated
+func TestHandleStartHandNotSeated(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Create a session but don't seat the player
+	session, _ := sm.CreateSession("Player1")
+
+	// Create a mock client
+	client := &Client{
+		hub:   hub,
+		Token: session.Token,
+		send:  make(chan []byte, 256),
+	}
+
+	// Call HandleStartHand - should fail because player is not seated
+	payload := []byte("{}")
+	err := client.HandleStartHand(sm, server, logger, payload)
+	if err == nil {
+		t.Error("expected error when player not seated")
+	}
+}
+
+// TestHandleStartHandInsufficientPlayers verifies error with < 2 players
+func TestHandleStartHandInsufficientPlayers(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up only 1 player
+	session1, _ := sm.CreateSession("Player1")
+	token1 := session1.Token
+
+	// Assign seat
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.mu.Unlock()
+
+	// Create a mock client
+	client := &Client{
+		hub:   hub,
+		Token: token1,
+		send:  make(chan []byte, 256),
+	}
+
+	// Call HandleStartHand - should fail because only 1 player
+	payload := []byte("{}")
+	err := client.HandleStartHand(sm, server, logger, payload)
+	if err == nil {
+		t.Error("expected error when insufficient players")
+	}
+}

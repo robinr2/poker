@@ -21,11 +21,41 @@ interface TableSeat {
   index: number;
   playerName: string | null;
   status: string;
+  stack?: number;
 }
 
 interface TableState {
   tableId: string;
   seats: TableSeat[];
+}
+
+interface GameState {
+  dealerSeat: number | null;
+  smallBlindSeat: number | null;
+  bigBlindSeat: number | null;
+  holeCards: [string, string] | null;
+  pot: number;
+}
+
+interface HandStartedPayload {
+  dealerSeat: number;
+  smallBlindSeat: number;
+  bigBlindSeat: number;
+}
+
+interface BlindPostedPayload {
+  seatIndex: number;
+  amount: number;
+  newStack: number;
+}
+
+interface Card {
+  Rank: string;
+  Suit: string;
+}
+
+interface CardsDealtPayload {
+  holeCards: Record<number, Card[]>;
 }
 
 interface UseWebSocketReturn {
@@ -35,6 +65,7 @@ interface UseWebSocketReturn {
   lobbyState: TableInfo[];
   lastSeatMessage: SeatMessage | null;
   tableState: TableState | null;
+  gameState: GameState;
 }
 
 interface UseWebSocketOptions {
@@ -46,13 +77,22 @@ export function useWebSocket(
   token?: string,
   options?: UseWebSocketOptions
 ): UseWebSocketReturn {
-   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
-   const [lastMessage, setLastMessage] = useState<string | null>(null);
-   const [lobbyState, setLobbyState] = useState<TableInfo[]>([]);
-   const [lastSeatMessage, setLastSeatMessage] = useState<SeatMessage | null>(null);
-   const [tableState, setTableState] = useState<TableState | null>(null);
-   const serviceRef = useRef<WebSocketService | null>(null);
-   const onMessageRef = useRef(options?.onMessage);
+  const [status, setStatus] = useState<ConnectionStatus>('disconnected');
+  const [lastMessage, setLastMessage] = useState<string | null>(null);
+  const [lobbyState, setLobbyState] = useState<TableInfo[]>([]);
+  const [lastSeatMessage, setLastSeatMessage] = useState<SeatMessage | null>(
+    null
+  );
+  const [tableState, setTableState] = useState<TableState | null>(null);
+  const [gameState, setGameState] = useState<GameState>({
+    dealerSeat: null,
+    smallBlindSeat: null,
+    bigBlindSeat: null,
+    holeCards: null,
+    pot: 0,
+  });
+  const serviceRef = useRef<WebSocketService | null>(null);
+  const onMessageRef = useRef(options?.onMessage);
 
   // Update the ref when the callback changes
   useEffect(() => {
@@ -80,44 +120,113 @@ export function useWebSocket(
       // Also update state for components that need it
       setLastMessage(data);
 
-       // Parse and handle lobby_state messages
-        try {
-          const message = JSON.parse(data);
-          if (message.type === 'lobby_state' && message.payload) {
-            // Payload is an array of table objects with snake_case fields
-            const tables = JSON.parse(message.payload);
-            const convertedTables: TableInfo[] = tables.map((t: {
-              id: string;
-              name: string;
-              seats_occupied: number;
-              max_seats: number;
-            }) => ({
-              id: t.id,
-              name: t.name,
-              seatsOccupied: t.seats_occupied,
-              maxSeats: t.max_seats,
-            }));
-            setLobbyState(convertedTables);
-          } else if (message.type === 'seat_assigned' || message.type === 'seat_cleared') {
-            // Store the seat message for the app to handle
-            setLastSeatMessage({
-              type: message.type,
-              payload: message.payload,
-            });
-          } else if (message.type === 'table_state' && message.payload) {
-            // Handle table_state message with seat information
-            const payload = message.payload as {
-              tableId: string;
-              seats: TableSeat[];
+      // Parse and handle messages
+      try {
+        const message = JSON.parse(data);
+        if (message.type === 'lobby_state' && message.payload) {
+          // Parse payload directly - backend sends it as an array, not a string
+          const tables = message.payload as {
+            id: string;
+            name: string;
+            seats_occupied: number;
+            max_seats: number;
+          }[];
+          const convertedTables: TableInfo[] = tables.map((t) => ({
+            id: t.id,
+            name: t.name,
+            seatsOccupied: t.seats_occupied,
+            maxSeats: t.max_seats,
+          }));
+          setLobbyState(convertedTables);
+        } else if (
+          message.type === 'seat_assigned' ||
+          message.type === 'seat_cleared'
+        ) {
+          // Store the seat message for the app to handle
+          setLastSeatMessage({
+            type: message.type,
+            payload: message.payload,
+          });
+        } else if (message.type === 'table_state' && message.payload) {
+          // Handle table_state message with seat information
+          const payload = message.payload as {
+            tableId: string;
+            seats: TableSeat[];
+          };
+          setTableState({
+            tableId: payload.tableId,
+            seats: payload.seats,
+          });
+        } else if (message.type === 'hand_started' && message.payload) {
+          // Handle hand_started message
+          // Payload can be either a string (needs parsing) or already an object
+          console.log('[useWebSocket] hand_started received, payload:', message.payload);
+          const payload = typeof message.payload === 'string' 
+            ? JSON.parse(message.payload) as HandStartedPayload
+            : message.payload as HandStartedPayload;
+          console.log('[useWebSocket] hand_started payload:', payload);
+          setGameState((prev) => ({
+            ...prev,
+            dealerSeat: payload.dealerSeat,
+            smallBlindSeat: payload.smallBlindSeat,
+            bigBlindSeat: payload.bigBlindSeat,
+          }));
+          console.log('[useWebSocket] gameState updated with dealer:', payload.dealerSeat, 'SB:', payload.smallBlindSeat, 'BB:', payload.bigBlindSeat);
+        } else if (message.type === 'blind_posted' && message.payload) {
+          // Handle blind_posted message - update pot
+          // Payload can be either a string (needs parsing) or already an object
+          console.log('[useWebSocket] blind_posted received, payload:', message.payload);
+          const payload = typeof message.payload === 'string'
+            ? JSON.parse(message.payload) as BlindPostedPayload
+            : message.payload as BlindPostedPayload;
+          console.log('[useWebSocket] blind_posted payload:', payload);
+          setGameState((prev) => ({
+            ...prev,
+            pot: prev.pot + payload.amount,
+          }));
+          console.log('[useWebSocket] gameState updated, pot:', payload.amount);
+          // Also update table state with new stack
+          setTableState((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              seats: prev.seats.map((seat) =>
+                seat.index === payload.seatIndex
+                  ? { ...seat, stack: payload.newStack }
+                  : seat
+              ),
             };
-            setTableState({
-              tableId: payload.tableId,
-              seats: payload.seats,
-            });
+          });
+        } else if (message.type === 'cards_dealt' && message.payload) {
+          // Handle cards_dealt message
+          // Payload can be either a string (needs parsing) or already an object
+          console.log('[useWebSocket] cards_dealt received, payload:', message.payload);
+          const payload = typeof message.payload === 'string'
+            ? JSON.parse(message.payload) as CardsDealtPayload
+            : message.payload as CardsDealtPayload;
+          console.log('[useWebSocket] cards_dealt payload:', payload);
+          // Find the current player's hole cards
+          // The backend sends personalized cards, so we need to find which seat index has cards
+          const holeCardsEntries = Object.entries(payload.holeCards);
+          if (holeCardsEntries.length > 0) {
+            const [, cards] = holeCardsEntries[0];
+            if (cards && cards.length === 2) {
+              // Convert Card objects {Rank, Suit} to string format "As", "Kh"
+              const cardStrings: [string, string] = [
+                cards[0].Rank + cards[0].Suit,
+                cards[1].Rank + cards[1].Suit,
+              ];
+              setGameState((prev) => ({
+                ...prev,
+                holeCards: cardStrings,
+              }));
+              console.log('[useWebSocket] gameState updated with hole cards:', cardStrings);
+            }
           }
-        } catch {
-          // Silently ignore parsing errors for non-JSON messages
         }
+      } catch {
+        // Silently ignore parsing errors for non-JSON messages
+      }
     });
 
     // Connect
@@ -144,12 +253,13 @@ export function useWebSocket(
     }
   }, []);
 
-   return {
-     status,
-     sendMessage,
-     lastMessage,
-     lobbyState,
-     lastSeatMessage,
-     tableState,
-   };
- }
+  return {
+    status,
+    sendMessage,
+    lastMessage,
+    lobbyState,
+    lastSeatMessage,
+    tableState,
+    gameState,
+  };
+}

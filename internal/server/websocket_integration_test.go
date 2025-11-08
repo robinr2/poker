@@ -584,15 +584,9 @@ func TestWebSocketSendsLobbyStateOnConnect(t *testing.T) {
 		t.Errorf("expected second message to be 'lobby_state', got %q", msg2.Type)
 	}
 
-	// Payload is double-encoded: first unmarshal to string, then parse JSON
-	var payloadStr string
-	err = json.Unmarshal(msg2.Payload, &payloadStr)
-	if err != nil {
-		t.Fatalf("failed to parse lobby_state payload as string: %v", err)
-	}
-
+	// Parse payload directly as array (not double-encoded)
 	var lobbyState []interface{}
-	err = json.Unmarshal([]byte(payloadStr), &lobbyState)
+	err = json.Unmarshal(msg2.Payload, &lobbyState)
 	if err != nil {
 		t.Fatalf("failed to parse lobby_state array: %v", err)
 	}
@@ -637,16 +631,9 @@ func TestLobbyStateMessageFormat(t *testing.T) {
 		t.Errorf("expected message type 'lobby_state', got %q", msg.Type)
 	}
 
-	// Payload is double-encoded: first unmarshal to string, then parse JSON
-	var payloadStr string
-	err = json.Unmarshal(msg.Payload, &payloadStr)
-	if err != nil {
-		t.Fatalf("failed to parse lobby_state payload as string: %v", err)
-	}
-
-	// Parse as array of table info
+	// Parse payload directly as array (not double-encoded)
 	var tables []map[string]interface{}
-	err = json.Unmarshal([]byte(payloadStr), &tables)
+	err = json.Unmarshal(msg.Payload, &tables)
 	if err != nil {
 		t.Fatalf("failed to parse lobby_state tables array: %v", err)
 	}
@@ -717,15 +704,9 @@ func TestWebSocketSendsLobbyStateOnRestore(t *testing.T) {
 		t.Errorf("expected second message to be 'lobby_state', got %q", msg2.Type)
 	}
 
-	// Payload is double-encoded: first unmarshal to string, then parse JSON
-	var payloadStr string
-	err = json.Unmarshal(msg2.Payload, &payloadStr)
-	if err != nil {
-		t.Fatalf("failed to parse lobby_state payload as string: %v", err)
-	}
-
+	// Parse payload directly as array (not double-encoded)
 	var lobbyState []interface{}
-	err = json.Unmarshal([]byte(payloadStr), &lobbyState)
+	err = json.Unmarshal(msg2.Payload, &lobbyState)
 	if err != nil {
 		t.Fatalf("failed to parse lobby_state array: %v", err)
 	}
@@ -1746,14 +1727,8 @@ func TestHandleLeaveTableReceivesLobbyState(t *testing.T) {
 	}
 
 	// Verify the lobby_state shows table has 0 occupied seats
-	var payloadStr string
-	err = json.Unmarshal(msg.Payload, &payloadStr)
-	if err != nil {
-		t.Fatalf("failed to parse lobby_state payload as string: %v", err)
-	}
-
 	var tables []map[string]interface{}
-	err = json.Unmarshal([]byte(payloadStr), &tables)
+	err = json.Unmarshal(msg.Payload, &tables)
 	if err != nil {
 		t.Fatalf("failed to parse lobby_state tables array: %v", err)
 	}

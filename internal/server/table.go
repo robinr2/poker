@@ -319,7 +319,7 @@ func (h *Hand) DealHoleCards(seats [6]Seat) error {
 
 // CanStartHand checks if a new hand can be started
 // Returns true if:
-// - At least 2 active players exist
+// - At least 2 players exist (waiting or active status)
 // - No hand is currently running (CurrentHand == nil)
 // Returns false otherwise
 func (t *Table) CanStartHand() bool {
@@ -331,31 +331,40 @@ func (t *Table) CanStartHand() bool {
 		return false
 	}
 
-	// Count active players
-	activeCount := 0
+	// Count players (both "waiting" and "active" can start a hand)
+	playerCount := 0
 	for i := 0; i < 6; i++ {
-		if t.Seats[i].Status == "active" {
-			activeCount++
+		if t.Seats[i].Status == "waiting" || t.Seats[i].Status == "active" {
+			playerCount++
 		}
 	}
 
-	// Need at least 2 active players
-	return activeCount >= 2
+	// Need at least 2 players
+	return playerCount >= 2
 }
 
 // StartHand initializes and starts a new poker hand
 // This method orchestrates the full hand start sequence:
-// 1. Validates that a hand can be started (CanStartHand)
-// 2. Assigns dealer via NextDealer()
-// 3. Gets blind positions
-// 4. Creates new deck and shuffles
-// 5. Posts blinds (SB=10, BB=20), handles all-in if stack < blind
-// 6. Deals hole cards to all active players
-// 7. Sets CurrentHand with all game state
-// 8. Broadcasts hand_started, blind_posted, and cards_dealt events
+// 1. Transitions "waiting" players to "active" status
+// 2. Validates that a hand can be started (≥2 active players, no hand running)
+// 3. Assigns dealer via NextDealer()
+// 4. Gets blind positions
+// 5. Creates new deck and shuffles
+// 6. Posts blinds (SB=10, BB=20), handles all-in if stack < blind
+// 7. Deals hole cards to all active players
+// 8. Sets CurrentHand with all game state
+// 9. Broadcasts hand_started, blind_posted, and cards_dealt events
 // Returns error if hand cannot be started or if operations fail
 func (t *Table) StartHand() error {
 	t.mu.Lock()
+
+	// Step 0: Transition all "waiting" players to "active" status
+	// Players become active when the first/next hand starts
+	for i := 0; i < 6; i++ {
+		if t.Seats[i].Status == "waiting" {
+			t.Seats[i].Status = "active"
+		}
+	}
 
 	// Check if hand can be started (must do this with lock held)
 	// Count active players

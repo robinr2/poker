@@ -177,6 +177,12 @@ func (c *Client) readPump(sm *SessionManager, server *Server, logger *slog.Logge
 				c.SendError(err.Error(), logger)
 				logger.Warn("failed to handle leave_table", "error", err)
 			}
+		case "start_hand":
+			err := c.HandleStartHand(sm, server, logger, wsMsg.Payload)
+			if err != nil {
+				c.SendError(err.Error(), logger)
+				logger.Warn("failed to handle start_hand", "error", err)
+			}
 		default:
 			c.SendError("Unknown message type: "+wsMsg.Type, logger)
 			logger.Warn("unknown message type", "type", wsMsg.Type)

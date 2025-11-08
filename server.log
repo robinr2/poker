@@ -1,0 +1,272 @@
+{"time":"2025-11-08T14:12:20.388561949+01:00","level":"INFO","msg":"starting poker application","port":"8080","log_level":"info"}
+{"time":"2025-11-08T14:12:20.388725981+01:00","level":"INFO","msg":"starting server","addr":"0.0.0.0:8080"}
+{"time":"2025-11-08T14:13:36.557788319+01:00","level":"INFO","msg":"client registered","total_clients":1}
+{"time":"2025-11-08T14:13:36.557726166+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"127.0.0.1","Port":57546,"Zone":""}}
+{"time":"2025-11-08T14:13:36.557831049+01:00","level":"WARN","msg":"invalid token provided","token":"5a90a27e-8817-43ac-b78b-45fd80771b8a","error":"session not found: 5a90a27e-8817-43ac-b78b-45fd80771b8a"}
+{"time":"2025-11-08T14:13:36.557853116+01:00","level":"INFO","msg":"error sent to client","message":"Invalid or expired token"}
+{"time":"2025-11-08T14:13:36.568118667+01:00","level":"INFO","msg":"client unregistered","total_clients":0}
+{"time":"2025-11-08T14:13:37.441595938+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"127.0.0.1","Port":57568,"Zone":""}}
+{"time":"2025-11-08T14:13:37.441639704+01:00","level":"WARN","msg":"invalid token provided","token":"a81aa4d1-57b7-4d54-9f0e-7d72922f8832","error":"session not found: a81aa4d1-57b7-4d54-9f0e-7d72922f8832"}
+{"time":"2025-11-08T14:13:37.441655279+01:00","level":"INFO","msg":"error sent to client","message":"Invalid or expired token"}
+{"time":"2025-11-08T14:13:37.441662281+01:00","level":"INFO","msg":"client registered","total_clients":1}
+{"time":"2025-11-08T14:13:37.452176078+01:00","level":"INFO","msg":"client unregistered","total_clients":0}
+{"time":"2025-11-08T14:13:37.723551567+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"127.0.0.1","Port":57584,"Zone":""}}
+{"time":"2025-11-08T14:13:37.723623691+01:00","level":"INFO","msg":"client registered","total_clients":1}
+{"time":"2025-11-08T14:13:37.723623471+01:00","level":"WARN","msg":"invalid token provided","token":"5a90a27e-8817-43ac-b78b-45fd80771b8a","error":"session not found: 5a90a27e-8817-43ac-b78b-45fd80771b8a"}
+{"time":"2025-11-08T14:13:37.723663103+01:00","level":"INFO","msg":"error sent to client","message":"Invalid or expired token"}
+{"time":"2025-11-08T14:13:37.733996122+01:00","level":"INFO","msg":"client unregistered","total_clients":0}
+{"time":"2025-11-08T14:13:38.490413933+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"127.0.0.1","Port":57598,"Zone":""}}
+{"time":"2025-11-08T14:13:38.490464027+01:00","level":"WARN","msg":"invalid token provided","token":"a81aa4d1-57b7-4d54-9f0e-7d72922f8832","error":"session not found: a81aa4d1-57b7-4d54-9f0e-7d72922f8832"}
+{"time":"2025-11-08T14:13:38.490477751+01:00","level":"INFO","msg":"error sent to client","message":"Invalid or expired token"}
+{"time":"2025-11-08T14:13:38.490495274+01:00","level":"INFO","msg":"client registered","total_clients":1}
+{"time":"2025-11-08T14:13:38.500830293+01:00","level":"INFO","msg":"client unregistered","total_clients":0}
+{"time":"2025-11-08T14:13:38.7400534+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"127.0.0.1","Port":57604,"Zone":""}}
+{"time":"2025-11-08T14:13:38.740149051+01:00","level":"WARN","msg":"invalid token provided","token":"5a90a27e-8817-43ac-b78b-45fd80771b8a","error":"session not found: 5a90a27e-8817-43ac-b78b-45fd80771b8a"}
+{"time":"2025-11-08T14:13:38.740126937+01:00","level":"INFO","msg":"client registered","total_clients":1}
+{"time":"2025-11-08T14:13:38.740174302+01:00","level":"INFO","msg":"error sent to client","message":"Invalid or expired token"}
+{"time":"2025-11-08T14:13:38.75056427+01:00","level":"INFO","msg":"client unregistered","total_clients":0}
+{"time":"2025-11-08T14:13:39.50673567+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"127.0.0.1","Port":57610,"Zone":""}}
+{"time":"2025-11-08T14:13:39.506835356+01:00","level":"WARN","msg":"invalid token provided","token":"a81aa4d1-57b7-4d54-9f0e-7d72922f8832","error":"session not found: a81aa4d1-57b7-4d54-9f0e-7d72922f8832"}
+{"time":"2025-11-08T14:13:39.506851401+01:00","level":"INFO","msg":"client registered","total_clients":1}
+{"time":"2025-11-08T14:13:39.506876794+01:00","level":"INFO","msg":"error sent to client","message":"Invalid or expired token"}
+{"time":"2025-11-08T14:13:39.51741232+01:00","level":"INFO","msg":"client unregistered","total_clients":0}
+{"time":"2025-11-08T14:13:39.819220339+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"127.0.0.1","Port":57612,"Zone":""}}
+{"time":"2025-11-08T14:13:39.819335845+01:00","level":"WARN","msg":"invalid token provided","token":"5a90a27e-8817-43ac-b78b-45fd80771b8a","error":"session not found: 5a90a27e-8817-43ac-b78b-45fd80771b8a"}
+{"time":"2025-11-08T14:13:39.81938273+01:00","level":"INFO","msg":"error sent to client","message":"Invalid or expired token"}
+{"time":"2025-11-08T14:13:39.819374648+01:00","level":"INFO","msg":"client registered","total_clients":1}
+{"time":"2025-11-08T14:13:39.829919608+01:00","level":"INFO","msg":"client unregistered","total_clients":0}
+{"time":"2025-11-08T14:13:40.524451107+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"127.0.0.1","Port":57622,"Zone":""}}
+{"time":"2025-11-08T14:13:40.524672414+01:00","level":"WARN","msg":"invalid token provided","token":"a81aa4d1-57b7-4d54-9f0e-7d72922f8832","error":"session not found: a81aa4d1-57b7-4d54-9f0e-7d72922f8832"}
+{"time":"2025-11-08T14:13:40.524727176+01:00","level":"INFO","msg":"error sent to client","message":"Invalid or expired token"}
+{"time":"2025-11-08T14:13:40.5248051+01:00","level":"INFO","msg":"client registered","total_clients":1}
+{"time":"2025-11-08T14:13:40.535280709+01:00","level":"INFO","msg":"client unregistered","total_clients":0}
+{"time":"2025-11-08T14:13:40.839745972+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"127.0.0.1","Port":57634,"Zone":""}}
+{"time":"2025-11-08T14:13:40.839874689+01:00","level":"WARN","msg":"invalid token provided","token":"5a90a27e-8817-43ac-b78b-45fd80771b8a","error":"session not found: 5a90a27e-8817-43ac-b78b-45fd80771b8a"}
+{"time":"2025-11-08T14:13:40.839917731+01:00","level":"INFO","msg":"error sent to client","message":"Invalid or expired token"}
+{"time":"2025-11-08T14:13:40.839929511+01:00","level":"INFO","msg":"client registered","total_clients":1}
+{"time":"2025-11-08T14:13:40.850450756+01:00","level":"INFO","msg":"client unregistered","total_clients":0}
+{"time":"2025-11-08T14:13:41.66301887+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"127.0.0.1","Port":57636,"Zone":""}}
+{"time":"2025-11-08T14:13:41.663099562+01:00","level":"INFO","msg":"client registered","total_clients":1}
+{"time":"2025-11-08T14:13:41.663123872+01:00","level":"WARN","msg":"invalid token provided","token":"a81aa4d1-57b7-4d54-9f0e-7d72922f8832","error":"session not found: a81aa4d1-57b7-4d54-9f0e-7d72922f8832"}
+{"time":"2025-11-08T14:13:41.663158434+01:00","level":"INFO","msg":"error sent to client","message":"Invalid or expired token"}
+{"time":"2025-11-08T14:13:41.673589725+01:00","level":"INFO","msg":"client unregistered","total_clients":0}
+{"time":"2025-11-08T14:13:41.939330208+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"127.0.0.1","Port":57644,"Zone":""}}
+{"time":"2025-11-08T14:13:41.939501523+01:00","level":"WARN","msg":"invalid token provided","token":"5a90a27e-8817-43ac-b78b-45fd80771b8a","error":"session not found: 5a90a27e-8817-43ac-b78b-45fd80771b8a"}
+{"time":"2025-11-08T14:13:41.939576662+01:00","level":"INFO","msg":"client registered","total_clients":1}
+{"time":"2025-11-08T14:13:41.939622+01:00","level":"INFO","msg":"error sent to client","message":"Invalid or expired token"}
+{"time":"2025-11-08T14:13:41.950161572+01:00","level":"INFO","msg":"client unregistered","total_clients":0}
+{"time":"2025-11-08T14:13:42.68389393+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"127.0.0.1","Port":49584,"Zone":""}}
+{"time":"2025-11-08T14:13:42.683939873+01:00","level":"WARN","msg":"invalid token provided","token":"a81aa4d1-57b7-4d54-9f0e-7d72922f8832","error":"session not found: a81aa4d1-57b7-4d54-9f0e-7d72922f8832"}
+{"time":"2025-11-08T14:13:42.683956416+01:00","level":"INFO","msg":"error sent to client","message":"Invalid or expired token"}
+{"time":"2025-11-08T14:13:42.683969927+01:00","level":"INFO","msg":"client registered","total_clients":1}
+{"time":"2025-11-08T14:13:42.685334663+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"127.0.0.1","Port":49592,"Zone":""}}
+{"time":"2025-11-08T14:13:42.685381456+01:00","level":"INFO","msg":"client registered","total_clients":2}
+{"time":"2025-11-08T14:13:42.694538885+01:00","level":"INFO","msg":"client unregistered","total_clients":1}
+{"time":"2025-11-08T14:13:43.698526269+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"127.0.0.1","Port":49608,"Zone":""}}
+{"time":"2025-11-08T14:13:43.698588168+01:00","level":"WARN","msg":"invalid token provided","token":"a81aa4d1-57b7-4d54-9f0e-7d72922f8832","error":"session not found: a81aa4d1-57b7-4d54-9f0e-7d72922f8832"}
+{"time":"2025-11-08T14:13:43.698601144+01:00","level":"INFO","msg":"error sent to client","message":"Invalid or expired token"}
+{"time":"2025-11-08T14:13:43.698608443+01:00","level":"INFO","msg":"client registered","total_clients":2}
+{"time":"2025-11-08T14:13:43.70889408+01:00","level":"INFO","msg":"client unregistered","total_clients":1}
+{"time":"2025-11-08T14:13:44.510147479+01:00","level":"INFO","msg":"session created","token":"f55fc36b-a589-477b-84c7-d0254682c546","name":"test1"}
+{"time":"2025-11-08T14:13:44.510202236+01:00","level":"INFO","msg":"session created via websocket","token":"f55fc36b-a589-477b-84c7-d0254682c546","name":"test1"}
+{"time":"2025-11-08T14:13:44.510280688+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:13:44.713005631+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"127.0.0.1","Port":49614,"Zone":""}}
+{"time":"2025-11-08T14:13:44.713091897+01:00","level":"WARN","msg":"invalid token provided","token":"a81aa4d1-57b7-4d54-9f0e-7d72922f8832","error":"session not found: a81aa4d1-57b7-4d54-9f0e-7d72922f8832"}
+{"time":"2025-11-08T14:13:44.713095525+01:00","level":"INFO","msg":"client registered","total_clients":2}
+{"time":"2025-11-08T14:13:44.713117114+01:00","level":"INFO","msg":"error sent to client","message":"Invalid or expired token"}
+{"time":"2025-11-08T14:13:44.723479428+01:00","level":"INFO","msg":"client unregistered","total_clients":1}
+{"time":"2025-11-08T14:13:45.366458418+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"127.0.0.1","Port":49626,"Zone":""}}
+{"time":"2025-11-08T14:13:45.366510244+01:00","level":"INFO","msg":"client registered","total_clients":2}
+{"time":"2025-11-08T14:13:46.712592888+01:00","level":"INFO","msg":"session created","token":"e36d905b-64b3-4984-9be7-78c52df577d8","name":"test2"}
+{"time":"2025-11-08T14:13:46.712639082+01:00","level":"INFO","msg":"session created via websocket","token":"e36d905b-64b3-4984-9be7-78c52df577d8","name":"test2"}
+{"time":"2025-11-08T14:13:46.712683839+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:13:47.722939879+01:00","level":"INFO","msg":"session updated","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableID":"table-1","seatIndex":0}
+{"time":"2025-11-08T14:13:47.723116249+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-1","seatIndex":0}
+{"time":"2025-11-08T14:13:47.723322214+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-1"}
+{"time":"2025-11-08T14:13:47.723344059+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":1,"excludeClient":true}
+{"time":"2025-11-08T14:13:47.7234746+01:00","level":"INFO","msg":"player joined table","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableId":"table-1","seatIndex":0}
+{"time":"2025-11-08T14:13:48.6657974+01:00","level":"INFO","msg":"session updated","token":"f55fc36b-a589-477b-84c7-d0254682c546","tableID":"table-1","seatIndex":1}
+{"time":"2025-11-08T14:13:48.665833391+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-1","seatIndex":1}
+{"time":"2025-11-08T14:13:48.665879001+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-1"}
+{"time":"2025-11-08T14:13:48.66588829+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":2,"excludeClient":true}
+{"time":"2025-11-08T14:13:48.665929057+01:00","level":"INFO","msg":"player joined table","token":"f55fc36b-a589-477b-84c7-d0254682c546","tableId":"table-1","seatIndex":1}
+{"time":"2025-11-08T14:13:50.506338269+01:00","level":"INFO","msg":"broadcasting hand_started","tableID":"table-1","num_clients":2}
+{"time":"2025-11-08T14:13:50.506403921+01:00","level":"INFO","msg":"hand_started details","dealerSeat":0,"sbSeat":0,"bbSeat":1}
+{"time":"2025-11-08T14:13:50.506524248+01:00","level":"INFO","msg":"hand_started broadcast complete","tableID":"table-1","sentCount":2}
+{"time":"2025-11-08T14:13:50.506865039+01:00","level":"INFO","msg":"hand started via temporary testing button","token":"f55fc36b-a589-477b-84c7-d0254682c546","tableId":"table-1"}
+{"time":"2025-11-08T14:17:05.687390689+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"::1","Port":45200,"Zone":""}}
+{"time":"2025-11-08T14:17:05.687456447+01:00","level":"INFO","msg":"client registered","total_clients":3}
+{"time":"2025-11-08T14:17:07.763663068+01:00","level":"INFO","msg":"session created","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","name":"test3"}
+{"time":"2025-11-08T14:17:07.763733441+01:00","level":"INFO","msg":"session created via websocket","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","name":"test3"}
+{"time":"2025-11-08T14:17:07.763828649+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:17:08.976920907+01:00","level":"INFO","msg":"session updated","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","tableID":"table-1","seatIndex":2}
+{"time":"2025-11-08T14:17:08.977105276+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-1","seatIndex":2}
+{"time":"2025-11-08T14:17:08.977317924+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-1"}
+{"time":"2025-11-08T14:17:08.977364968+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":3,"excludeClient":true}
+{"time":"2025-11-08T14:17:08.977571646+01:00","level":"INFO","msg":"player joined table","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","tableId":"table-1","seatIndex":2}
+{"time":"2025-11-08T14:17:15.667524393+01:00","level":"INFO","msg":"session updated","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableID":null,"seatIndex":null}
+{"time":"2025-11-08T14:17:15.667581017+01:00","level":"INFO","msg":"seat_cleared sent to client"}
+{"time":"2025-11-08T14:17:15.667592626+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":2,"excludeClient":false}
+{"time":"2025-11-08T14:17:15.667631746+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:17:15.667643582+01:00","level":"INFO","msg":"player left table","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableId":"table-1"}
+{"time":"2025-11-08T14:17:16.671041832+01:00","level":"INFO","msg":"session updated","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","tableID":null,"seatIndex":null}
+{"time":"2025-11-08T14:17:16.671125896+01:00","level":"INFO","msg":"seat_cleared sent to client"}
+{"time":"2025-11-08T14:17:16.671154759+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":1,"excludeClient":false}
+{"time":"2025-11-08T14:17:16.67122062+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:17:16.67126172+01:00","level":"INFO","msg":"player left table","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","tableId":"table-1"}
+{"time":"2025-11-08T14:17:18.857648579+01:00","level":"INFO","msg":"session updated","token":"f55fc36b-a589-477b-84c7-d0254682c546","tableID":null,"seatIndex":null}
+{"time":"2025-11-08T14:17:18.857747366+01:00","level":"INFO","msg":"seat_cleared sent to client"}
+{"time":"2025-11-08T14:17:18.857787864+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":0,"excludeClient":false}
+{"time":"2025-11-08T14:17:18.857914791+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:17:18.857993549+01:00","level":"INFO","msg":"player left table","token":"f55fc36b-a589-477b-84c7-d0254682c546","tableId":"table-1"}
+{"time":"2025-11-08T14:17:22.639653213+01:00","level":"INFO","msg":"client unregistered","total_clients":2}
+{"time":"2025-11-08T14:17:22.667172326+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"::1","Port":33358,"Zone":""}}
+{"time":"2025-11-08T14:17:22.667223213+01:00","level":"INFO","msg":"valid token provided","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70"}
+{"time":"2025-11-08T14:17:22.667240093+01:00","level":"INFO","msg":"client registered","total_clients":3}
+{"time":"2025-11-08T14:17:22.667291346+01:00","level":"INFO","msg":"session restored via websocket","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","name":"test3"}
+{"time":"2025-11-08T14:17:22.667312463+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:17:23.462628792+01:00","level":"INFO","msg":"client unregistered","total_clients":2}
+{"time":"2025-11-08T14:17:23.514793594+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"127.0.0.1","Port":57720,"Zone":""}}
+{"time":"2025-11-08T14:17:23.514828592+01:00","level":"INFO","msg":"valid token provided","token":"e36d905b-64b3-4984-9be7-78c52df577d8"}
+{"time":"2025-11-08T14:17:23.514839517+01:00","level":"INFO","msg":"client registered","total_clients":3}
+{"time":"2025-11-08T14:17:23.514853937+01:00","level":"INFO","msg":"session restored via websocket","token":"e36d905b-64b3-4984-9be7-78c52df577d8","name":"test2"}
+{"time":"2025-11-08T14:17:23.514869336+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:17:25.544797857+01:00","level":"INFO","msg":"session updated","token":"f55fc36b-a589-477b-84c7-d0254682c546","tableID":"table-4","seatIndex":0}
+{"time":"2025-11-08T14:17:25.544853557+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-4","seatIndex":0}
+{"time":"2025-11-08T14:17:25.544889195+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-4"}
+{"time":"2025-11-08T14:17:25.54489743+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-4","num_clients":1,"excludeClient":true}
+{"time":"2025-11-08T14:17:25.544938936+01:00","level":"INFO","msg":"player joined table","token":"f55fc36b-a589-477b-84c7-d0254682c546","tableId":"table-4","seatIndex":0}
+{"time":"2025-11-08T14:17:30.396713355+01:00","level":"INFO","msg":"session updated","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","tableID":"table-4","seatIndex":1}
+{"time":"2025-11-08T14:17:30.396832687+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-4","seatIndex":1}
+{"time":"2025-11-08T14:17:30.396939994+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-4"}
+{"time":"2025-11-08T14:17:30.396974808+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-4","num_clients":2,"excludeClient":true}
+{"time":"2025-11-08T14:17:30.397099098+01:00","level":"INFO","msg":"player joined table","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","tableId":"table-4","seatIndex":1}
+{"time":"2025-11-08T14:17:31.877976714+01:00","level":"INFO","msg":"session updated","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableID":"table-4","seatIndex":2}
+{"time":"2025-11-08T14:17:31.878077555+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-4","seatIndex":2}
+{"time":"2025-11-08T14:17:31.878140118+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-4"}
+{"time":"2025-11-08T14:17:31.878160764+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-4","num_clients":3,"excludeClient":true}
+{"time":"2025-11-08T14:17:31.878231131+01:00","level":"INFO","msg":"player joined table","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableId":"table-4","seatIndex":2}
+{"time":"2025-11-08T14:17:32.95599586+01:00","level":"INFO","msg":"broadcasting hand_started","tableID":"table-4","num_clients":3}
+{"time":"2025-11-08T14:17:32.956046081+01:00","level":"INFO","msg":"hand_started details","dealerSeat":0,"sbSeat":1,"bbSeat":2}
+{"time":"2025-11-08T14:17:32.956098905+01:00","level":"INFO","msg":"hand_started broadcast complete","tableID":"table-4","sentCount":3}
+{"time":"2025-11-08T14:17:32.956234587+01:00","level":"INFO","msg":"hand started via temporary testing button","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","tableId":"table-4"}
+{"time":"2025-11-08T14:17:38.062589292+01:00","level":"INFO","msg":"session updated","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","tableID":null,"seatIndex":null}
+{"time":"2025-11-08T14:17:38.062687677+01:00","level":"INFO","msg":"seat_cleared sent to client"}
+{"time":"2025-11-08T14:17:38.062724601+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-4","num_clients":2,"excludeClient":false}
+{"time":"2025-11-08T14:17:38.062909214+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:17:38.063001423+01:00","level":"INFO","msg":"player left table","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","tableId":"table-4"}
+{"time":"2025-11-08T14:17:38.774642914+01:00","level":"INFO","msg":"session updated","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableID":null,"seatIndex":null}
+{"time":"2025-11-08T14:17:38.77468687+01:00","level":"INFO","msg":"seat_cleared sent to client"}
+{"time":"2025-11-08T14:17:38.774703431+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-4","num_clients":1,"excludeClient":false}
+{"time":"2025-11-08T14:17:38.774752413+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:17:38.774771884+01:00","level":"INFO","msg":"player left table","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableId":"table-4"}
+{"time":"2025-11-08T14:17:39.975307789+01:00","level":"INFO","msg":"session updated","token":"f55fc36b-a589-477b-84c7-d0254682c546","tableID":null,"seatIndex":null}
+{"time":"2025-11-08T14:17:39.975357782+01:00","level":"INFO","msg":"seat_cleared sent to client"}
+{"time":"2025-11-08T14:17:39.975375905+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-4","num_clients":0,"excludeClient":false}
+{"time":"2025-11-08T14:17:39.975442507+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:17:39.975485191+01:00","level":"INFO","msg":"player left table","token":"f55fc36b-a589-477b-84c7-d0254682c546","tableId":"table-4"}
+{"time":"2025-11-08T14:17:43.847868742+01:00","level":"INFO","msg":"session updated","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","tableID":"table-2","seatIndex":0}
+{"time":"2025-11-08T14:17:43.84801472+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-2","seatIndex":0}
+{"time":"2025-11-08T14:17:43.848081311+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-2"}
+{"time":"2025-11-08T14:17:43.848104796+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-2","num_clients":1,"excludeClient":true}
+{"time":"2025-11-08T14:17:43.848177636+01:00","level":"INFO","msg":"player joined table","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","tableId":"table-2","seatIndex":0}
+{"time":"2025-11-08T14:17:45.143328478+01:00","level":"INFO","msg":"session updated","token":"f55fc36b-a589-477b-84c7-d0254682c546","tableID":"table-2","seatIndex":1}
+{"time":"2025-11-08T14:17:45.143432115+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-2","seatIndex":1}
+{"time":"2025-11-08T14:17:45.143496359+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-2"}
+{"time":"2025-11-08T14:17:45.14351302+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-2","num_clients":2,"excludeClient":true}
+{"time":"2025-11-08T14:17:45.143593648+01:00","level":"INFO","msg":"player joined table","token":"f55fc36b-a589-477b-84c7-d0254682c546","tableId":"table-2","seatIndex":1}
+{"time":"2025-11-08T14:17:46.544693005+01:00","level":"INFO","msg":"session updated","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableID":"table-2","seatIndex":2}
+{"time":"2025-11-08T14:17:46.565162811+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-2","seatIndex":2}
+{"time":"2025-11-08T14:17:46.565233822+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-2"}
+{"time":"2025-11-08T14:17:46.565246075+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-2","num_clients":3,"excludeClient":true}
+{"time":"2025-11-08T14:17:46.565287742+01:00","level":"INFO","msg":"player joined table","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableId":"table-2","seatIndex":2}
+{"time":"2025-11-08T14:17:48.347402368+01:00","level":"INFO","msg":"session updated","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableID":null,"seatIndex":null}
+{"time":"2025-11-08T14:17:48.347431267+01:00","level":"INFO","msg":"seat_cleared sent to client"}
+{"time":"2025-11-08T14:17:48.347440408+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-2","num_clients":2,"excludeClient":false}
+{"time":"2025-11-08T14:17:48.347478671+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:17:48.347495201+01:00","level":"INFO","msg":"player left table","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableId":"table-2"}
+{"time":"2025-11-08T14:17:49.741180772+01:00","level":"INFO","msg":"session updated","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableID":"table-2","seatIndex":2}
+{"time":"2025-11-08T14:17:49.741258386+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-2","seatIndex":2}
+{"time":"2025-11-08T14:17:49.741313303+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-2"}
+{"time":"2025-11-08T14:17:49.741331992+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-2","num_clients":3,"excludeClient":true}
+{"time":"2025-11-08T14:17:49.741404333+01:00","level":"INFO","msg":"player joined table","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableId":"table-2","seatIndex":2}
+{"time":"2025-11-08T14:17:51.230886494+01:00","level":"INFO","msg":"session updated","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableID":null,"seatIndex":null}
+{"time":"2025-11-08T14:17:51.23095984+01:00","level":"INFO","msg":"seat_cleared sent to client"}
+{"time":"2025-11-08T14:17:51.23098853+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-2","num_clients":2,"excludeClient":false}
+{"time":"2025-11-08T14:17:51.231052314+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:17:51.231107764+01:00","level":"INFO","msg":"player left table","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableId":"table-2"}
+{"time":"2025-11-08T14:17:51.923110058+01:00","level":"INFO","msg":"session updated","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableID":"table-2","seatIndex":2}
+{"time":"2025-11-08T14:17:51.923177689+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-2","seatIndex":2}
+{"time":"2025-11-08T14:17:51.923218868+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-2"}
+{"time":"2025-11-08T14:17:51.923232904+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-2","num_clients":3,"excludeClient":true}
+{"time":"2025-11-08T14:17:51.923280859+01:00","level":"INFO","msg":"player joined table","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableId":"table-2","seatIndex":2}
+{"time":"2025-11-08T14:17:52.963480584+01:00","level":"INFO","msg":"session updated","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableID":null,"seatIndex":null}
+{"time":"2025-11-08T14:17:52.9635112+01:00","level":"INFO","msg":"seat_cleared sent to client"}
+{"time":"2025-11-08T14:17:52.963519965+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-2","num_clients":2,"excludeClient":false}
+{"time":"2025-11-08T14:17:52.963549418+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:17:52.963564526+01:00","level":"INFO","msg":"player left table","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableId":"table-2"}
+{"time":"2025-11-08T14:17:54.024944893+01:00","level":"INFO","msg":"session updated","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableID":"table-2","seatIndex":2}
+{"time":"2025-11-08T14:17:54.025045344+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-2","seatIndex":2}
+{"time":"2025-11-08T14:17:54.025124269+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-2"}
+{"time":"2025-11-08T14:17:54.02514815+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-2","num_clients":3,"excludeClient":true}
+{"time":"2025-11-08T14:17:54.025218546+01:00","level":"INFO","msg":"player joined table","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableId":"table-2","seatIndex":2}
+{"time":"2025-11-08T14:17:54.871585466+01:00","level":"INFO","msg":"session updated","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableID":null,"seatIndex":null}
+{"time":"2025-11-08T14:17:54.871775875+01:00","level":"INFO","msg":"seat_cleared sent to client"}
+{"time":"2025-11-08T14:17:54.87187777+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-2","num_clients":2,"excludeClient":false}
+{"time":"2025-11-08T14:17:54.872047585+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:17:54.872142642+01:00","level":"INFO","msg":"player left table","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableId":"table-2"}
+{"time":"2025-11-08T14:17:56.519033748+01:00","level":"INFO","msg":"session updated","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","tableID":null,"seatIndex":null}
+{"time":"2025-11-08T14:17:56.519124948+01:00","level":"INFO","msg":"seat_cleared sent to client"}
+{"time":"2025-11-08T14:17:56.519153364+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-2","num_clients":1,"excludeClient":false}
+{"time":"2025-11-08T14:17:56.519212441+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:17:56.519245987+01:00","level":"INFO","msg":"player left table","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","tableId":"table-2"}
+{"time":"2025-11-08T14:18:04.119664967+01:00","level":"INFO","msg":"session updated","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","tableID":"table-2","seatIndex":0}
+{"time":"2025-11-08T14:18:04.119715117+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-2","seatIndex":0}
+{"time":"2025-11-08T14:18:04.119754926+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-2"}
+{"time":"2025-11-08T14:18:04.119765871+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-2","num_clients":2,"excludeClient":true}
+{"time":"2025-11-08T14:18:04.119800337+01:00","level":"INFO","msg":"player joined table","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","tableId":"table-2","seatIndex":0}
+{"time":"2025-11-08T14:18:05.882809035+01:00","level":"INFO","msg":"session updated","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableID":"table-2","seatIndex":2}
+{"time":"2025-11-08T14:18:05.88291329+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-2","seatIndex":2}
+{"time":"2025-11-08T14:18:05.882996682+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-2"}
+{"time":"2025-11-08T14:18:05.883024587+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-2","num_clients":3,"excludeClient":true}
+{"time":"2025-11-08T14:18:05.883127871+01:00","level":"INFO","msg":"player joined table","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableId":"table-2","seatIndex":2}
+{"time":"2025-11-08T14:18:15.616049554+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"::1","Port":37060,"Zone":""}}
+{"time":"2025-11-08T14:18:15.616127171+01:00","level":"INFO","msg":"client registered","total_clients":4}
+{"time":"2025-11-08T14:18:17.758935946+01:00","level":"INFO","msg":"session created","token":"9bfe7aaa-3704-432e-865d-7a6e3a6ef813","name":"test4"}
+{"time":"2025-11-08T14:18:17.759021644+01:00","level":"INFO","msg":"session created via websocket","token":"9bfe7aaa-3704-432e-865d-7a6e3a6ef813","name":"test4"}
+{"time":"2025-11-08T14:18:17.759126534+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:18:19.408623311+01:00","level":"INFO","msg":"session updated","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableID":null,"seatIndex":null}
+{"time":"2025-11-08T14:18:19.408668104+01:00","level":"INFO","msg":"seat_cleared sent to client"}
+{"time":"2025-11-08T14:18:19.408683588+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-2","num_clients":2,"excludeClient":false}
+{"time":"2025-11-08T14:18:19.408732181+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:18:19.408777929+01:00","level":"INFO","msg":"player left table","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableId":"table-2"}
+{"time":"2025-11-08T14:18:20.961237627+01:00","level":"INFO","msg":"session updated","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","tableID":null,"seatIndex":null}
+{"time":"2025-11-08T14:18:20.961287719+01:00","level":"INFO","msg":"seat_cleared sent to client"}
+{"time":"2025-11-08T14:18:20.961309815+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-2","num_clients":1,"excludeClient":false}
+{"time":"2025-11-08T14:18:20.961386712+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:18:20.961445433+01:00","level":"INFO","msg":"player left table","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","tableId":"table-2"}
+{"time":"2025-11-08T14:18:21.472205161+01:00","level":"INFO","msg":"session updated","token":"f55fc36b-a589-477b-84c7-d0254682c546","tableID":null,"seatIndex":null}
+{"time":"2025-11-08T14:18:21.472242558+01:00","level":"INFO","msg":"seat_cleared sent to client"}
+{"time":"2025-11-08T14:18:21.472251432+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-2","num_clients":0,"excludeClient":false}
+{"time":"2025-11-08T14:18:21.472285037+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:18:21.472304644+01:00","level":"INFO","msg":"player left table","token":"f55fc36b-a589-477b-84c7-d0254682c546","tableId":"table-2"}
+{"time":"2025-11-08T14:18:22.322283937+01:00","level":"INFO","msg":"session updated","token":"f55fc36b-a589-477b-84c7-d0254682c546","tableID":"table-1","seatIndex":0}
+{"time":"2025-11-08T14:18:22.322418919+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-1","seatIndex":0}
+{"time":"2025-11-08T14:18:22.322507212+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-1"}
+{"time":"2025-11-08T14:18:22.322527796+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":1,"excludeClient":true}
+{"time":"2025-11-08T14:18:22.322692026+01:00","level":"INFO","msg":"player joined table","token":"f55fc36b-a589-477b-84c7-d0254682c546","tableId":"table-1","seatIndex":0}
+{"time":"2025-11-08T14:18:22.994884817+01:00","level":"INFO","msg":"session updated","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","tableID":"table-1","seatIndex":1}
+{"time":"2025-11-08T14:18:22.995014886+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-1","seatIndex":1}
+{"time":"2025-11-08T14:18:22.995133417+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-1"}
+{"time":"2025-11-08T14:18:22.99516136+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":2,"excludeClient":true}
+{"time":"2025-11-08T14:18:22.995256158+01:00","level":"INFO","msg":"player joined table","token":"f1fd6344-dfad-407c-b61c-ef0abe697b70","tableId":"table-1","seatIndex":1}
+{"time":"2025-11-08T14:18:24.216367815+01:00","level":"INFO","msg":"session updated","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableID":"table-1","seatIndex":2}
+{"time":"2025-11-08T14:18:24.216399538+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-1","seatIndex":2}
+{"time":"2025-11-08T14:18:24.216421503+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-1"}
+{"time":"2025-11-08T14:18:24.216428266+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":3,"excludeClient":true}
+{"time":"2025-11-08T14:18:24.216470927+01:00","level":"INFO","msg":"player joined table","token":"e36d905b-64b3-4984-9be7-78c52df577d8","tableId":"table-1","seatIndex":2}
+{"time":"2025-11-08T14:18:26.310499002+01:00","level":"INFO","msg":"session updated","token":"9bfe7aaa-3704-432e-865d-7a6e3a6ef813","tableID":"table-1","seatIndex":3}
+{"time":"2025-11-08T14:18:26.310644845+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-1","seatIndex":3}
+{"time":"2025-11-08T14:18:26.310723909+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-1"}
+{"time":"2025-11-08T14:18:26.310742929+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":4,"excludeClient":true}
+{"time":"2025-11-08T14:18:26.31081332+01:00","level":"INFO","msg":"player joined table","token":"9bfe7aaa-3704-432e-865d-7a6e3a6ef813","tableId":"table-1","seatIndex":3}
