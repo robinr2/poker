@@ -154,3 +154,26 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func (s *Server) Router() chi.Router {
 	return s.router
 }
+
+// FindPlayerSeat searches across all tables for a player token and returns their seat (thread-safe)
+// Returns a pointer to a copy of the seat if found, nil if not seated at any table
+func (s *Server) FindPlayerSeat(token *string) *Seat {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Search all 4 tables for the token
+	for _, table := range s.tables {
+		if table == nil {
+			continue
+		}
+
+		// GetSeatByToken is thread-safe (uses its own RLock)
+		seat, found := table.GetSeatByToken(token)
+		if found {
+			return &seat
+		}
+	}
+
+	// Not found in any table
+	return nil
+}

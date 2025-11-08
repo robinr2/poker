@@ -70,3 +70,90 @@ func TestServerStart(t *testing.T) {
 		// Server stopped cleanly
 	}
 }
+
+// TestServerFindPlayerSeat verifies FindPlayerSeat finds player across all 4 tables
+func TestServerFindPlayerSeat(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+
+	token1 := "player-1"
+	token2 := "player-2"
+	token3 := "player-3"
+
+	// Assign token1 to table 0, seat 0
+	table0 := server.tables[0]
+	seat1, _ := table0.AssignSeat(&token1)
+
+	// Assign token2 to table 1, seat 1
+	table1 := server.tables[1]
+	seat2, _ := table1.AssignSeat(&token2)
+
+	// Assign token3 to table 3, seat 2
+	table3 := server.tables[3]
+	seat3, _ := table3.AssignSeat(&token3)
+
+	// Find token1 - should return seat from table 0
+	foundSeat := server.FindPlayerSeat(&token1)
+	if foundSeat == nil {
+		t.Fatal("expected to find token1, got nil")
+	}
+
+	if foundSeat.Index != seat1.Index {
+		t.Errorf("expected seat index %d, got %d", seat1.Index, foundSeat.Index)
+	}
+
+	if foundSeat.Token == nil || *foundSeat.Token != token1 {
+		t.Errorf("expected token '%s', got %v", token1, foundSeat.Token)
+	}
+
+	// Find token2 - should return seat from table 1
+	foundSeat = server.FindPlayerSeat(&token2)
+	if foundSeat == nil {
+		t.Fatal("expected to find token2, got nil")
+	}
+
+	if foundSeat.Index != seat2.Index {
+		t.Errorf("expected seat index %d for token2, got %d", seat2.Index, foundSeat.Index)
+	}
+
+	if foundSeat.Token == nil || *foundSeat.Token != token2 {
+		t.Errorf("expected token '%s', got %v", token2, foundSeat.Token)
+	}
+
+	// Find token3 - should return seat from table 3
+	foundSeat = server.FindPlayerSeat(&token3)
+	if foundSeat == nil {
+		t.Fatal("expected to find token3, got nil")
+	}
+
+	if foundSeat.Index != seat3.Index {
+		t.Errorf("expected seat index %d for token3, got %d", seat3.Index, foundSeat.Index)
+	}
+
+	if foundSeat.Token == nil || *foundSeat.Token != token3 {
+		t.Errorf("expected token '%s', got %v", token3, foundSeat.Token)
+	}
+}
+
+// TestServerFindPlayerSeatNotFound verifies returns nil when player not seated
+func TestServerFindPlayerSeatNotFound(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+
+	tokenNotSeated := "player-not-seated"
+
+	// Try to find player who is not seated
+	foundSeat := server.FindPlayerSeat(&tokenNotSeated)
+	if foundSeat != nil {
+		t.Errorf("expected nil for unseated player, got %v", foundSeat)
+	}
+
+	// Seat one player, then search for different token
+	token1 := "player-1"
+	server.tables[0].AssignSeat(&token1)
+
+	foundSeat = server.FindPlayerSeat(&tokenNotSeated)
+	if foundSeat != nil {
+		t.Errorf("expected nil for different token, got %v", foundSeat)
+	}
+}

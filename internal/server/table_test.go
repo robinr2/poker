@@ -181,3 +181,262 @@ func TestServerTablesPreseeded(t *testing.T) {
 		}
 	}
 }
+
+// TestTableAssignSeat verifies assigns to first empty seat (0-5 sequential)
+func TestTableAssignSeat(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+	token := "player-token-1"
+
+	// Assign to seat 0 (first empty)
+	seat, err := table.AssignSeat(&token)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if seat.Index != 0 {
+		t.Errorf("expected seat index 0, got %d", seat.Index)
+	}
+
+	if seat.Token == nil || *seat.Token != token {
+		t.Errorf("expected token '%s', got %v", token, seat.Token)
+	}
+
+	// Verify it's in the table's seats
+	if table.Seats[0].Token == nil || *table.Seats[0].Token != token {
+		t.Errorf("expected table.Seats[0].Token to be '%s'", token)
+	}
+
+	// Assign to seat 1 (next empty)
+	token2 := "player-token-2"
+	seat2, err := table.AssignSeat(&token2)
+	if err != nil {
+		t.Fatalf("expected no error for second assignment, got %v", err)
+	}
+
+	if seat2.Index != 1 {
+		t.Errorf("expected seat index 1, got %d", seat2.Index)
+	}
+
+	if seat2.Token == nil || *seat2.Token != token2 {
+		t.Errorf("expected token '%s', got %v", token2, seat2.Token)
+	}
+}
+
+// TestTableAssignSeatSequential verifies seats are assigned 0-5 sequentially
+func TestTableAssignSeatSequential(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	for i := 0; i < 6; i++ {
+		token := "player-" + string(rune('0'+i))
+		seat, err := table.AssignSeat(&token)
+		if err != nil {
+			t.Fatalf("assignment %d: expected no error, got %v", i, err)
+		}
+
+		if seat.Index != i {
+			t.Errorf("assignment %d: expected seat index %d, got %d", i, i, seat.Index)
+		}
+	}
+
+	// Verify all 6 seats are occupied
+	if table.GetOccupiedSeatCount() != 6 {
+		t.Errorf("expected 6 occupied seats, got %d", table.GetOccupiedSeatCount())
+	}
+}
+
+// TestTableAssignSeatWhenFull verifies returns error when all 6 seats occupied
+func TestTableAssignSeatWhenFull(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	// Fill all 6 seats
+	for i := 0; i < 6; i++ {
+		token := "player-" + string(rune('0'+i))
+		_, err := table.AssignSeat(&token)
+		if err != nil {
+			t.Fatalf("seat %d: expected no error, got %v", i, err)
+		}
+	}
+
+	// Try to assign 7th seat
+	token7 := "player-7"
+	seat, err := table.AssignSeat(&token7)
+	if err == nil {
+		t.Fatal("expected error when table is full, got nil")
+	}
+
+	if seat != (Seat{}) {
+		t.Errorf("expected empty seat when table is full, got %v", seat)
+	}
+
+	if err.Error() != "table is full" {
+		t.Errorf("expected error message 'table is full', got '%s'", err.Error())
+	}
+}
+
+// TestTableClearSeat verifies clears seat by token, sets Token to nil
+func TestTableClearSeat(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+	token1 := "player-1"
+	token2 := "player-2"
+
+	// Assign two seats
+	_, _ = table.AssignSeat(&token1)
+	_, _ = table.AssignSeat(&token2)
+
+	// Verify they're assigned
+	if table.Seats[0].Token == nil || *table.Seats[0].Token != token1 {
+		t.Fatal("expected seat 0 to have token1")
+	}
+
+	if table.Seats[1].Token == nil || *table.Seats[1].Token != token2 {
+		t.Fatal("expected seat 1 to have token2")
+	}
+
+	// Clear seat 1 (token2)
+	err := table.ClearSeat(&token2)
+	if err != nil {
+		t.Fatalf("expected no error when clearing seat, got %v", err)
+	}
+
+	// Verify seat 1 is now empty
+	if table.Seats[1].Token != nil {
+		t.Errorf("expected seat 1 Token to be nil after clearing, got %v", table.Seats[1].Token)
+	}
+
+	// Verify seat 0 is still occupied
+	if table.Seats[0].Token == nil || *table.Seats[0].Token != token1 {
+		t.Errorf("expected seat 0 to still have token1")
+	}
+
+	// Verify occupied count is 1
+	if table.GetOccupiedSeatCount() != 1 {
+		t.Errorf("expected 1 occupied seat, got %d", table.GetOccupiedSeatCount())
+	}
+}
+
+// TestTableClearSeatNotFound verifies returns error when token not found
+func TestTableClearSeatNotFound(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+	token1 := "player-1"
+	tokenNotAssigned := "player-not-assigned"
+
+	// Assign one seat
+	_, _ = table.AssignSeat(&token1)
+
+	// Try to clear a non-existent seat
+	err := table.ClearSeat(&tokenNotAssigned)
+	if err == nil {
+		t.Fatal("expected error when clearing non-existent seat, got nil")
+	}
+
+	if err.Error() != "seat not found" {
+		t.Errorf("expected error message 'seat not found', got '%s'", err.Error())
+	}
+
+	// Verify seat 0 is still occupied
+	if table.Seats[0].Token == nil || *table.Seats[0].Token != token1 {
+		t.Errorf("expected seat 0 to still have token1")
+	}
+}
+
+// TestTableGetSeatByToken verifies returns seat if player is seated at table
+func TestTableGetSeatByToken(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+	token1 := "player-1"
+	token2 := "player-2"
+
+	// Assign two seats
+	_, _ = table.AssignSeat(&token1)
+	_, _ = table.AssignSeat(&token2)
+
+	// Get seat by token1
+	seat, found := table.GetSeatByToken(&token1)
+	if !found {
+		t.Fatal("expected seat to be found for token1, got not found")
+	}
+
+	if seat.Index != 0 {
+		t.Errorf("expected seat index 0, got %d", seat.Index)
+	}
+
+	if seat.Token == nil || *seat.Token != token1 {
+		t.Errorf("expected token '%s', got %v", token1, seat.Token)
+	}
+
+	// Get seat by token2
+	seat, found = table.GetSeatByToken(&token2)
+	if !found {
+		t.Fatal("expected seat to be found for token2, got not found")
+	}
+
+	if seat.Index != 1 {
+		t.Errorf("expected seat index 1 for token2, got %d", seat.Index)
+	}
+
+	if seat.Token == nil || *seat.Token != token2 {
+		t.Errorf("expected token '%s', got %v", token2, seat.Token)
+	}
+}
+
+// TestTableGetSeatByTokenNotFound verifies returns found=false when token not found
+func TestTableGetSeatByTokenNotFound(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+	token1 := "player-1"
+	tokenNotAssigned := "player-not-assigned"
+
+	// Assign one seat
+	_, _ = table.AssignSeat(&token1)
+
+	// Get seat by non-existent token
+	seat, found := table.GetSeatByToken(&tokenNotAssigned)
+	if found {
+		t.Errorf("expected not found for non-existent token, got found")
+	}
+	if seat != (Seat{}) {
+		t.Errorf("expected empty seat for non-existent token, got %v", seat)
+	}
+
+	// Empty table should return not found
+	emptyTable := NewTable("empty", "Empty")
+	seat, found = emptyTable.GetSeatByToken(&token1)
+	if found {
+		t.Errorf("expected not found for empty table, got found")
+	}
+	if seat != (Seat{}) {
+		t.Errorf("expected empty seat for empty table, got %v", seat)
+	}
+}
+
+// TestTableConcurrentAssignments verifies multiple goroutines assign seats safely
+func TestTableConcurrentAssignments(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	const numGoroutines = 6
+	var wg sync.WaitGroup
+	successCount := 0
+	var mu sync.Mutex
+
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			token := "player-" + string(rune('0'+id))
+			seat, err := table.AssignSeat(&token)
+			if err == nil && seat != (Seat{}) {
+				mu.Lock()
+				successCount++
+				mu.Unlock()
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	if successCount != 6 {
+		t.Errorf("expected 6 successful assignments, got %d", successCount)
+	}
+
+	if table.GetOccupiedSeatCount() != 6 {
+		t.Errorf("expected 6 occupied seats, got %d", table.GetOccupiedSeatCount())
+	}
+}

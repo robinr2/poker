@@ -1,6 +1,9 @@
 package server
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+)
 
 // Seat represents a seat at a poker table
 type Seat struct {
@@ -48,4 +51,59 @@ func (t *Table) GetOccupiedSeatCount() int {
 		}
 	}
 	return count
+}
+
+// AssignSeat assigns a player token to the first available seat (thread-safe)
+// Returns the assigned seat (by value) and nil error on success
+// Returns empty Seat and error if table is full
+func (t *Table) AssignSeat(token *string) (Seat, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// Find first empty seat
+	for i := 0; i < 6; i++ {
+		if t.Seats[i].Token == nil {
+			t.Seats[i].Token = token
+			return t.Seats[i], nil
+		}
+	}
+
+	// No empty seats found
+	return Seat{}, fmt.Errorf("table is full")
+}
+
+// ClearSeat removes a player from a table by token (thread-safe)
+// Returns nil error on success
+// Returns error if token not found
+func (t *Table) ClearSeat(token *string) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// Find seat with matching token
+	for i := 0; i < 6; i++ {
+		if t.Seats[i].Token != nil && *t.Seats[i].Token == *token {
+			t.Seats[i].Token = nil
+			return nil
+		}
+	}
+
+	// Token not found
+	return fmt.Errorf("seat not found")
+}
+
+// GetSeatByToken returns the seat occupied by a player token (thread-safe)
+// Returns the seat (by value) and true if found, empty Seat and false if not found
+func (t *Table) GetSeatByToken(token *string) (Seat, bool) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	// Find seat with matching token
+	for i := 0; i < 6; i++ {
+		if t.Seats[i].Token != nil && *t.Seats[i].Token == *token {
+			return t.Seats[i], true
+		}
+	}
+
+	// Not found
+	return Seat{}, false
 }
