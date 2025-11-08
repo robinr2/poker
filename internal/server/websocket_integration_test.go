@@ -584,11 +584,17 @@ func TestWebSocketSendsLobbyStateOnConnect(t *testing.T) {
 		t.Errorf("expected second message to be 'lobby_state', got %q", msg2.Type)
 	}
 
-	// Verify payload is an array
-	var lobbyState []interface{}
-	err = json.Unmarshal(msg2.Payload, &lobbyState)
+	// Payload is double-encoded: first unmarshal to string, then parse JSON
+	var payloadStr string
+	err = json.Unmarshal(msg2.Payload, &payloadStr)
 	if err != nil {
-		t.Fatalf("failed to parse lobby_state payload: %v", err)
+		t.Fatalf("failed to parse lobby_state payload as string: %v", err)
+	}
+
+	var lobbyState []interface{}
+	err = json.Unmarshal([]byte(payloadStr), &lobbyState)
+	if err != nil {
+		t.Fatalf("failed to parse lobby_state array: %v", err)
 	}
 
 	if len(lobbyState) != 4 {
@@ -631,11 +637,18 @@ func TestLobbyStateMessageFormat(t *testing.T) {
 		t.Errorf("expected message type 'lobby_state', got %q", msg.Type)
 	}
 
+	// Payload is double-encoded: first unmarshal to string, then parse JSON
+	var payloadStr string
+	err = json.Unmarshal(msg.Payload, &payloadStr)
+	if err != nil {
+		t.Fatalf("failed to parse lobby_state payload as string: %v", err)
+	}
+
 	// Parse as array of table info
 	var tables []map[string]interface{}
-	err = json.Unmarshal(msg.Payload, &tables)
+	err = json.Unmarshal([]byte(payloadStr), &tables)
 	if err != nil {
-		t.Fatalf("failed to parse lobby_state payload: %v", err)
+		t.Fatalf("failed to parse lobby_state tables array: %v", err)
 	}
 
 	if len(tables) != 4 {
@@ -652,14 +665,14 @@ func TestLobbyStateMessageFormat(t *testing.T) {
 		t.Error("expected table to have 'name' field")
 	}
 
-	if maxSeats, ok := firstTable["maxSeats"].(float64); !ok || maxSeats != 6 {
-		t.Error("expected table to have 'maxSeats' field with value 6")
+	if maxSeats, ok := firstTable["max_seats"].(float64); !ok || maxSeats != 6 {
+		t.Error("expected table to have 'max_seats' field with value 6")
 	}
 
-	if seatsOccupied, ok := firstTable["seatsOccupied"].(float64); !ok {
-		t.Error("expected table to have 'seatsOccupied' field")
+	if seatsOccupied, ok := firstTable["seats_occupied"].(float64); !ok {
+		t.Error("expected table to have 'seats_occupied' field")
 	} else if seatsOccupied < 0 || seatsOccupied > 6 {
-		t.Errorf("expected seatsOccupied to be between 0 and 6, got %v", seatsOccupied)
+		t.Errorf("expected seats_occupied to be between 0 and 6, got %v", seatsOccupied)
 	}
 }
 
@@ -704,11 +717,17 @@ func TestWebSocketSendsLobbyStateOnRestore(t *testing.T) {
 		t.Errorf("expected second message to be 'lobby_state', got %q", msg2.Type)
 	}
 
-	// Verify payload is an array
-	var lobbyState []interface{}
-	err = json.Unmarshal(msg2.Payload, &lobbyState)
+	// Payload is double-encoded: first unmarshal to string, then parse JSON
+	var payloadStr string
+	err = json.Unmarshal(msg2.Payload, &payloadStr)
 	if err != nil {
-		t.Fatalf("failed to parse lobby_state payload: %v", err)
+		t.Fatalf("failed to parse lobby_state payload as string: %v", err)
+	}
+
+	var lobbyState []interface{}
+	err = json.Unmarshal([]byte(payloadStr), &lobbyState)
+	if err != nil {
+		t.Fatalf("failed to parse lobby_state array: %v", err)
 	}
 
 	if len(lobbyState) != 4 {

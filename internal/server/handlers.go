@@ -149,14 +149,21 @@ func (c *Client) SendError(message string, logger *slog.Logger) error {
 func (c *Client) SendLobbyState(server *Server, logger *slog.Logger) error {
 	lobbyState := server.GetLobbyState()
 
+	// First marshal the lobby state to JSON
 	payloadBytes, err := json.Marshal(lobbyState)
 	if err != nil {
 		return fmt.Errorf("failed to marshal lobby state: %w", err)
 	}
 
+	// Then marshal it again as a JSON string (double-encode)
+	payloadString, err := json.Marshal(string(payloadBytes))
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload string: %w", err)
+	}
+
 	response := WebSocketMessage{
 		Type:    "lobby_state",
-		Payload: json.RawMessage(payloadBytes),
+		Payload: json.RawMessage(payloadString),
 	}
 
 	responseBytes, err := json.Marshal(response)
@@ -210,14 +217,21 @@ func (s *Server) GetLobbyState() []TableInfo {
 func (s *Server) broadcastLobbyState() error {
 	lobbyState := s.GetLobbyState()
 
+	// First marshal the lobby state to JSON
 	payloadBytes, err := json.Marshal(lobbyState)
 	if err != nil {
 		return fmt.Errorf("failed to marshal lobby state: %w", err)
 	}
 
+	// Then marshal it again as a JSON string (double-encode)
+	payloadString, err := json.Marshal(string(payloadBytes))
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload string: %w", err)
+	}
+
 	response := WebSocketMessage{
 		Type:    "lobby_state",
-		Payload: json.RawMessage(payloadBytes),
+		Payload: json.RawMessage(payloadString),
 	}
 
 	responseBytes, err := json.Marshal(response)

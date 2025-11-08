@@ -225,4 +225,135 @@ describe('useWebSocket', () => {
     expect(mockMessageCallbacks.length).toBe(0);
     expect(mockServiceInstance.disconnect).toHaveBeenCalled();
   });
+
+  describe('TestUseWebSocketHook_LobbyState', () => {
+    it('should expose lobbyState in hook return value', () => {
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      expect(result.current.lobbyState).toBeDefined();
+      expect(Array.isArray(result.current.lobbyState)).toBe(true);
+      expect(result.current.lobbyState.length).toBe(0);
+    });
+
+    it('should update lobbyState when lobby_state message is received', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      const lobbyStateMessage = JSON.stringify({
+        type: 'lobby_state',
+        payload: JSON.stringify([
+          {
+            id: 'table-1',
+            name: 'Table 1',
+            seats_occupied: 0,
+            max_seats: 6,
+          },
+          {
+            id: 'table-2',
+            name: 'Table 2',
+            seats_occupied: 2,
+            max_seats: 6,
+          },
+        ]),
+      });
+
+      // Simulate message received
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(lobbyStateMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.lobbyState.length).toBe(2);
+        expect(result.current.lobbyState[0]).toEqual({
+          id: 'table-1',
+          name: 'Table 1',
+          seatsOccupied: 0,
+          maxSeats: 6,
+        });
+        expect(result.current.lobbyState[1]).toEqual({
+          id: 'table-2',
+          name: 'Table 2',
+          seatsOccupied: 2,
+          maxSeats: 6,
+        });
+      });
+    });
+
+    it('should handle lobby_state updates with different seat counts', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      // First message
+      const firstMessage = JSON.stringify({
+        type: 'lobby_state',
+        payload: JSON.stringify([
+          {
+            id: 'table-1',
+            name: 'Table 1',
+            seats_occupied: 0,
+            max_seats: 6,
+          },
+        ]),
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(firstMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.lobbyState[0].seatsOccupied).toBe(0);
+      });
+
+      // Second message with updated seat count
+      const secondMessage = JSON.stringify({
+        type: 'lobby_state',
+        payload: JSON.stringify([
+          {
+            id: 'table-1',
+            name: 'Table 1',
+            seats_occupied: 3,
+            max_seats: 6,
+          },
+        ]),
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(secondMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.lobbyState[0].seatsOccupied).toBe(3);
+      });
+    });
+
+    it('should not update lobbyState for non-lobby_state messages', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      const otherMessage = JSON.stringify({
+        type: 'session_created',
+        payload: JSON.stringify({ token: 'test', name: 'Alice' }),
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(otherMessage));
+      });
+
+      await waitFor(() => {
+        // lobbyState should remain empty
+        expect(result.current.lobbyState.length).toBe(0);
+      });
+    });
+  });
 });

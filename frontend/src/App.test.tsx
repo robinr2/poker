@@ -297,87 +297,149 @@ describe('App', () => {
     });
   });
 
-  describe('TestApp_LobbyView_Integration', () => {
-    it('should render LobbyView after session created', async () => {
-      render(<App />);
+   describe('TestApp_LobbyView_Integration', () => {
+     it('should render LobbyView after session created', async () => {
+       render(<App />);
 
-      const input = screen.getByPlaceholderText(
-        'Your name'
-      ) as HTMLInputElement;
-      const button = screen.getByRole('button', { name: 'Join Game' });
+       const input = screen.getByPlaceholderText(
+         'Your name'
+       ) as HTMLInputElement;
+       const button = screen.getByRole('button', { name: 'Join Game' });
 
-      fireEvent.change(input, { target: { value: 'Alice' } });
+       fireEvent.change(input, { target: { value: 'Alice' } });
 
-      await waitFor(() => {
-        expect(createdMockSockets.length).toBeGreaterThan(0);
-      });
+       await waitFor(() => {
+         expect(createdMockSockets.length).toBeGreaterThan(0);
+       });
 
-      fireEvent.click(button);
+       fireEvent.click(button);
 
-      const mockSocket = createdMockSockets[0];
+       const mockSocket = createdMockSockets[0];
 
-      const sessionMessage = JSON.stringify({
-        type: 'session_created',
-        payload: { token: 'token-lobby', name: 'Alice' },
-      });
+       const sessionMessage = JSON.stringify({
+         type: 'session_created',
+         payload: { token: 'token-lobby', name: 'Alice' },
+       });
 
-      mockSocket.simulateMessage(sessionMessage);
+       mockSocket.simulateMessage(sessionMessage);
 
-      await waitFor(() => {
-        expect(screen.getByText('Lobby')).toBeInTheDocument();
-      });
-    });
+       await waitFor(() => {
+         expect(screen.getByText('Lobby')).toBeInTheDocument();
+       });
+     });
 
-    it('should display tables from lobby_state message', async () => {
-      localStorage.setItem('poker_session_token', 'lobby-token');
+     it('should display tables from lobby_state message', async () => {
+       localStorage.setItem('poker_session_token', 'lobby-token');
 
-      render(<App />);
+       render(<App />);
 
-      await waitFor(() => {
-        expect(createdMockSockets.length).toBeGreaterThan(0);
-      });
+       await waitFor(() => {
+         expect(createdMockSockets.length).toBeGreaterThan(0);
+       });
 
-      const mockSocket = createdMockSockets[createdMockSockets.length - 1];
+       const mockSocket = createdMockSockets[createdMockSockets.length - 1];
 
-      // Send session_restored first
-      const sessionMessage = JSON.stringify({
-        type: 'session_restored',
-        payload: { name: 'Alice' },
-      });
-      mockSocket.simulateMessage(sessionMessage);
+       // Send session_restored first
+       const sessionMessage = JSON.stringify({
+         type: 'session_restored',
+         payload: { name: 'Alice' },
+       });
+       mockSocket.simulateMessage(sessionMessage);
 
-      // Wait for lobby to render
-      await waitFor(() => {
-        expect(screen.getByText('Lobby')).toBeInTheDocument();
-      });
+       // Wait for lobby to render
+       await waitFor(() => {
+         expect(screen.getByText('Lobby')).toBeInTheDocument();
+       });
 
-      // Send lobby_state with tables (payload is array, not object)
-      const lobbyMessage = JSON.stringify({
-        type: 'lobby_state',
-        payload: [
-          {
-            id: 'table-1',
-            name: 'Table 1',
-            seats_occupied: 2,
-            max_seats: 6,
-          },
-          {
-            id: 'table-2',
-            name: 'Table 2',
-            seats_occupied: 4,
-            max_seats: 6,
-          },
-        ],
-      });
+        // Send lobby_state with tables (payload is JSON-stringified array)
+        const lobbyMessage = JSON.stringify({
+          type: 'lobby_state',
+          payload: JSON.stringify([
+            {
+              id: 'table-1',
+              name: 'Table 1',
+              seats_occupied: 2,
+              max_seats: 6,
+            },
+            {
+              id: 'table-2',
+              name: 'Table 2',
+              seats_occupied: 4,
+              max_seats: 6,
+            },
+          ]),
+        });
 
-      mockSocket.simulateMessage(lobbyMessage);
+       mockSocket.simulateMessage(lobbyMessage);
 
-      await waitFor(() => {
-        expect(screen.getByText('Table 1')).toBeInTheDocument();
-        expect(screen.getByText('Table 2')).toBeInTheDocument();
-        expect(screen.getByText('2/6')).toBeInTheDocument();
-        expect(screen.getByText('4/6')).toBeInTheDocument();
-      });
-    });
-  });
+       await waitFor(() => {
+         expect(screen.getByText('Table 1')).toBeInTheDocument();
+         expect(screen.getByText('Table 2')).toBeInTheDocument();
+         expect(screen.getByText('2/6')).toBeInTheDocument();
+         expect(screen.getByText('4/6')).toBeInTheDocument();
+       });
+     });
+
+     it('should update table seat counts when lobby_state updates', async () => {
+       localStorage.setItem('poker_session_token', 'lobby-update-token');
+
+       render(<App />);
+
+       await waitFor(() => {
+         expect(createdMockSockets.length).toBeGreaterThan(0);
+       });
+
+       const mockSocket = createdMockSockets[createdMockSockets.length - 1];
+
+       // Send session_restored first
+       const sessionMessage = JSON.stringify({
+         type: 'session_restored',
+         payload: { name: 'Bob' },
+       });
+       mockSocket.simulateMessage(sessionMessage);
+
+       // Wait for lobby to render
+       await waitFor(() => {
+         expect(screen.getByText('Lobby')).toBeInTheDocument();
+       });
+
+        // Send initial lobby_state
+        const initialLobbyMessage = JSON.stringify({
+          type: 'lobby_state',
+          payload: JSON.stringify([
+            {
+              id: 'table-1',
+              name: 'Table 1',
+              seats_occupied: 1,
+              max_seats: 6,
+            },
+          ]),
+        });
+
+        mockSocket.simulateMessage(initialLobbyMessage);
+
+        await waitFor(() => {
+          expect(screen.getByText('1/6')).toBeInTheDocument();
+        });
+
+        // Send updated lobby_state
+        const updatedLobbyMessage = JSON.stringify({
+          type: 'lobby_state',
+          payload: JSON.stringify([
+            {
+              id: 'table-1',
+              name: 'Table 1',
+              seats_occupied: 5,
+              max_seats: 6,
+            },
+          ]),
+        });
+
+       mockSocket.simulateMessage(updatedLobbyMessage);
+
+       await waitFor(() => {
+         expect(screen.getByText('5/6')).toBeInTheDocument();
+       });
+     });
+   });
 });

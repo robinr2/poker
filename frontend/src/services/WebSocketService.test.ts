@@ -451,57 +451,88 @@ describe('WebSocketService', () => {
     });
   });
 
-  describe('TestWebSocketService_SessionMessages', () => {
-    it('should handle session_created message', async () => {
-      vi.useFakeTimers();
+   describe('TestWebSocketService_SessionMessages', () => {
+     it('should handle session_created message', async () => {
+       vi.useFakeTimers();
 
-      service = new WebSocketService('ws://localhost:8080/ws');
-      const messageCallback = vi.fn();
-      service.onMessage(messageCallback);
+       service = new WebSocketService('ws://localhost:8080/ws');
+       const messageCallback = vi.fn();
+       service.onMessage(messageCallback);
 
-      const connectPromise = service.connect();
-      const mockSocket = createdMockSockets[0];
+       const connectPromise = service.connect();
+       const mockSocket = createdMockSockets[0];
 
-      mockSocket.simulateOpen();
+       mockSocket.simulateOpen();
 
-      await connectPromise;
+       await connectPromise;
 
-      const sessionMessage = JSON.stringify({
-        type: 'session_created',
-        payload: { token: 'uuid-123', name: 'Alice' },
-      });
+       const sessionMessage = JSON.stringify({
+         type: 'session_created',
+         payload: { token: 'uuid-123', name: 'Alice' },
+       });
 
-      mockSocket.simulateMessage(sessionMessage);
+       mockSocket.simulateMessage(sessionMessage);
 
-      expect(messageCallback).toHaveBeenCalledWith(sessionMessage);
+       expect(messageCallback).toHaveBeenCalledWith(sessionMessage);
 
-      vi.useRealTimers();
-    });
+       vi.useRealTimers();
+     });
 
-    it('should handle session_restored message', async () => {
-      vi.useFakeTimers();
+     it('should handle session_restored message', async () => {
+       vi.useFakeTimers();
 
-      service = new WebSocketService('ws://localhost:8080/ws');
-      const messageCallback = vi.fn();
-      service.onMessage(messageCallback);
+       service = new WebSocketService('ws://localhost:8080/ws');
+       const messageCallback = vi.fn();
+       service.onMessage(messageCallback);
 
-      const connectPromise = service.connect();
-      const mockSocket = createdMockSockets[0];
+       const connectPromise = service.connect();
+       const mockSocket = createdMockSockets[0];
 
-      mockSocket.simulateOpen();
+       mockSocket.simulateOpen();
 
-      await connectPromise;
+       await connectPromise;
 
-      const sessionMessage = JSON.stringify({
-        type: 'session_restored',
-        payload: { name: 'Bob', tableID: 'table-1', seatIndex: 2 },
-      });
+       const sessionMessage = JSON.stringify({
+         type: 'session_restored',
+         payload: { name: 'Bob', tableID: 'table-1', seatIndex: 2 },
+       });
 
-      mockSocket.simulateMessage(sessionMessage);
+       mockSocket.simulateMessage(sessionMessage);
 
-      expect(messageCallback).toHaveBeenCalledWith(sessionMessage);
+       expect(messageCallback).toHaveBeenCalledWith(sessionMessage);
 
-      vi.useRealTimers();
-    });
-  });
+       vi.useRealTimers();
+     });
+   });
+
+   describe('TestWebSocketService_LobbyState', () => {
+     it('should parse lobby_state message correctly', async () => {
+       vi.useFakeTimers();
+
+       service = new WebSocketService('ws://localhost:8080/ws');
+       const messageCallback = vi.fn();
+       service.onMessage(messageCallback);
+
+       const connectPromise = service.connect();
+       const mockSocket = createdMockSockets[0];
+
+       mockSocket.simulateOpen();
+
+       await connectPromise;
+
+       const lobbyStateMessage = JSON.stringify({
+         type: 'lobby_state',
+         tables: [
+           { id: 'table-1', name: 'Table 1', seatsOccupied: 0, maxSeats: 6 },
+           { id: 'table-2', name: 'Table 2', seatsOccupied: 2, maxSeats: 6 },
+         ],
+       });
+
+       mockSocket.simulateMessage(lobbyStateMessage);
+
+       expect(messageCallback).toHaveBeenCalledWith(lobbyStateMessage);
+
+       vi.useRealTimers();
+     });
+   });
 });

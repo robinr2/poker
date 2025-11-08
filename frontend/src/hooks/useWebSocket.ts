@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 
+import type { TableInfo } from '../components/TableCard';
 import {
   WebSocketService,
   type ConnectionStatus,
@@ -9,6 +10,7 @@ interface UseWebSocketReturn {
   status: ConnectionStatus;
   sendMessage: (message: string) => void;
   lastMessage: string | null;
+  lobbyState: TableInfo[];
 }
 
 interface UseWebSocketOptions {
@@ -22,6 +24,7 @@ export function useWebSocket(
 ): UseWebSocketReturn {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [lastMessage, setLastMessage] = useState<string | null>(null);
+  const [lobbyState, setLobbyState] = useState<TableInfo[]>([]);
   const serviceRef = useRef<WebSocketService | null>(null);
   const onMessageRef = useRef(options?.onMessage);
 
@@ -50,6 +53,29 @@ export function useWebSocket(
       }
       // Also update state for components that need it
       setLastMessage(data);
+
+      // Parse and handle lobby_state messages
+      try {
+        const message = JSON.parse(data);
+        if (message.type === 'lobby_state' && message.payload) {
+          // Payload is an array of table objects with snake_case fields
+          const tables = JSON.parse(message.payload);
+          const convertedTables: TableInfo[] = tables.map((t: {
+            id: string;
+            name: string;
+            seats_occupied: number;
+            max_seats: number;
+          }) => ({
+            id: t.id,
+            name: t.name,
+            seatsOccupied: t.seats_occupied,
+            maxSeats: t.max_seats,
+          }));
+          setLobbyState(convertedTables);
+        }
+      } catch {
+        // Silently ignore parsing errors for non-JSON messages
+      }
     });
 
     // Connect
@@ -80,5 +106,6 @@ export function useWebSocket(
     status,
     sendMessage,
     lastMessage,
+    lobbyState,
   };
 }

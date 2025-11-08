@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 
-import { NamePrompt } from './components/NamePrompt';
 import { LobbyView } from './components/LobbyView';
-import type { TableInfo } from './components/TableCard';
+import { NamePrompt } from './components/NamePrompt';
 import { useWebSocket } from './hooks/useWebSocket';
 import { SessionService } from './services/SessionService';
 import './App.css';
@@ -18,7 +17,6 @@ function App() {
   const [playerName, setPlayerName] = useState<string | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
   const [initialToken] = useState<string | null>(() => SessionService.getToken());
-  const [tables, setTables] = useState<TableInfo[]>([]);
   
   // Use refs to avoid stale closures in the message handler
   const playerNameRef = useRef(playerName);
@@ -49,33 +47,14 @@ function App() {
         const name = message.payload.name as string;
         setPlayerName(name);
         setShowPrompt(false);
-      } else if (message.type === 'lobby_state') {
-        // Phase 3: Parse and store lobby state (Phase 4 will make this live)
-        if (message.payload && Array.isArray(message.payload)) {
-          const lobbyTables = message.payload as Array<{
-            id: string;
-            name: string;
-            seats_occupied: number;
-            max_seats: number;
-          }>;
-          
-          // Convert snake_case to camelCase for frontend
-          const parsedTables: TableInfo[] = lobbyTables.map((t) => ({
-            id: t.id,
-            name: t.name,
-            seatsOccupied: t.seats_occupied,
-            maxSeats: t.max_seats,
-          }));
-          
-          setTables(parsedTables);
-        }
       }
+      // lobby_state is now handled by useWebSocket hook
     } catch (error) {
       console.error('Failed to parse message:', error);
     }
   }, []); // Empty deps - we use refs for current values
 
-  const { status, sendMessage } = useWebSocket(
+  const { status, sendMessage, lobbyState } = useWebSocket(
     WS_URL,
     initialToken || undefined,
     { onMessage: handleMessage }
@@ -143,7 +122,7 @@ function App() {
       <main className="app-main">
         {showPrompt && <NamePrompt onSubmit={handleNameSubmit} />}
 
-        {!showPrompt && <LobbyView tables={tables} onJoinTable={handleJoinTable} />}
+        {!showPrompt && <LobbyView tables={lobbyState} onJoinTable={handleJoinTable} />}
       </main>
     </div>
   );
