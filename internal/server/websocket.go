@@ -135,6 +135,7 @@ func (s *Server) HandleWebSocket(hub *Hub) http.HandlerFunc {
 // readPump reads messages from the WebSocket connection.
 func (c *Client) readPump(sm *SessionManager, server *Server, logger *slog.Logger) {
 	defer func() {
+		server.HandleDisconnect(c.Token)
 		c.hub.unregister <- c
 		c.conn.Close()
 	}()
@@ -169,6 +170,12 @@ func (c *Client) readPump(sm *SessionManager, server *Server, logger *slog.Logge
 			if err != nil {
 				c.SendError(err.Error(), logger)
 				logger.Warn("failed to handle join_table", "error", err)
+			}
+		case "leave_table":
+			err := c.HandleLeaveTable(sm, server, logger, wsMsg.Payload)
+			if err != nil {
+				c.SendError(err.Error(), logger)
+				logger.Warn("failed to handle leave_table", "error", err)
 			}
 		default:
 			c.SendError("Unknown message type: "+wsMsg.Type, logger)

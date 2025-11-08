@@ -177,3 +177,55 @@ func (s *Server) FindPlayerSeat(token *string) *Seat {
 	// Not found in any table
 	return nil
 }
+
+// HandleDisconnect handles client disconnect by clearing their seat if they were seated
+func (s *Server) HandleDisconnect(token string) error {
+	// Find player's seat
+	playerSeat := s.FindPlayerSeat(&token)
+	if playerSeat == nil {
+		// Player not seated, nothing to do
+		return nil
+	}
+
+	// Find the table containing the player
+	var table *Table
+	s.mu.RLock()
+	for _, t := range s.tables {
+		if t != nil {
+			seat, found := t.GetSeatByToken(&token)
+			if found {
+				table = t
+				playerSeat = &seat
+				break
+			}
+		}
+	}
+	s.mu.RUnlock()
+
+	if table == nil {
+		return nil
+	}
+
+	// Clear the seat
+	err := table.ClearSeat(&token)
+	if err != nil {
+		s.logger.Warn("failed to clear seat on disconnect", "token", token, "error", err)
+		return nil // Don't error on disconnect, just log
+	}
+
+	// Update session to clear TableID and SeatIndex
+	_, err = s.sessionManager.UpdateSession(token, nil, nil)
+	if err != nil {
+		s.logger.Warn("failed to update session on disconnect", "token", token, "error", err)
+	}
+
+	// Broadcast lobby_state to remaining clients
+	err = s.broadcastLobbyState()
+	if err != nil {
+		s.logger.Warn("failed to broadcast lobby state on disconnect", "error", err)
+	}
+
+	s.logger.Info("player disconnected and seat cleared", "token", token, "tableId", table.ID)
+
+	return nil
+}

@@ -1216,3 +1216,463 @@ func TestJoinTableBroadcastsLobbyState(t *testing.T) {
 		t.Errorf("expected seats_occupied to be 1 for table-1, got %v", seatsOccupied)
 	}
 }
+
+// TestHandleLeaveTableSuccess tests successful leave_table with seat clearing
+func TestHandleLeaveTableSuccess(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+
+	// Create a session
+	session, err := server.sessionManager.CreateSession("Player")
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	// Create a test HTTP server with the WebSocket handler
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.HandleWebSocket(hub)(w, r)
+	}))
+	defer testServer.Close()
+
+	// Convert http:// to ws://
+	wsURL := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session.Token
+
+	// Connect with valid token
+	dialer := websocket.Dialer{}
+	ws, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer ws.Close()
+
+	// Receive session_restored message
+	_ = readMessage(t, ws)
+
+	// Receive lobby_state message
+	_ = readMessage(t, ws)
+
+	// Send join_table message
+	sendMessage(t, ws, "join_table", JoinTablePayload{TableId: "table-1"})
+
+	// Receive seat_assigned message
+	msg := readMessage(t, ws)
+	if msg.Type != "seat_assigned" {
+		t.Errorf("expected message type 'seat_assigned', got %q", msg.Type)
+	}
+
+	// Verify session has table and seat
+	updatedSession, _ := server.sessionManager.GetSession(session.Token)
+	if updatedSession.TableID == nil || *updatedSession.TableID != "table-1" {
+		t.Fatalf("session TableID should be set")
+	}
+
+	// Send leave_table message
+	sendMessage(t, ws, "leave_table", struct{}{})
+
+	// Receive seat_cleared message
+	msg = readMessage(t, ws)
+	if msg.Type != "seat_cleared" {
+		t.Errorf("expected message type 'seat_cleared', got %q", msg.Type)
+	}
+
+	// Verify session was updated (TableID and SeatIndex should be nil)
+	updatedSession, _ = server.sessionManager.GetSession(session.Token)
+	if updatedSession.TableID != nil {
+		t.Errorf("expected session TableID to be nil after leave_table, got %v", updatedSession.TableID)
+	}
+	if updatedSession.SeatIndex != nil {
+		t.Errorf("expected session SeatIndex to be nil after leave_table, got %v", updatedSession.SeatIndex)
+	}
+
+	// Verify seat is actually cleared on the table
+	table := server.tables[0] // table-1 is the first table
+	seat, found := table.GetSeatByToken(&session.Token)
+	if found {
+		t.Errorf("expected player to be removed from table, but found in seat %d", seat.Index)
+	}
+}
+
+// TestHandleLeaveTableNotSeated tests leave_table returns error when player not seated
+func TestHandleLeaveTableNotSeated(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+
+	// Create a session
+	session, err := server.sessionManager.CreateSession("Player")
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	// Create a test HTTP server with the WebSocket handler
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.HandleWebSocket(hub)(w, r)
+	}))
+	defer testServer.Close()
+
+	// Convert http:// to ws://
+	wsURL := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session.Token
+
+	// Connect with valid token
+	dialer := websocket.Dialer{}
+	ws, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer ws.Close()
+
+	// Receive session_restored message
+	_ = readMessage(t, ws)
+
+	// Receive lobby_state message
+	_ = readMessage(t, ws)
+
+	// Send leave_table message without being seated
+	sendMessage(t, ws, "leave_table", struct{}{})
+
+	// Should receive error message
+	msg := readMessage(t, ws)
+	if msg.Type != "error" {
+		t.Errorf("expected message type 'error', got %q", msg.Type)
+	}
+
+	// Parse error payload
+	payloadBytes, _ := json.Marshal(msg.Payload)
+	var payload ErrorPayload
+	err = json.Unmarshal(payloadBytes, &payload)
+	if err != nil {
+		t.Fatalf("failed to parse error payload: %v", err)
+	}
+
+	if payload.Message != "not_seated" {
+		t.Errorf("expected error message 'not_seated', got %q", payload.Message)
+	}
+}
+
+// TestLeaveTableBroadcastsLobbyState tests that lobby_state is broadcast after leave
+func TestLeaveTableBroadcastsLobbyState(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+
+	// Create two sessions
+	session1, err := server.sessionManager.CreateSession("Player1")
+	if err != nil {
+		t.Fatalf("failed to create session1: %v", err)
+	}
+
+	session2, err := server.sessionManager.CreateSession("Player2")
+	if err != nil {
+		t.Fatalf("failed to create session2: %v", err)
+	}
+
+	// Create a test HTTP server with the WebSocket handler
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.HandleWebSocket(hub)(w, r)
+	}))
+	defer testServer.Close()
+
+	// Connect first client
+	wsURL1 := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session1.Token
+	dialer := websocket.Dialer{}
+	ws1, _, err := dialer.Dial(wsURL1, nil)
+	if err != nil {
+		t.Fatalf("failed to connect ws1: %v", err)
+	}
+	defer ws1.Close()
+
+	// Receive session_restored and lobby_state
+	_ = readMessage(t, ws1)
+	_ = readMessage(t, ws1)
+
+	// Connect second client
+	wsURL2 := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session2.Token
+	ws2, _, err := dialer.Dial(wsURL2, nil)
+	if err != nil {
+		t.Fatalf("failed to connect ws2: %v", err)
+	}
+	defer ws2.Close()
+
+	// Receive session_restored and lobby_state for second client
+	_ = readMessage(t, ws2)
+	_ = readMessage(t, ws2)
+
+	// Player 1 joins a table
+	sendMessage(t, ws1, "join_table", JoinTablePayload{TableId: "table-1"})
+
+	// Player 1 receives seat_assigned
+	_ = readMessage(t, ws1)
+
+	// Player 2 receives lobby_state broadcast
+	_ = readMessage(t, ws2)
+
+	// Player 1 leaves the table
+	sendMessage(t, ws1, "leave_table", struct{}{})
+
+	// Player 1 receives seat_cleared
+	msg1 := readMessage(t, ws1)
+	if msg1.Type != "seat_cleared" {
+		t.Fatalf("expected seat_cleared for player1, got %q", msg1.Type)
+	}
+
+	// Player 2 should receive lobby_state broadcast
+	msg2 := readMessage(t, ws2)
+	if msg2.Type != "lobby_state" {
+		t.Fatalf("expected lobby_state for player2, got %q", msg2.Type)
+	}
+
+	// Verify the lobby_state shows updated seat count (back to 0)
+	var payloadStr string
+	err = json.Unmarshal(msg2.Payload, &payloadStr)
+	if err != nil {
+		t.Fatalf("failed to parse lobby_state payload as string: %v", err)
+	}
+
+	var tables []map[string]interface{}
+	err = json.Unmarshal([]byte(payloadStr), &tables)
+	if err != nil {
+		t.Fatalf("failed to parse lobby_state tables array: %v", err)
+	}
+
+	// Find table-1 in the lobby state
+	var table1 map[string]interface{}
+	for _, table := range tables {
+		if id, ok := table["id"].(string); ok && id == "table-1" {
+			table1 = table
+			break
+		}
+	}
+
+	if table1 == nil {
+		t.Fatal("table-1 not found in lobby_state")
+	}
+
+	seatsOccupied, ok := table1["seats_occupied"].(float64)
+	if !ok || int(seatsOccupied) != 0 {
+		t.Errorf("expected seats_occupied to be 0 for table-1 after leave, got %v", seatsOccupied)
+	}
+}
+
+// TestHandleDisconnectClearsSeat tests that disconnect clears seat if player was seated
+func TestHandleDisconnectClearsSeat(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+
+	// Create a session
+	session, err := server.sessionManager.CreateSession("Player")
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	// Create a test HTTP server with the WebSocket handler
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.HandleWebSocket(hub)(w, r)
+	}))
+	defer testServer.Close()
+
+	// Convert http:// to ws://
+	wsURL := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session.Token
+
+	// Connect with valid token
+	dialer := websocket.Dialer{}
+	ws, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer ws.Close()
+
+	// Receive session_restored message
+	_ = readMessage(t, ws)
+
+	// Receive lobby_state message
+	_ = readMessage(t, ws)
+
+	// Send join_table message
+	sendMessage(t, ws, "join_table", JoinTablePayload{TableId: "table-1"})
+
+	// Receive seat_assigned message
+	_ = readMessage(t, ws)
+
+	// Verify player is seated
+	seat := server.FindPlayerSeat(&session.Token)
+	if seat == nil {
+		t.Fatal("expected player to be seated before disconnect")
+	}
+
+	// Close the connection
+	ws.Close()
+
+	// Give server time to process disconnect
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify seat is cleared
+	seat = server.FindPlayerSeat(&session.Token)
+	if seat != nil {
+		t.Errorf("expected player seat to be cleared on disconnect, but found in seat %d", seat.Index)
+	}
+
+	// Verify session was updated (TableID and SeatIndex should be nil)
+	updatedSession, _ := server.sessionManager.GetSession(session.Token)
+	if updatedSession.TableID != nil {
+		t.Errorf("expected session TableID to be nil after disconnect, got %v", updatedSession.TableID)
+	}
+	if updatedSession.SeatIndex != nil {
+		t.Errorf("expected session SeatIndex to be nil after disconnect, got %v", updatedSession.SeatIndex)
+	}
+}
+
+// TestHandleDisconnectNoSeat tests that disconnect doesn't error when player has no seat
+func TestHandleDisconnectNoSeat(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+
+	// Create a session
+	session, err := server.sessionManager.CreateSession("Player")
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	// Create a test HTTP server with the WebSocket handler
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.HandleWebSocket(hub)(w, r)
+	}))
+	defer testServer.Close()
+
+	// Convert http:// to ws://
+	wsURL := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session.Token
+
+	// Connect with valid token
+	dialer := websocket.Dialer{}
+	ws, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer ws.Close()
+
+	// Receive session_restored message
+	_ = readMessage(t, ws)
+
+	// Receive lobby_state message
+	_ = readMessage(t, ws)
+
+	// Verify player is not seated
+	seat := server.FindPlayerSeat(&session.Token)
+	if seat != nil {
+		t.Fatal("expected player to not be seated before disconnect")
+	}
+
+	// Close the connection (this should not error)
+	ws.Close()
+
+	// Give server time to process disconnect
+	time.Sleep(50 * time.Millisecond)
+
+	// Just verify the test didn't panic by reaching this point
+	if seat := server.FindPlayerSeat(&session.Token); seat != nil {
+		t.Error("expected player to remain unseated")
+	}
+}
+
+// TestDisconnectBroadcastsLobbyState tests that remaining clients receive updated lobby_state on disconnect
+func TestDisconnectBroadcastsLobbyState(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+
+	// Create two sessions
+	session1, err := server.sessionManager.CreateSession("Player1")
+	if err != nil {
+		t.Fatalf("failed to create session1: %v", err)
+	}
+
+	session2, err := server.sessionManager.CreateSession("Player2")
+	if err != nil {
+		t.Fatalf("failed to create session2: %v", err)
+	}
+
+	// Create a test HTTP server with the WebSocket handler
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.HandleWebSocket(hub)(w, r)
+	}))
+	defer testServer.Close()
+
+	// Connect first client
+	wsURL1 := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session1.Token
+	dialer := websocket.Dialer{}
+	ws1, _, err := dialer.Dial(wsURL1, nil)
+	if err != nil {
+		t.Fatalf("failed to connect ws1: %v", err)
+	}
+	defer ws1.Close()
+
+	// Receive session_restored and lobby_state
+	_ = readMessage(t, ws1)
+	_ = readMessage(t, ws1)
+
+	// Connect second client
+	wsURL2 := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session2.Token
+	ws2, _, err := dialer.Dial(wsURL2, nil)
+	if err != nil {
+		t.Fatalf("failed to connect ws2: %v", err)
+	}
+	defer ws2.Close()
+
+	// Receive session_restored and lobby_state for second client
+	_ = readMessage(t, ws2)
+	_ = readMessage(t, ws2)
+
+	// Player 1 joins a table
+	sendMessage(t, ws1, "join_table", JoinTablePayload{TableId: "table-1"})
+
+	// Player 1 receives seat_assigned
+	_ = readMessage(t, ws1)
+
+	// Player 2 receives lobby_state broadcast
+	_ = readMessage(t, ws2)
+
+	// Player 1 disconnects
+	ws1.Close()
+
+	// Give server time to process disconnect
+	time.Sleep(50 * time.Millisecond)
+
+	// Player 2 should receive lobby_state broadcast showing table is empty
+	msg := readMessage(t, ws2)
+	if msg.Type != "lobby_state" {
+		t.Fatalf("expected lobby_state for player2 on player1 disconnect, got %q", msg.Type)
+	}
+
+	// Verify the lobby_state shows updated seat count (back to 0)
+	var payloadStr string
+	err = json.Unmarshal(msg.Payload, &payloadStr)
+	if err != nil {
+		t.Fatalf("failed to parse lobby_state payload as string: %v", err)
+	}
+
+	var tables []map[string]interface{}
+	err = json.Unmarshal([]byte(payloadStr), &tables)
+	if err != nil {
+		t.Fatalf("failed to parse lobby_state tables array: %v", err)
+	}
+
+	// Find table-1 in the lobby state
+	var table1 map[string]interface{}
+	for _, table := range tables {
+		if id, ok := table["id"].(string); ok && id == "table-1" {
+			table1 = table
+			break
+		}
+	}
+
+	if table1 == nil {
+		t.Fatal("table-1 not found in lobby_state")
+	}
+
+	seatsOccupied, ok := table1["seats_occupied"].(float64)
+	if !ok || int(seatsOccupied) != 0 {
+		t.Errorf("expected seats_occupied to be 0 for table-1 after disconnect, got %v", seatsOccupied)
+	}
+}
