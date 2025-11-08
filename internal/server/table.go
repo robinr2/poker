@@ -5,11 +5,47 @@ import (
 	"sync"
 )
 
+// Card represents a playing card with rank and suit
+type Card struct {
+	Rank string // A, 2, 3, 4, 5, 6, 7, 8, 9, T, J, Q, K
+	Suit string // s (spades), h (hearts), d (diamonds), c (clubs)
+}
+
+// String returns the 2-character string representation of a card (e.g., "As", "Kh")
+func (c Card) String() string {
+	return c.Rank + c.Suit
+}
+
+// NewDeck creates and returns a new 52-card deck with all unique cards
+func NewDeck() []Card {
+	ranks := []string{"A", "2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K"}
+	suits := []string{"s", "h", "d", "c"}
+
+	deck := make([]Card, 0, 52)
+	for _, suit := range suits {
+		for _, rank := range ranks {
+			deck = append(deck, Card{Rank: rank, Suit: suit})
+		}
+	}
+	return deck
+}
+
+// Hand represents the current game hand state
+type Hand struct {
+	DealerSeat     int            // Seat number of the dealer
+	SmallBlindSeat int            // Seat number of the small blind
+	BigBlindSeat   int            // Seat number of the big blind
+	Pot            int            // Current pot amount
+	Deck           []Card         // Cards remaining in the deck
+	HoleCards      map[int][]Card // Hole cards for each seat (key = seat number, value = 2 cards)
+}
+
 // Seat represents a seat at a poker table
 type Seat struct {
 	Index  int     // 0-5
 	Token  *string // nil = empty, non-nil = occupied
 	Status string  // "empty", "waiting", "active"
+	Stack  int     // Chip stack for the player (0 for empty seats, 1000 for new players)
 }
 
 // Table represents a poker table
@@ -67,6 +103,7 @@ func (t *Table) AssignSeat(token *string) (Seat, error) {
 		if t.Seats[i].Token == nil {
 			t.Seats[i].Token = token
 			t.Seats[i].Status = "waiting"
+			t.Seats[i].Stack = 1000
 			return t.Seats[i], nil
 		}
 	}
@@ -87,6 +124,7 @@ func (t *Table) ClearSeat(token *string) error {
 		if t.Seats[i].Token != nil && *t.Seats[i].Token == *token {
 			t.Seats[i].Token = nil
 			t.Seats[i].Status = "empty"
+			t.Seats[i].Stack = 0
 			return nil
 		}
 	}

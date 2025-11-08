@@ -381,6 +381,11 @@ func TestTableClearSeatNotFound(t *testing.T) {
 	if table.Seats[0].Token == nil || *table.Seats[0].Token != token1 {
 		t.Errorf("expected seat 0 to still have token1")
 	}
+
+	// Verify seat 1's Stack is reset to 0 after clearing
+	if table.Seats[1].Stack != 0 {
+		t.Errorf("expected seat 1 Stack to be 0 after clearing, got %d", table.Seats[1].Stack)
+	}
 }
 
 // TestTableGetSeatByToken verifies returns seat if player is seated at table
@@ -482,5 +487,162 @@ func TestTableConcurrentAssignments(t *testing.T) {
 
 	if table.GetOccupiedSeatCount() != 6 {
 		t.Errorf("expected 6 occupied seats, got %d", table.GetOccupiedSeatCount())
+	}
+}
+
+// TestCardString verifies card representation (e.g., "As" for Ace of Spades, "Kh" for King of Hearts)
+func TestCardString(t *testing.T) {
+	tests := []struct {
+		rank string
+		suit string
+		want string
+	}{
+		{"A", "s", "As"},
+		{"K", "h", "Kh"},
+		{"Q", "d", "Qd"},
+		{"J", "c", "Jc"},
+		{"T", "s", "Ts"},
+		{"9", "h", "9h"},
+		{"2", "d", "2d"},
+	}
+
+	for _, tt := range tests {
+		card := Card{Rank: tt.rank, Suit: tt.suit}
+		if got := card.String(); got != tt.want {
+			t.Errorf("Card{Rank: %q, Suit: %q}.String() = %q, want %q", tt.rank, tt.suit, got, tt.want)
+		}
+	}
+}
+
+// TestNewDeck verifies 52-card deck generation with all unique cards
+func TestNewDeck(t *testing.T) {
+	deck := NewDeck()
+
+	// Verify exactly 52 cards
+	if len(deck) != 52 {
+		t.Errorf("expected 52 cards in deck, got %d", len(deck))
+	}
+
+	// Verify all cards are unique
+	cardMap := make(map[string]bool)
+	for _, card := range deck {
+		cardStr := card.String()
+		if cardMap[cardStr] {
+			t.Errorf("duplicate card found: %s", cardStr)
+		}
+		cardMap[cardStr] = true
+	}
+
+	// Verify all 13 ranks are present for each suit
+	ranks := []string{"A", "2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K"}
+	suits := []string{"s", "h", "d", "c"}
+
+	for _, suit := range suits {
+		for _, rank := range ranks {
+			cardStr := rank + suit
+			if !cardMap[cardStr] {
+				t.Errorf("expected card %s in deck, not found", cardStr)
+			}
+		}
+	}
+}
+
+// TestHandInitialization verifies Hand struct fields are properly initialized
+func TestHandInitialization(t *testing.T) {
+	hand := &Hand{
+		DealerSeat:     2,
+		SmallBlindSeat: 3,
+		BigBlindSeat:   4,
+		Pot:            0,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+	}
+
+	if hand.DealerSeat != 2 {
+		t.Errorf("expected DealerSeat 2, got %d", hand.DealerSeat)
+	}
+
+	if hand.SmallBlindSeat != 3 {
+		t.Errorf("expected SmallBlindSeat 3, got %d", hand.SmallBlindSeat)
+	}
+
+	if hand.BigBlindSeat != 4 {
+		t.Errorf("expected BigBlindSeat 4, got %d", hand.BigBlindSeat)
+	}
+
+	if hand.Pot != 0 {
+		t.Errorf("expected Pot 0, got %d", hand.Pot)
+	}
+
+	if len(hand.Deck) != 52 {
+		t.Errorf("expected 52 cards in deck, got %d", len(hand.Deck))
+	}
+
+	if hand.HoleCards == nil {
+		t.Error("expected HoleCards to be initialized, got nil")
+	}
+
+	if len(hand.HoleCards) != 0 {
+		t.Errorf("expected HoleCards to be empty, got %d entries", len(hand.HoleCards))
+	}
+}
+
+// TestSeatWithStack verifies Stack field is added to Seat struct and defaults to 1000
+func TestSeatWithStack(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	// Verify Stack field exists and defaults to 0 on new table
+	for i := 0; i < 6; i++ {
+		if table.Seats[i].Stack != 0 {
+			t.Errorf("seat %d: expected Stack 0 on empty seat, got %d", i, table.Seats[i].Stack)
+		}
+	}
+
+	// Assign a seat and verify Stack is set to 1000
+	token := "player-1"
+	seat, err := table.AssignSeat(&token)
+	if err != nil {
+		t.Fatalf("expected no error assigning seat, got %v", err)
+	}
+
+	if seat.Stack != 1000 {
+		t.Errorf("expected Stack 1000 on assigned seat, got %d", seat.Stack)
+	}
+
+	// Verify it's persisted in the table
+	if table.Seats[0].Stack != 1000 {
+		t.Errorf("expected table.Seats[0].Stack to be 1000, got %d", table.Seats[0].Stack)
+	}
+}
+
+// TestTableClearSeatResetStack verifies Stack is reset to 0 after clearing a seat
+func TestTableClearSeatResetStack(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+	token1 := "player-1"
+
+	// Assign a seat
+	seat, err := table.AssignSeat(&token1)
+	if err != nil {
+		t.Fatalf("expected no error assigning seat, got %v", err)
+	}
+
+	// Verify Stack is 1000 after assignment
+	if seat.Stack != 1000 {
+		t.Errorf("expected Stack 1000 after assignment, got %d", seat.Stack)
+	}
+
+	if table.Seats[0].Stack != 1000 {
+		t.Errorf("expected table.Seats[0].Stack to be 1000, got %d", table.Seats[0].Stack)
+	}
+
+	// Clear the seat
+	err = table.ClearSeat(&token1)
+	if err != nil {
+		t.Fatalf("expected no error clearing seat, got %v", err)
+	}
+
+	// Verify Stack is reset to 0 after clearing
+	if table.Seats[0].Stack != 0 {
+		t.Errorf("expected Stack to be 0 after clearing, got %d", table.Seats[0].Stack)
 	}
 }
