@@ -62,6 +62,25 @@ type LeaveTablePayload struct{}
 // SeatClearedPayload represents the payload for seat_cleared messages (empty)
 type SeatClearedPayload struct{}
 
+// HandStartedPayload represents the payload for hand_started messages
+type HandStartedPayload struct {
+	DealerSeat     int `json:"dealerSeat"`
+	SmallBlindSeat int `json:"smallBlindSeat"`
+	BigBlindSeat   int `json:"bigBlindSeat"`
+}
+
+// BlindPostedPayload represents the payload for blind_posted messages
+type BlindPostedPayload struct {
+	SeatIndex int `json:"seatIndex"`
+	Amount    int `json:"amount"`
+	NewStack  int `json:"newStack"`
+}
+
+// CardsDealtPayload represents the payload for cards_dealt messages (with privacy-filtered hole cards)
+type CardsDealtPayload struct {
+	HoleCards map[int][]Card `json:"holeCards"`
+}
+
 // HandleSetName processes a set_name message and creates a session for the client
 func (c *Client) HandleSetName(sm *SessionManager, server *Server, logger *slog.Logger, payload []byte) error {
 	var setNamePayload SetNamePayload
@@ -672,6 +691,167 @@ func (s *Server) broadcastTableState(tableID string, excludeClient *Client) erro
 		case client.send <- responseBytes:
 		default:
 			s.logger.Warn("client send channel full, skipping table_state message")
+		}
+	}
+
+	return nil
+}
+
+// broadcastHandStarted sends hand_started message to all clients at the table with dealer and blind info
+func (s *Server) broadcastHandStarted(table *Table) error {
+	// Get all clients at the table
+	clients := s.GetClientsAtTable(table.ID)
+
+	table.mu.RLock()
+	hand := table.CurrentHand
+	if hand == nil {
+		table.mu.RUnlock()
+		return fmt.Errorf("CurrentHand is nil")
+	}
+	dealerSeat := *table.DealerSeat
+	sbSeat := hand.SmallBlindSeat
+	bbSeat := hand.BigBlindSeat
+	table.mu.RUnlock()
+
+	// Create payload
+	payloadObj := HandStartedPayload{
+		DealerSeat:     dealerSeat,
+		SmallBlindSeat: sbSeat,
+		BigBlindSeat:   bbSeat,
+	}
+
+	payloadBytes, err := json.Marshal(payloadObj)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	response := WebSocketMessage{
+		Type:    "hand_started",
+		Payload: json.RawMessage(payloadBytes),
+	}
+
+	responseBytes, err := json.Marshal(response)
+	if err != nil {
+		return fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	// Send to all clients at the table
+	for _, client := range clients {
+		select {
+		case client.send <- responseBytes:
+		default:
+			s.logger.Warn("client send channel full, skipping hand_started message")
+		}
+	}
+
+	return nil
+}
+
+// broadcastBlindPosted sends blind_posted message to all clients at the table
+func (s *Server) broadcastBlindPosted(table *Table, seatNum int, amount int) error {
+	// Get all clients at the table
+	clients := s.GetClientsAtTable(table.ID)
+
+	// Get the player's new stack
+	table.mu.RLock()
+	newStack := table.Seats[seatNum].Stack
+	table.mu.RUnlock()
+
+	// Create payload
+	payloadObj := BlindPostedPayload{
+		SeatIndex: seatNum,
+		Amount:    amount,
+		NewStack:  newStack,
+	}
+
+	payloadBytes, err := json.Marshal(payloadObj)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	response := WebSocketMessage{
+		Type:    "blind_posted",
+		Payload: json.RawMessage(payloadBytes),
+	}
+
+	responseBytes, err := json.Marshal(response)
+	if err != nil {
+		return fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	// Send to all clients at the table
+	for _, client := range clients {
+		select {
+		case client.send <- responseBytes:
+		default:
+			s.logger.Warn("client send channel full, skipping blind_posted message")
+		}
+	}
+
+	return nil
+}
+
+// broadcastCardsDealt sends cards_dealt messages to all clients at the table with privacy filtering
+// Each player receives only their own hole cards
+func (s *Server) broadcastCardsDealt(table *Table) error {
+	// Get all clients at the table
+	clients := s.GetClientsAtTable(table.ID)
+
+	table.mu.RLock()
+	hand := table.CurrentHand
+	if hand == nil {
+		table.mu.RUnlock()
+		return fmt.Errorf("CurrentHand is nil")
+	}
+	holeCards := hand.HoleCards
+	table.mu.RUnlock()
+
+	// Send personalized message to each player
+	for _, client := range clients {
+		// Find which seat this client is at
+		session, err := s.sessionManager.GetSession(client.Token)
+		if err != nil {
+			s.logger.Warn("failed to get session for client", "token", client.Token, "error", err)
+			continue
+		}
+
+		if session.SeatIndex == nil {
+			s.logger.Warn("client has no seat assigned", "token", client.Token)
+			continue
+		}
+
+		seatIndex := *session.SeatIndex
+
+		// Filter hole cards to only show this player's cards
+		filteredCards := filterHoleCardsForPlayer(holeCards, seatIndex)
+
+		// Create payload
+		payloadObj := CardsDealtPayload{
+			HoleCards: filteredCards,
+		}
+
+		payloadBytes, err := json.Marshal(payloadObj)
+		if err != nil {
+			s.logger.Warn("failed to marshal cards_dealt payload", "error", err)
+			continue
+		}
+
+		response := WebSocketMessage{
+			Type:    "cards_dealt",
+			Payload: json.RawMessage(payloadBytes),
+		}
+
+		responseBytes, err := json.Marshal(response)
+		if err != nil {
+			s.logger.Warn("failed to marshal cards_dealt response", "error", err)
+			continue
+		}
+
+		// Send to this client
+		select {
+		case client.send <- responseBytes:
+		default:
+			s.logger.Warn("client send channel full, skipping cards_dealt message")
 		}
 	}
 

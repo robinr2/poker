@@ -204,3 +204,196 @@ func TestGetLobbyStateThreadSafety(t *testing.T) {
 		t.Error("final lobby state is invalid")
 	}
 }
+
+// TestFilterHoleCardsForPlayer verifies that filterHoleCardsForPlayer returns only the player's cards
+func TestFilterHoleCardsForPlayer(t *testing.T) {
+	// Create test hole cards - using a map[int][]Card structure (slice, not array)
+	holeCards := map[int][]Card{
+		0: {Card{Rank: "A", Suit: "s"}, Card{Rank: "K", Suit: "h"}},
+		1: {Card{Rank: "Q", Suit: "d"}, Card{Rank: "J", Suit: "c"}},
+		2: {Card{Rank: "T", Suit: "s"}, Card{Rank: "9", Suit: "h"}},
+		3: {Card{Rank: "8", Suit: "d"}, Card{Rank: "7", Suit: "c"}},
+	}
+
+	// Test filtering for player at seat 0
+	filtered := filterHoleCardsForPlayer(holeCards, 0)
+	if len(filtered) != 1 {
+		t.Errorf("expected 1 card entry for player 0, got %d", len(filtered))
+	}
+	if cards, ok := filtered[0]; ok {
+		if len(cards) != 2 {
+			t.Errorf("expected 2 cards for player 0, got %d", len(cards))
+		}
+		if cards[0].Rank != "A" || cards[0].Suit != "s" {
+			t.Errorf("expected As, got %s", cards[0].String())
+		}
+		if cards[1].Rank != "K" || cards[1].Suit != "h" {
+			t.Errorf("expected Kh, got %s", cards[1].String())
+		}
+	} else {
+		t.Error("expected seat 0 in filtered map")
+	}
+
+	// Verify no other seats are present
+	for seat := range filtered {
+		if seat != 0 {
+			t.Errorf("unexpected seat %d in filtered map", seat)
+		}
+	}
+
+	// Test filtering for player at seat 2
+	filtered = filterHoleCardsForPlayer(holeCards, 2)
+	if len(filtered) != 1 {
+		t.Errorf("expected 1 card entry for player 2, got %d", len(filtered))
+	}
+	if cards, ok := filtered[2]; ok {
+		if len(cards) != 2 {
+			t.Errorf("expected 2 cards for player 2, got %d", len(cards))
+		}
+		if cards[0].Rank != "T" || cards[0].Suit != "s" {
+			t.Errorf("expected Ts, got %s", cards[0].String())
+		}
+	} else {
+		t.Error("expected seat 2 in filtered map")
+	}
+
+	// Test filtering for player not in holeCards
+	filtered = filterHoleCardsForPlayer(holeCards, 5)
+	if len(filtered) != 0 {
+		t.Errorf("expected empty map for player 5, got %d entries", len(filtered))
+	}
+}
+
+// TestBroadcastHandStarted verifies hand_started message broadcast with dealer and blind info
+func TestBroadcastHandStarted(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up players
+	token1 := "player-1"
+	token2 := "player-2"
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start a hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Call broadcastHandStarted
+	err = server.broadcastHandStarted(table)
+	if err != nil {
+		t.Fatalf("failed to broadcast hand started: %v", err)
+	}
+
+	// Verify table has proper hand state
+	table.mu.RLock()
+	if table.CurrentHand == nil {
+		t.Error("expected CurrentHand to be set")
+	}
+	if table.DealerSeat == nil {
+		t.Error("expected DealerSeat to be set")
+	}
+	table.mu.RUnlock()
+}
+
+// TestBroadcastBlindPosted verifies blind_posted message broadcast
+func TestBroadcastBlindPosted(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up players
+	token1 := "player-1"
+	token2 := "player-2"
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start a hand to establish blind positions
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Get blind positions
+	table.mu.RLock()
+	hand := table.CurrentHand
+	sbSeat := hand.SmallBlindSeat
+	sbAmount := 10
+	table.mu.RUnlock()
+
+	// Call broadcastBlindPosted
+	err = server.broadcastBlindPosted(table, sbSeat, sbAmount)
+	if err != nil {
+		t.Fatalf("failed to broadcast blind posted: %v", err)
+	}
+}
+
+// TestBroadcastCardsDealt verifies cards_dealt message with privacy filtering
+func TestBroadcastCardsDealt(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up players
+	token1 := "player-1"
+	token2 := "player-2"
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start a hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Call broadcastCardsDealt - this should use privacy filtering
+	err = server.broadcastCardsDealt(table)
+	if err != nil {
+		t.Fatalf("failed to broadcast cards dealt: %v", err)
+	}
+}

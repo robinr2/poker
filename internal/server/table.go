@@ -58,15 +58,17 @@ type Table struct {
 	Seats       [6]Seat // Fixed array of 6 seats
 	DealerSeat  *int    // Seat number of the current dealer (nil = no dealer assigned yet)
 	CurrentHand *Hand   // Currently active hand (nil = no hand running)
+	Server      *Server // Reference to the server for broadcasting events
 	mu          sync.RWMutex
 }
 
 // NewTable creates and returns a new Table instance with 6 empty seats
-func NewTable(id, name string) *Table {
+func NewTable(id, name string, server *Server) *Table {
 	table := &Table{
 		ID:       id,
 		Name:     name,
 		MaxSeats: 6,
+		Server:   server,
 	}
 
 	// Initialize all seats with Index and nil Token
@@ -350,10 +352,10 @@ func (t *Table) CanStartHand() bool {
 // 5. Posts blinds (SB=10, BB=20), handles all-in if stack < blind
 // 6. Deals hole cards to all active players
 // 7. Sets CurrentHand with all game state
+// 8. Broadcasts hand_started, blind_posted, and cards_dealt events
 // Returns error if hand cannot be started or if operations fail
 func (t *Table) StartHand() error {
 	t.mu.Lock()
-	defer t.mu.Unlock()
 
 	// Check if hand can be started (must do this with lock held)
 	// Count active players
@@ -365,10 +367,12 @@ func (t *Table) StartHand() error {
 	}
 
 	if activeCount < 2 {
+		t.mu.Unlock()
 		return fmt.Errorf("insufficient active players to start hand: %d active, need at least 2", activeCount)
 	}
 
 	if t.CurrentHand != nil {
+		t.mu.Unlock()
 		return fmt.Errorf("hand already running")
 	}
 
@@ -378,6 +382,7 @@ func (t *Table) StartHand() error {
 	// Step 2: Get blind positions
 	sbSeat, bbSeat, err := t.getBlindPositionsLocked(dealerSeat)
 	if err != nil {
+		t.mu.Unlock()
 		return fmt.Errorf("failed to get blind positions: %w", err)
 	}
 
@@ -394,6 +399,7 @@ func (t *Table) StartHand() error {
 	// Step 4: Shuffle the deck
 	err = ShuffleDeck(hand.Deck)
 	if err != nil {
+		t.mu.Unlock()
 		return fmt.Errorf("failed to shuffle deck: %w", err)
 	}
 
@@ -426,11 +432,58 @@ func (t *Table) StartHand() error {
 	// Step 6: Deal hole cards to all active players
 	err = hand.DealHoleCards(t.Seats)
 	if err != nil {
+		t.mu.Unlock()
 		return fmt.Errorf("failed to deal hole cards: %w", err)
 	}
 
 	// Step 7: Set CurrentHand
 	t.CurrentHand = hand
+
+	// Unlock before broadcasting to avoid holding the lock during network operations
+	t.mu.Unlock()
+
+	// Step 8: Broadcast events to all table clients
+	if t.Server != nil {
+		// Broadcast hand_started with dealer and blind positions
+		err = t.Server.broadcastHandStarted(t)
+		if err != nil {
+			t.mu.Lock()
+			// Revert the hand state on broadcast failure
+			t.CurrentHand = nil
+			t.mu.Unlock()
+			return fmt.Errorf("failed to broadcast hand_started: %w", err)
+		}
+
+		// Broadcast small blind posted
+		err = t.Server.broadcastBlindPosted(t, sbSeat, sbPosted)
+		if err != nil {
+			t.mu.Lock()
+			// Revert the hand state on broadcast failure
+			t.CurrentHand = nil
+			t.mu.Unlock()
+			return fmt.Errorf("failed to broadcast small blind: %w", err)
+		}
+
+		// Broadcast big blind posted
+		err = t.Server.broadcastBlindPosted(t, bbSeat, bbPosted)
+		if err != nil {
+			t.mu.Lock()
+			// Revert the hand state on broadcast failure
+			t.CurrentHand = nil
+			t.mu.Unlock()
+			return fmt.Errorf("failed to broadcast big blind: %w", err)
+		}
+
+		// Broadcast hole cards dealt
+		err = t.Server.broadcastCardsDealt(t)
+		if err != nil {
+			t.mu.Lock()
+			// Revert the hand state on broadcast failure
+			t.CurrentHand = nil
+			t.mu.Unlock()
+			return fmt.Errorf("failed to broadcast cards_dealt: %w", err)
+		}
+	}
 
 	return nil
 }

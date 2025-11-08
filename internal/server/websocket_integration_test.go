@@ -2356,3 +2356,249 @@ func TestDisconnectBroadcastsTableStateToRemaining(t *testing.T) {
 		t.Errorf("expected seat 1 to be empty after Player2 disconnected, got %v", seat1["playerName"])
 	}
 }
+
+// TestStartHandBroadcastsMessages verifies StartHand() broadcasts hand_started, blind_posted, and cards_dealt
+func TestStartHandBroadcastsMessages(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+
+	// Create two sessions
+	session1, err := server.sessionManager.CreateSession("Player1")
+	if err != nil {
+		t.Fatalf("failed to create session1: %v", err)
+	}
+
+	session2, err := server.sessionManager.CreateSession("Player2")
+	if err != nil {
+		t.Fatalf("failed to create session2: %v", err)
+	}
+
+	// Create a test HTTP server with the WebSocket handler
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.HandleWebSocket(hub)(w, r)
+	}))
+	defer testServer.Close()
+
+	// Connect first client
+	wsURL1 := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session1.Token
+	dialer := websocket.Dialer{}
+	ws1, _, err := dialer.Dial(wsURL1, nil)
+	if err != nil {
+		t.Fatalf("failed to connect ws1: %v", err)
+	}
+	defer ws1.Close()
+
+	// Receive session_restored and lobby_state
+	_ = readMessage(t, ws1)
+	_ = readMessage(t, ws1)
+
+	// Connect second client
+	wsURL2 := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session2.Token
+	ws2, _, err := dialer.Dial(wsURL2, nil)
+	if err != nil {
+		t.Fatalf("failed to connect ws2: %v", err)
+	}
+	defer ws2.Close()
+
+	// Receive session_restored and lobby_state for second client
+	_ = readMessage(t, ws2)
+	_ = readMessage(t, ws2)
+
+	// Both players join table-1
+	sendMessage(t, ws1, "join_table", JoinTablePayload{TableId: "table-1"})
+	_ = readMessage(t, ws1) // seat_assigned
+	_ = readMessage(t, ws1) // table_state
+
+	_ = readMessage(t, ws2) // lobby_state broadcast
+
+	sendMessage(t, ws2, "join_table", JoinTablePayload{TableId: "table-1"})
+	_ = readMessage(t, ws2) // seat_assigned
+	_ = readMessage(t, ws2) // table_state
+
+	_ = readMessage(t, ws1) // table_state broadcast
+
+	// Mark both players as active to allow hand start
+	table := server.tables[0]
+	table.mu.Lock()
+	table.Seats[0].Status = "active"
+	table.Seats[1].Status = "active"
+	table.mu.Unlock()
+
+	// Call StartHand()
+	err = table.StartHand()
+	if err != nil {
+		t.Fatalf("StartHand failed: %v", err)
+	}
+
+	// Give server time to process and send broadcasts
+	time.Sleep(100 * time.Millisecond)
+
+	// Player 1 should receive: hand_started, blind_posted (SB), blind_posted (BB), cards_dealt
+	msg1 := readMessage(t, ws1)
+	if msg1.Type != "hand_started" {
+		t.Errorf("expected first message to be 'hand_started', got %q", msg1.Type)
+	}
+
+	msg2 := readMessage(t, ws1)
+	if msg2.Type != "blind_posted" {
+		t.Errorf("expected second message to be 'blind_posted', got %q", msg2.Type)
+	}
+
+	msg3 := readMessage(t, ws1)
+	if msg3.Type != "blind_posted" {
+		t.Errorf("expected third message to be 'blind_posted', got %q", msg3.Type)
+	}
+
+	msg4 := readMessage(t, ws1)
+	if msg4.Type != "cards_dealt" {
+		t.Errorf("expected fourth message to be 'cards_dealt', got %q", msg4.Type)
+	}
+
+	// Player 2 should receive same messages
+	msg1p2 := readMessage(t, ws2)
+	if msg1p2.Type != "hand_started" {
+		t.Errorf("expected first message for player2 to be 'hand_started', got %q", msg1p2.Type)
+	}
+
+	msg2p2 := readMessage(t, ws2)
+	if msg2p2.Type != "blind_posted" {
+		t.Errorf("expected second message for player2 to be 'blind_posted', got %q", msg2p2.Type)
+	}
+
+	msg3p2 := readMessage(t, ws2)
+	if msg3p2.Type != "blind_posted" {
+		t.Errorf("expected third message for player2 to be 'blind_posted', got %q", msg3p2.Type)
+	}
+
+	msg4p2 := readMessage(t, ws2)
+	if msg4p2.Type != "cards_dealt" {
+		t.Errorf("expected fourth message for player2 to be 'cards_dealt', got %q", msg4p2.Type)
+	}
+}
+
+// TestStartHandBroadcastsCardPrivacy verifies each player only receives their own hole cards
+func TestStartHandBroadcastsCardPrivacy(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+
+	// Create two sessions
+	session1, err := server.sessionManager.CreateSession("Player1")
+	if err != nil {
+		t.Fatalf("failed to create session1: %v", err)
+	}
+
+	session2, err := server.sessionManager.CreateSession("Player2")
+	if err != nil {
+		t.Fatalf("failed to create session2: %v", err)
+	}
+
+	// Create a test HTTP server with the WebSocket handler
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.HandleWebSocket(hub)(w, r)
+	}))
+	defer testServer.Close()
+
+	// Connect first client
+	wsURL1 := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session1.Token
+	dialer := websocket.Dialer{}
+	ws1, _, err := dialer.Dial(wsURL1, nil)
+	if err != nil {
+		t.Fatalf("failed to connect ws1: %v", err)
+	}
+	defer ws1.Close()
+
+	// Receive session_restored and lobby_state
+	_ = readMessage(t, ws1)
+	_ = readMessage(t, ws1)
+
+	// Connect second client
+	wsURL2 := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session2.Token
+	ws2, _, err := dialer.Dial(wsURL2, nil)
+	if err != nil {
+		t.Fatalf("failed to connect ws2: %v", err)
+	}
+	defer ws2.Close()
+
+	// Receive session_restored and lobby_state for second client
+	_ = readMessage(t, ws2)
+	_ = readMessage(t, ws2)
+
+	// Both players join table-1
+	sendMessage(t, ws1, "join_table", JoinTablePayload{TableId: "table-1"})
+	_ = readMessage(t, ws1) // seat_assigned
+	_ = readMessage(t, ws1) // table_state
+
+	_ = readMessage(t, ws2) // lobby_state broadcast
+
+	sendMessage(t, ws2, "join_table", JoinTablePayload{TableId: "table-1"})
+	_ = readMessage(t, ws2) // seat_assigned
+	_ = readMessage(t, ws2) // table_state
+
+	_ = readMessage(t, ws1) // table_state broadcast
+
+	// Mark both players as active to allow hand start
+	table := server.tables[0]
+	table.mu.Lock()
+	table.Seats[0].Status = "active"
+	table.Seats[1].Status = "active"
+	table.mu.Unlock()
+
+	// Call StartHand()
+	err = table.StartHand()
+	if err != nil {
+		t.Fatalf("StartHand failed: %v", err)
+	}
+
+	// Give server time to process and send broadcasts
+	time.Sleep(100 * time.Millisecond)
+
+	// Player 1 receives: hand_started, blind_posted (SB), blind_posted (BB), cards_dealt
+	_ = readMessage(t, ws1)          // hand_started
+	_ = readMessage(t, ws1)          // blind_posted
+	_ = readMessage(t, ws1)          // blind_posted
+	cardsMsg1 := readMessage(t, ws1) // cards_dealt
+
+	// Player 2 receives same messages
+	_ = readMessage(t, ws2)          // hand_started
+	_ = readMessage(t, ws2)          // blind_posted
+	_ = readMessage(t, ws2)          // blind_posted
+	cardsMsg2 := readMessage(t, ws2) // cards_dealt
+
+	// Parse cards for player 1
+	var cardsPayload1 CardsDealtPayload
+	err = json.Unmarshal(cardsMsg1.Payload, &cardsPayload1)
+	if err != nil {
+		t.Fatalf("failed to parse cards_dealt for player1: %v", err)
+	}
+
+	// Parse cards for player 2
+	var cardsPayload2 CardsDealtPayload
+	err = json.Unmarshal(cardsMsg2.Payload, &cardsPayload2)
+	if err != nil {
+		t.Fatalf("failed to parse cards_dealt for player2: %v", err)
+	}
+
+	// Player 1 should only have hole cards for seat 0 (their seat)
+	if len(cardsPayload1.HoleCards) != 1 {
+		t.Errorf("expected player1 to receive hole cards for 1 seat only, got %d seats", len(cardsPayload1.HoleCards))
+	}
+	if _, ok := cardsPayload1.HoleCards[0]; !ok {
+		t.Errorf("expected player1 to receive hole cards for seat 0 (their seat)")
+	}
+	if _, ok := cardsPayload1.HoleCards[1]; ok {
+		t.Errorf("player1 should not receive hole cards for seat 1 (opponent's seat)")
+	}
+
+	// Player 2 should only have hole cards for seat 1 (their seat)
+	if len(cardsPayload2.HoleCards) != 1 {
+		t.Errorf("expected player2 to receive hole cards for 1 seat only, got %d seats", len(cardsPayload2.HoleCards))
+	}
+	if _, ok := cardsPayload2.HoleCards[1]; !ok {
+		t.Errorf("expected player2 to receive hole cards for seat 1 (their seat)")
+	}
+	if _, ok := cardsPayload2.HoleCards[0]; ok {
+		t.Errorf("player2 should not receive hole cards for seat 0 (opponent's seat)")
+	}
+}

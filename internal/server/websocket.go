@@ -197,3 +197,15 @@ func (c *Client) writePump() {
 		}
 	}
 }
+
+// filterHoleCardsForPlayer returns a map with only the specified player's hole cards
+// This ensures players only see their own cards, not opponents' cards
+func filterHoleCardsForPlayer(holeCards map[int][]Card, playerSeat int) map[int][]Card {
+	filtered := make(map[int][]Card)
+
+	if cards, ok := holeCards[playerSeat]; ok {
+		filtered[playerSeat] = cards
+	}
+
+	return filtered
+}

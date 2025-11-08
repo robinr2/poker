@@ -8,7 +8,7 @@ import (
 
 // TestNewTable verifies table creation with correct ID, name, and 6 empty seats
 func TestNewTable(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	if table == nil {
 		t.Fatal("expected table to be created, got nil")
@@ -29,7 +29,7 @@ func TestNewTable(t *testing.T) {
 
 // TestSeatInitialization verifies all seats have correct Index and nil Token
 func TestSeatInitialization(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	if len(table.Seats) != 6 {
 		t.Errorf("expected 6 seats, got %d", len(table.Seats))
@@ -48,7 +48,7 @@ func TestSeatInitialization(t *testing.T) {
 
 // TestSeatStatusField verifies Seat has Status field with valid "empty" value for new tables
 func TestSeatStatusField(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	if len(table.Seats) != 6 {
 		t.Errorf("expected 6 seats, got %d", len(table.Seats))
@@ -63,7 +63,7 @@ func TestSeatStatusField(t *testing.T) {
 
 // TestGetOccupiedSeatCount verifies returns 0 for empty table
 func TestGetOccupiedSeatCount(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	count := table.GetOccupiedSeatCount()
 	if count != 0 {
@@ -73,7 +73,7 @@ func TestGetOccupiedSeatCount(t *testing.T) {
 
 // TestGetOccupiedSeatCountWithOccupiedSeats verifies count with manually set tokens
 func TestGetOccupiedSeatCountWithOccupiedSeats(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	// Manually set some tokens
 	token1 := "player1"
@@ -106,7 +106,7 @@ func TestGetOccupiedSeatCountWithOccupiedSeats(t *testing.T) {
 
 // TestTableThreadSafety verifies concurrent reads/writes with RWMutex
 func TestTableThreadSafety(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	const numGoroutines = 5
 	const operationsPerGoroutine = 50
@@ -199,7 +199,7 @@ func TestServerTablesPreseeded(t *testing.T) {
 
 // TestTableAssignSeat verifies assigns to first empty seat (0-5 sequential)
 func TestTableAssignSeat(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 	token := "player-token-1"
 
 	// Assign to seat 0 (first empty)
@@ -252,7 +252,7 @@ func TestTableAssignSeat(t *testing.T) {
 
 // TestTableAssignSeatSequential verifies seats are assigned 0-5 sequentially
 func TestTableAssignSeatSequential(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	for i := 0; i < 6; i++ {
 		token := "player-" + string(rune('0'+i))
@@ -274,7 +274,7 @@ func TestTableAssignSeatSequential(t *testing.T) {
 
 // TestTableAssignSeatWhenFull verifies returns error when all 6 seats occupied
 func TestTableAssignSeatWhenFull(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	// Fill all 6 seats
 	for i := 0; i < 6; i++ {
@@ -303,7 +303,7 @@ func TestTableAssignSeatWhenFull(t *testing.T) {
 
 // TestTableClearSeat verifies clears seat by token, sets Token to nil and Status to "empty"
 func TestTableClearSeat(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 	token1 := "player-1"
 	token2 := "player-2"
 
@@ -360,7 +360,7 @@ func TestTableClearSeat(t *testing.T) {
 
 // TestTableClearSeatNotFound verifies returns error when token not found
 func TestTableClearSeatNotFound(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 	token1 := "player-1"
 	tokenNotAssigned := "player-not-assigned"
 
@@ -390,7 +390,7 @@ func TestTableClearSeatNotFound(t *testing.T) {
 
 // TestTableGetSeatByToken verifies returns seat if player is seated at table
 func TestTableGetSeatByToken(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 	token1 := "player-1"
 	token2 := "player-2"
 
@@ -429,7 +429,7 @@ func TestTableGetSeatByToken(t *testing.T) {
 
 // TestTableGetSeatByTokenNotFound verifies returns found=false when token not found
 func TestTableGetSeatByTokenNotFound(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 	token1 := "player-1"
 	tokenNotAssigned := "player-not-assigned"
 
@@ -446,7 +446,7 @@ func TestTableGetSeatByTokenNotFound(t *testing.T) {
 	}
 
 	// Empty table should return not found
-	emptyTable := NewTable("empty", "Empty")
+	emptyTable := NewTable("empty", "Empty", nil)
 	seat, found = emptyTable.GetSeatByToken(&token1)
 	if found {
 		t.Errorf("expected not found for empty table, got found")
@@ -458,7 +458,7 @@ func TestTableGetSeatByTokenNotFound(t *testing.T) {
 
 // TestTableConcurrentAssignments verifies multiple goroutines assign seats safely
 func TestTableConcurrentAssignments(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	const numGoroutines = 6
 	var wg sync.WaitGroup
@@ -589,7 +589,7 @@ func TestHandInitialization(t *testing.T) {
 
 // TestSeatWithStack verifies Stack field is added to Seat struct and defaults to 1000
 func TestSeatWithStack(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	// Verify Stack field exists and defaults to 0 on new table
 	for i := 0; i < 6; i++ {
@@ -617,7 +617,7 @@ func TestSeatWithStack(t *testing.T) {
 
 // TestTableClearSeatResetStack verifies Stack is reset to 0 after clearing a seat
 func TestTableClearSeatResetStack(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 	token1 := "player-1"
 
 	// Assign a seat
@@ -649,7 +649,7 @@ func TestTableClearSeatResetStack(t *testing.T) {
 
 // TestNextDealerFirstHand verifies first hand assigns dealer to first active seat
 func TestNextDealerFirstHand(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	// Set up: seat 0 and 2 are active, seat 1 is waiting
 	token0 := "player-0"
@@ -682,7 +682,7 @@ func TestNextDealerFirstHand(t *testing.T) {
 
 // TestNextDealerRotation verifies dealer rotates clockwise through active players
 func TestNextDealerRotation(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	// Set up: seats 0, 2, 4 are active
 	token0 := "player-0"
@@ -728,7 +728,7 @@ func TestNextDealerRotation(t *testing.T) {
 
 // TestNextDealerSkipsWaiting verifies dealer skips seats with "waiting" status
 func TestNextDealerSkipsWaiting(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	// Set up: seat 0 active, seat 1 waiting, seat 2 active
 	token0 := "player-0"
@@ -762,7 +762,7 @@ func TestNextDealerSkipsWaiting(t *testing.T) {
 
 // TestGetBlindPositionsNormal verifies blind positions for 3+ players (SB=next after dealer, BB=next after SB)
 func TestGetBlindPositionsNormal(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	// Set up: seats 0, 1, 2, 3 are active
 	for i := 0; i < 4; i++ {
@@ -803,7 +803,7 @@ func TestGetBlindPositionsNormal(t *testing.T) {
 
 // TestGetBlindPositionsHeadsUp verifies blind positions for 2 players (dealer IS SB, other is BB)
 func TestGetBlindPositionsHeadsUp(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	// Set up: only seats 0 and 3 are active (heads-up)
 	token0 := "player-0"
@@ -848,7 +848,7 @@ func TestGetBlindPositionsHeadsUp(t *testing.T) {
 
 // TestGetBlindPositionsInsufficientPlayers verifies error for <2 active players
 func TestGetBlindPositionsInsufficientPlayers(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	// No active players
 	sb, bb, err := table.GetBlindPositions(0)
@@ -878,7 +878,7 @@ func TestGetBlindPositionsInsufficientPlayers(t *testing.T) {
 
 // TestGetBlindPositionsScatteredSeats verifies blind positions with non-consecutive active seats
 func TestGetBlindPositionsScatteredSeats(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	// Set up: seats 1, 3, 5 are active (scattered, non-consecutive)
 	token1 := "player-1"
@@ -928,7 +928,7 @@ func TestGetBlindPositionsScatteredSeats(t *testing.T) {
 
 // TestGetBlindPositionsInvalidDealer verifies error when dealer seat is not active
 func TestGetBlindPositionsInvalidDealer(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	// Set up: seats 1, 3, 5 are active
 	token1 := "player-1"
@@ -1419,7 +1419,7 @@ func TestDealHoleCardsInsufficientCards(t *testing.T) {
 
 // TestCanStartHandRequiresTwoActive verifies CanStartHand returns false with <2 active players
 func TestCanStartHandRequiresTwoActive(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	// No active players
 	if table.CanStartHand() {
@@ -1439,7 +1439,7 @@ func TestCanStartHandRequiresTwoActive(t *testing.T) {
 
 // TestCanStartHandRequiresNoActiveHand verifies CanStartHand returns false if hand already running
 func TestCanStartHandRequiresNoActiveHand(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	// Set up 2 active players
 	token0 := "player-0"
@@ -1476,7 +1476,7 @@ func TestCanStartHandRequiresNoActiveHand(t *testing.T) {
 
 // TestCanStartHandTrue verifies CanStartHand returns true when ≥2 active and no active hand
 func TestCanStartHandTrue(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	// Set up 2 active players (heads-up)
 	token0 := "player-0"
@@ -1495,7 +1495,7 @@ func TestCanStartHandTrue(t *testing.T) {
 	}
 
 	// Set up 6 active players (full table)
-	table2 := NewTable("table-2", "Table 2")
+	table2 := NewTable("table-2", "Table 2", nil)
 	for i := 0; i < 6; i++ {
 		token := "player-" + string(rune('0'+i))
 		table2.Seats[i].Token = &token
@@ -1510,7 +1510,7 @@ func TestCanStartHandTrue(t *testing.T) {
 
 // TestStartHandInitializesDealer verifies StartHand sets dealer via NextDealer()
 func TestStartHandInitializesDealer(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	// Set up 2 active players
 	token0 := "player-0"
@@ -1546,7 +1546,7 @@ func TestStartHandInitializesDealer(t *testing.T) {
 
 // TestStartHandPostsBlinds verifies StartHand deducts SB(10) and BB(20) from stacks, pot = 30
 func TestStartHandPostsBlinds(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	// Set up 2 active players (heads-up)
 	token0 := "player-0"
@@ -1602,7 +1602,7 @@ func TestStartHandPostsBlinds(t *testing.T) {
 
 // TestStartHandDealsCards verifies each active player has 2 cards in CurrentHand.HoleCards
 func TestStartHandDealsCards(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	// Set up 3 active players
 	for i := 0; i < 3; i++ {
@@ -1639,7 +1639,7 @@ func TestStartHandDealsCards(t *testing.T) {
 
 // TestStartHandSetsPot verifies pot equals SB + BB = 30
 func TestStartHandSetsPot(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	// Set up 6 active players (full table)
 	for i := 0; i < 6; i++ {
@@ -1663,7 +1663,7 @@ func TestStartHandSetsPot(t *testing.T) {
 
 // TestStartHandAllInBlind verifies handling player with stack < blind amount (goes all-in)
 func TestStartHandAllInBlind(t *testing.T) {
-	table := NewTable("table-1", "Table 1")
+	table := NewTable("table-1", "Table 1", nil)
 
 	// Set up 3 active players where SB player has only 5 chips (less than 10)
 	token0 := "player-0"

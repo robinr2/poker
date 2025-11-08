@@ -48,7 +48,7 @@ func NewServer(logger *slog.Logger) *Server {
 	tableNames := [4]string{"Table 1", "Table 2", "Table 3", "Table 4"}
 	for i := 0; i < 4; i++ {
 		tableID := fmt.Sprintf("table-%d", i+1)
-		s.tables[i] = NewTable(tableID, tableNames[i])
+		s.tables[i] = NewTable(tableID, tableNames[i], s)
 	}
 
 	s.RegisterRoutes()
