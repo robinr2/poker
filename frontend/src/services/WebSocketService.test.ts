@@ -492,10 +492,10 @@ describe('WebSocketService', () => {
 
        await connectPromise;
 
-       const sessionMessage = JSON.stringify({
-         type: 'session_restored',
-         payload: { name: 'Bob', tableID: 'table-1', seatIndex: 2 },
-       });
+        const sessionMessage = JSON.stringify({
+          type: 'session_restored',
+          payload: { name: 'Bob', tableId: 'table-1', seatIndex: 2 },
+        });
 
        mockSocket.simulateMessage(sessionMessage);
 

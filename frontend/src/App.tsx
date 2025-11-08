@@ -2,13 +2,21 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 
 import { LobbyView } from './components/LobbyView';
 import { NamePrompt } from './components/NamePrompt';
+import { TableView } from './components/TableView';
 import { useWebSocket } from './hooks/useWebSocket';
 import { SessionService } from './services/SessionService';
 import './App.css';
+import './styles/TableView.css';
 
 interface SessionMessage {
   type: string;
   payload?: Record<string, unknown>;
+}
+
+interface SeatInfo {
+  index: number;
+  playerName: string | null;
+  status: string;
 }
 
 const WS_URL = 'ws://localhost:8080/ws';
@@ -17,6 +25,10 @@ function App() {
   const [playerName, setPlayerName] = useState<string | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
   const [initialToken] = useState<string | null>(() => SessionService.getToken());
+  const [view, setView] = useState<'lobby' | 'table'>('lobby');
+  const [currentTableId, setCurrentTableId] = useState<string | null>(null);
+  const [currentSeatIndex, setCurrentSeatIndex] = useState<number | null>(null);
+  const [seats, setSeats] = useState<SeatInfo[]>([]);
   
   // Use refs to avoid stale closures in the message handler
   const playerNameRef = useRef(playerName);
@@ -54,11 +66,50 @@ function App() {
     }
   }, []); // Empty deps - we use refs for current values
 
-  const { status, sendMessage, lobbyState } = useWebSocket(
-    WS_URL,
-    initialToken || undefined,
-    { onMessage: handleMessage }
-  );
+   const { status, sendMessage, lobbyState, lastSeatMessage, tableState } = useWebSocket(
+     WS_URL,
+     initialToken || undefined,
+     { onMessage: handleMessage }
+   );
+
+    // Handle seat messages (seat_assigned and seat_cleared)
+    useEffect(() => {
+      if (lastSeatMessage) {
+        if (lastSeatMessage.type === 'seat_assigned' && lastSeatMessage.payload) {
+          const payload = lastSeatMessage.payload as { tableId: string; seatIndex: number; status?: string };
+          setCurrentTableId(payload.tableId);
+          setCurrentSeatIndex(payload.seatIndex);
+         // Initialize seats array with 6 empty seats
+         const newSeats: SeatInfo[] = [];
+         for (let i = 0; i < 6; i++) {
+           newSeats.push({
+             index: i,
+             playerName: i === payload.seatIndex ? playerNameRef.current : null,
+             status: i === payload.seatIndex ? 'occupied' : 'empty',
+           });
+         }
+         setSeats(newSeats);
+         setView('table');
+       } else if (lastSeatMessage.type === 'seat_cleared') {
+         setView('lobby');
+         setCurrentTableId(null);
+         setCurrentSeatIndex(null);
+         setSeats([]);
+       }
+     }
+   }, [lastSeatMessage]);
+
+   // Handle table state updates
+   useEffect(() => {
+     if (tableState) {
+       const updatedSeats: SeatInfo[] = tableState.seats.map((seat) => ({
+         index: seat.index,
+         playerName: seat.playerName,
+         status: seat.status,
+       }));
+       setSeats(updatedSeats);
+     }
+   }, [tableState]);
 
   const handleNameSubmit = (name: string): void => {
     try {
@@ -73,8 +124,27 @@ function App() {
   };
 
   const handleJoinTable = (tableId: string): void => {
-    // Phase 4 will implement actual join logic
-    console.log('Join table:', tableId);
+    try {
+      const message = JSON.stringify({
+        type: 'join_table',
+        payload: { tableId },
+      });
+      sendMessage(message);
+    } catch (error) {
+      console.error('Failed to send join_table message:', error);
+    }
+  };
+
+  const handleLeaveTable = (): void => {
+    try {
+      const message = JSON.stringify({
+        type: 'leave_table',
+        payload: {},
+      });
+      sendMessage(message);
+    } catch (error) {
+      console.error('Failed to send leave_table message:', error);
+    }
   };
 
   const getStatusColor = (): string => {
@@ -120,10 +190,20 @@ function App() {
       </header>
 
       <main className="app-main">
-        {showPrompt && <NamePrompt onSubmit={handleNameSubmit} />}
+         {showPrompt && <NamePrompt onSubmit={handleNameSubmit} />}
 
-        {!showPrompt && <LobbyView tables={lobbyState} onJoinTable={handleJoinTable} />}
-      </main>
+         {!showPrompt && view === 'lobby' && (
+           <LobbyView tables={lobbyState} onJoinTable={handleJoinTable} />
+         )}
+         {!showPrompt && view === 'table' && currentTableId && (
+           <TableView
+             tableId={currentTableId}
+             seats={seats}
+             currentSeatIndex={currentSeatIndex}
+             onLeave={handleLeaveTable}
+           />
+         )}
+       </main>
     </div>
   );
 }

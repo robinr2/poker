@@ -219,6 +219,13 @@ func (s *Server) HandleDisconnect(token string) error {
 		s.logger.Warn("failed to update session on disconnect", "token", token, "error", err)
 	}
 
+	// Broadcast table_state to remaining players at the table BEFORE broadcasting lobby_state
+	tableID := table.ID
+	err = s.broadcastTableState(tableID, nil)
+	if err != nil {
+		s.logger.Warn("failed to broadcast table_state on disconnect", "error", err)
+	}
+
 	// Broadcast lobby_state to remaining clients
 	err = s.broadcastLobbyState()
 	if err != nil {
@@ -228,4 +235,44 @@ func (s *Server) HandleDisconnect(token string) error {
 	s.logger.Info("player disconnected and seat cleared", "token", token, "tableId", table.ID)
 
 	return nil
+}
+
+// GetClientsAtTable returns all clients currently at a specific table (thread-safe)
+func (s *Server) GetClientsAtTable(tableID string) []*Client {
+	var clients []*Client
+
+	// Find the table
+	var table *Table
+	s.mu.RLock()
+	for _, t := range s.tables {
+		if t != nil && t.ID == tableID {
+			table = t
+			break
+		}
+	}
+	s.mu.RUnlock()
+
+	if table == nil {
+		return clients
+	}
+
+	// Get all seats at the table
+	table.mu.RLock()
+	defer table.mu.RUnlock()
+
+	for _, seat := range table.Seats {
+		if seat.Token != nil {
+			// Find the client with this token in the hub
+			s.hub.mu.RLock()
+			for client := range s.hub.clients {
+				if client.Token == *seat.Token {
+					clients = append(clients, client)
+					break
+				}
+			}
+			s.hub.mu.RUnlock()
+		}
+	}
+
+	return clients
 }

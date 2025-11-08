@@ -269,6 +269,7 @@ func (s *Server) broadcastLobbyState() error {
 
 // broadcastLobbyStateExcluding sends the current lobby state to all connected clients except one
 // This is used to send the state to other players after one player makes a change
+// Note: Only clients NOT at a table receive lobby_state (clients at tables only receive table_state)
 func (s *Server) broadcastLobbyStateExcluding(excludeClient *Client) error {
 	lobbyState := s.GetLobbyState()
 
@@ -294,14 +295,25 @@ func (s *Server) broadcastLobbyStateExcluding(excludeClient *Client) error {
 		return fmt.Errorf("failed to marshal response: %w", err)
 	}
 
-	// Send directly to all hub clients except excludeClient (to avoid ordering issues with direct sends)
+	// Send directly to all hub clients except excludeClient and clients at a table
+	// (to avoid ordering issues with direct sends)
 	s.hub.mu.RLock()
 	for client := range s.hub.clients {
 		if client != excludeClient {
-			select {
-			case client.send <- responseBytes:
-			default:
-				s.logger.Warn("client send channel full, skipping message")
+			// Check if this client is at a table (skip if they are)
+			session, err := s.sessionManager.GetSession(client.Token)
+			if err != nil {
+				s.logger.Warn("failed to get session for client", "token", client.Token, "error", err)
+				continue
+			}
+
+			// Only send to clients NOT at a table
+			if session.TableID == nil {
+				select {
+				case client.send <- responseBytes:
+				default:
+					s.logger.Warn("client send channel full, skipping message")
+				}
 			}
 		}
 	}
@@ -361,6 +373,18 @@ func (c *Client) HandleJoinTable(sm *SessionManager, server *Server, logger *slo
 	err = c.SendSeatAssigned(table.ID, seat.Index, seat.Status, logger)
 	if err != nil {
 		return fmt.Errorf("failed to send seat_assigned: %w", err)
+	}
+
+	// Send table_state to the joining client
+	err = c.SendTableState(server, table.ID, logger)
+	if err != nil {
+		logger.Warn("failed to send table_state to joining client", "error", err)
+	}
+
+	// Broadcast table_state to other players at the table (excluding the joining player)
+	err = server.broadcastTableState(table.ID, c)
+	if err != nil {
+		logger.Warn("failed to broadcast table_state", "error", err)
 	}
 
 	// Broadcast lobby_state to other clients
@@ -449,6 +473,18 @@ func (c *Client) HandleLeaveTable(sm *SessionManager, server *Server, logger *sl
 		return fmt.Errorf("failed to send seat_cleared: %w", err)
 	}
 
+	// Broadcast table_state to remaining players at the table BEFORE broadcasting lobby_state
+	err = server.broadcastTableState(table.ID, nil)
+	if err != nil {
+		logger.Warn("failed to broadcast table_state after leave", "error", err)
+	}
+
+	// Send updated lobby_state to the client who left
+	err = c.SendLobbyState(server, logger)
+	if err != nil {
+		logger.Warn("failed to send lobby state to leaving client", "error", err)
+	}
+
 	// Broadcast lobby_state to other clients
 	err = server.broadcastLobbyStateExcluding(c)
 	if err != nil {
@@ -481,5 +517,163 @@ func (c *Client) SendSeatCleared(logger *slog.Logger) error {
 	logger.Info("seat_cleared sent to client")
 
 	c.send <- responseBytes
+	return nil
+}
+
+// TableStateSeat represents a single seat in the table_state message
+type TableStateSeat struct {
+	Index      int     `json:"index"`
+	PlayerName *string `json:"playerName"`
+	Status     string  `json:"status"`
+}
+
+// TableStatePayload represents the payload for table_state messages
+type TableStatePayload struct {
+	TableId string           `json:"tableId"`
+	Seats   []TableStateSeat `json:"seats"`
+}
+
+// SendTableState sends a table_state message to a single client
+func (c *Client) SendTableState(server *Server, tableID string, logger *slog.Logger) error {
+	// Get the table
+	var table *Table
+	server.mu.RLock()
+	for _, t := range server.tables {
+		if t != nil && t.ID == tableID {
+			table = t
+			break
+		}
+	}
+	server.mu.RUnlock()
+
+	if table == nil {
+		return fmt.Errorf("table not found: %s", tableID)
+	}
+
+	// Build seats array with player names
+	seats := make([]TableStateSeat, 6)
+	table.mu.RLock()
+	for i, seat := range table.Seats {
+		seats[i].Index = i
+		seats[i].Status = seat.Status
+
+		if seat.Token != nil {
+			// Get player name by token
+			playerName, err := server.sessionManager.GetPlayerName(*seat.Token)
+			if err != nil {
+				logger.Warn("failed to get player name", "token", *seat.Token, "error", err)
+				seats[i].PlayerName = nil
+			} else {
+				seats[i].PlayerName = &playerName
+			}
+		} else {
+			seats[i].PlayerName = nil
+		}
+	}
+	table.mu.RUnlock()
+
+	// Create payload
+	payloadObj := TableStatePayload{
+		TableId: tableID,
+		Seats:   seats,
+	}
+
+	payloadBytes, err := json.Marshal(payloadObj)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	response := WebSocketMessage{
+		Type:    "table_state",
+		Payload: json.RawMessage(payloadBytes),
+	}
+
+	responseBytes, err := json.Marshal(response)
+	if err != nil {
+		return fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	logger.Info("table_state sent to client", "tableId", tableID)
+
+	c.send <- responseBytes
+	return nil
+}
+
+// broadcastTableState sends the current table state to all clients at a specific table except the sender
+func (s *Server) broadcastTableState(tableID string, excludeClient *Client) error {
+	// Get all clients at the table
+	clients := s.GetClientsAtTable(tableID)
+	s.logger.Info("broadcastTableState", "tableID", tableID, "num_clients", len(clients), "excludeClient", excludeClient != nil)
+
+	// Get the table
+	var table *Table
+	s.mu.RLock()
+	for _, t := range s.tables {
+		if t != nil && t.ID == tableID {
+			table = t
+			break
+		}
+	}
+	s.mu.RUnlock()
+
+	if table == nil {
+		return fmt.Errorf("table not found: %s", tableID)
+	}
+
+	// Build seats array with player names
+	seats := make([]TableStateSeat, 6)
+	table.mu.RLock()
+	for i, seat := range table.Seats {
+		seats[i].Index = i
+		seats[i].Status = seat.Status
+
+		if seat.Token != nil {
+			// Get player name by token
+			playerName, err := s.sessionManager.GetPlayerName(*seat.Token)
+			if err != nil {
+				s.logger.Warn("failed to get player name", "token", *seat.Token, "error", err)
+				seats[i].PlayerName = nil
+			} else {
+				seats[i].PlayerName = &playerName
+			}
+		} else {
+			seats[i].PlayerName = nil
+		}
+	}
+	table.mu.RUnlock()
+
+	// Create payload
+	payloadObj := TableStatePayload{
+		TableId: tableID,
+		Seats:   seats,
+	}
+
+	payloadBytes, err := json.Marshal(payloadObj)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	response := WebSocketMessage{
+		Type:    "table_state",
+		Payload: json.RawMessage(payloadBytes),
+	}
+
+	responseBytes, err := json.Marshal(response)
+	if err != nil {
+		return fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	// Send to all clients at the table except the excludeClient
+	for _, client := range clients {
+		if excludeClient != nil && client == excludeClient {
+			continue
+		}
+		select {
+		case client.send <- responseBytes:
+		default:
+			s.logger.Warn("client send channel full, skipping table_state message")
+		}
+	}
+
 	return nil
 }

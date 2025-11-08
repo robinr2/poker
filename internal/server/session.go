@@ -129,3 +129,16 @@ func (sm *SessionManager) RemoveSession(token string) error {
 	sm.logger.Info("session removed", "token", token)
 	return nil
 }
+
+// GetPlayerName retrieves a player's name by their token
+func (sm *SessionManager) GetPlayerName(token string) (string, error) {
+	sm.mutex.RLock()
+	defer sm.mutex.RUnlock()
+
+	session, ok := sm.sessions[token]
+	if !ok {
+		return "", fmt.Errorf("session not found: %s", token)
+	}
+
+	return session.Name, nil
+}

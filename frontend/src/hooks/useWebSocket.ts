@@ -6,11 +6,35 @@ import {
   type ConnectionStatus,
 } from '../services/WebSocketService';
 
+interface SeatAssignedPayload {
+  tableId: string;
+  seatIndex: number;
+  status?: string;
+}
+
+interface SeatMessage {
+  type: 'seat_assigned' | 'seat_cleared';
+  payload?: SeatAssignedPayload | Record<string, unknown>;
+}
+
+interface TableSeat {
+  index: number;
+  playerName: string | null;
+  status: string;
+}
+
+interface TableState {
+  tableId: string;
+  seats: TableSeat[];
+}
+
 interface UseWebSocketReturn {
   status: ConnectionStatus;
   sendMessage: (message: string) => void;
   lastMessage: string | null;
   lobbyState: TableInfo[];
+  lastSeatMessage: SeatMessage | null;
+  tableState: TableState | null;
 }
 
 interface UseWebSocketOptions {
@@ -22,11 +46,13 @@ export function useWebSocket(
   token?: string,
   options?: UseWebSocketOptions
 ): UseWebSocketReturn {
-  const [status, setStatus] = useState<ConnectionStatus>('disconnected');
-  const [lastMessage, setLastMessage] = useState<string | null>(null);
-  const [lobbyState, setLobbyState] = useState<TableInfo[]>([]);
-  const serviceRef = useRef<WebSocketService | null>(null);
-  const onMessageRef = useRef(options?.onMessage);
+   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
+   const [lastMessage, setLastMessage] = useState<string | null>(null);
+   const [lobbyState, setLobbyState] = useState<TableInfo[]>([]);
+   const [lastSeatMessage, setLastSeatMessage] = useState<SeatMessage | null>(null);
+   const [tableState, setTableState] = useState<TableState | null>(null);
+   const serviceRef = useRef<WebSocketService | null>(null);
+   const onMessageRef = useRef(options?.onMessage);
 
   // Update the ref when the callback changes
   useEffect(() => {
@@ -54,28 +80,44 @@ export function useWebSocket(
       // Also update state for components that need it
       setLastMessage(data);
 
-      // Parse and handle lobby_state messages
-      try {
-        const message = JSON.parse(data);
-        if (message.type === 'lobby_state' && message.payload) {
-          // Payload is an array of table objects with snake_case fields
-          const tables = JSON.parse(message.payload);
-          const convertedTables: TableInfo[] = tables.map((t: {
-            id: string;
-            name: string;
-            seats_occupied: number;
-            max_seats: number;
-          }) => ({
-            id: t.id,
-            name: t.name,
-            seatsOccupied: t.seats_occupied,
-            maxSeats: t.max_seats,
-          }));
-          setLobbyState(convertedTables);
+       // Parse and handle lobby_state messages
+        try {
+          const message = JSON.parse(data);
+          if (message.type === 'lobby_state' && message.payload) {
+            // Payload is an array of table objects with snake_case fields
+            const tables = JSON.parse(message.payload);
+            const convertedTables: TableInfo[] = tables.map((t: {
+              id: string;
+              name: string;
+              seats_occupied: number;
+              max_seats: number;
+            }) => ({
+              id: t.id,
+              name: t.name,
+              seatsOccupied: t.seats_occupied,
+              maxSeats: t.max_seats,
+            }));
+            setLobbyState(convertedTables);
+          } else if (message.type === 'seat_assigned' || message.type === 'seat_cleared') {
+            // Store the seat message for the app to handle
+            setLastSeatMessage({
+              type: message.type,
+              payload: message.payload,
+            });
+          } else if (message.type === 'table_state' && message.payload) {
+            // Handle table_state message with seat information
+            const payload = message.payload as {
+              tableId: string;
+              seats: TableSeat[];
+            };
+            setTableState({
+              tableId: payload.tableId,
+              seats: payload.seats,
+            });
+          }
+        } catch {
+          // Silently ignore parsing errors for non-JSON messages
         }
-      } catch {
-        // Silently ignore parsing errors for non-JSON messages
-      }
     });
 
     // Connect
@@ -102,10 +144,12 @@ export function useWebSocket(
     }
   }, []);
 
-  return {
-    status,
-    sendMessage,
-    lastMessage,
-    lobbyState,
-  };
-}
+   return {
+     status,
+     sendMessage,
+     lastMessage,
+     lobbyState,
+     lastSeatMessage,
+     tableState,
+   };
+ }

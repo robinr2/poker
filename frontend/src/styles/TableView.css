@@ -1,0 +1,119 @@
+.table-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 20px;
+  gap: 30px;
+}
+
+.table-view h1 {
+  font-size: 2rem;
+  margin: 0;
+  color: #1f2937;
+}
+
+.seats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 30px;
+  padding: 40px;
+  background-color: #f3f4f6;
+  border-radius: 12px;
+  max-width: 600px;
+}
+
+.seat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background-color: #fff;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  min-height: 120px;
+  transition: all 0.2s ease;
+  cursor: default;
+}
+
+.seat:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.seat.own-seat {
+  background-color: #dbeafe;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.seat-number {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #6b7280;
+  margin: 0 0 8px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.seat-player {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: #1f2937;
+  margin: 0;
+  text-align: center;
+  min-height: 1.5rem;
+}
+
+.seat:not(.own-seat) .seat-player {
+  color: #6b7280;
+}
+
+.seat.own-seat .seat-player {
+  color: #1e40af;
+  font-weight: 600;
+}
+
+.leave-button {
+  padding: 12px 24px;
+  font-size: 1rem;
+  font-weight: 500;
+  color: white;
+  background-color: #ef4444;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.leave-button:hover {
+  background-color: #dc2626;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.leave-button:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 768px) {
+  .seats-grid {
+    gap: 20px;
+    padding: 30px;
+    max-width: 100%;
+  }
+
+  .seat {
+    min-height: 100px;
+    padding: 15px;
+  }
+
+  .seat-number {
+    font-size: 0.75rem;
+  }
+
+  .seat-player {
+    font-size: 1rem;
+  }
+}

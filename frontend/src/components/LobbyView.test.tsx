@@ -46,20 +46,33 @@ describe("LobbyView", () => {
     });
   });
 
-  describe("table interaction", () => {
-    it("passes onJoinTable callback to TableCard components", () => {
-      const mockOnJoin = vi.fn();
-      render(<LobbyView tables={mockTables} onJoinTable={mockOnJoin} />);
+   describe("table interaction", () => {
+     it("passes onJoinTable callback to TableCard components", () => {
+       const mockOnJoin = vi.fn();
+       render(<LobbyView tables={mockTables} onJoinTable={mockOnJoin} />);
 
-      // Click the Join button on Table 3 (which is empty and available)
-      const joinButtons = screen.getAllByText("Join");
-      const availableButton = joinButtons.find(
-        (btn) => !btn.hasAttribute("disabled")
-      );
-      availableButton?.click();
+       // Click the Join button on Table 3 (which is empty and available)
+       const joinButtons = screen.getAllByText("Join");
+       const availableButton = joinButtons.find(
+         (btn) => !btn.hasAttribute("disabled")
+       );
+       availableButton?.click();
 
-      // Should have called the callback with a table ID
-      expect(mockOnJoin).toHaveBeenCalledWith(expect.any(String));
-    });
-  });
-});
+       // Should have called the callback with a table ID
+       expect(mockOnJoin).toHaveBeenCalledWith(expect.any(String));
+     });
+
+     it("calls onJoinTable with correct table ID when Join button clicked", () => {
+       const mockOnJoin = vi.fn();
+       render(<LobbyView tables={mockTables} onJoinTable={mockOnJoin} />);
+
+       // Click the Join button on Table 3 (which is empty)
+       const joinButtons = screen.getAllByText("Join");
+       const table3Button = joinButtons[2]; // Table 3 is at index 2
+       table3Button?.click();
+
+       // Should have called with table-3
+       expect(mockOnJoin).toHaveBeenCalledWith("table-3");
+     });
+   });
+ });
