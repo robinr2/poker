@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestHealthCheckHandler(t *testing.T) {
@@ -519,5 +520,1000 @@ func TestHandleStartHandInsufficientPlayers(t *testing.T) {
 	err := client.HandleStartHand(sm, server, logger, payload)
 	if err == nil {
 		t.Error("expected error when insufficient players")
+	}
+}
+
+// TestTableStateSeatIncludesStack verifies that stack field is included in table_state payload
+func TestTableStateSeatIncludesStack(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up player in seat 0 with stack
+	session1, _ := sm.CreateSession("Player1")
+	token1 := session1.Token
+
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1500
+	table.mu.Unlock()
+
+	// Create a mock client with send channel
+	client := &Client{
+		send: make(chan []byte, 256),
+	}
+
+	// Call SendTableState
+	err := client.SendTableState(server, table.ID, logger)
+	if err != nil {
+		t.Fatalf("SendTableState failed: %v", err)
+	}
+
+	// Get the response from the send channel
+	response := <-client.send
+
+	// Parse the response
+	var msg WebSocketMessage
+	err = json.Unmarshal(response, &msg)
+	if err != nil {
+		t.Fatalf("failed to parse WebSocket message: %v", err)
+	}
+
+	if msg.Type != "table_state" {
+		t.Errorf("expected message type 'table_state', got %s", msg.Type)
+	}
+
+	// Parse the payload
+	var payload TableStatePayload
+	err = json.Unmarshal(msg.Payload, &payload)
+	if err != nil {
+		t.Fatalf("failed to parse payload: %v", err)
+	}
+
+	if payload.TableId != table.ID {
+		t.Errorf("expected tableId %s, got %s", table.ID, payload.TableId)
+	}
+
+	// Check seat 0
+	seat0 := payload.Seats[0]
+	if seat0.Index != 0 {
+		t.Errorf("expected seat 0 index to be 0, got %d", seat0.Index)
+	}
+
+	if seat0.Stack == nil {
+		t.Error("expected seat 0 Stack to be non-nil")
+	} else if *seat0.Stack != 1500 {
+		t.Errorf("expected seat 0 Stack to be 1500, got %d", *seat0.Stack)
+	}
+
+	// Check empty seat (seat 1)
+	seat1 := payload.Seats[1]
+	if seat1.Stack != nil {
+		t.Error("expected seat 1 Stack (empty seat) to be nil")
+	}
+}
+
+// TestTableStateSerializationWithStacks verifies JSON serialization includes stack values
+func TestTableStateSerializationWithStacks(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up multiple players with different stacks
+	session1, _ := sm.CreateSession("Player1")
+	token1 := session1.Token
+	session2, _ := sm.CreateSession("Player2")
+	token2 := session2.Token
+
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 2000
+
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "waiting"
+	table.Seats[2].Stack = 1500
+	table.mu.Unlock()
+
+	// Create a mock client
+	client := &Client{
+		send: make(chan []byte, 256),
+	}
+
+	// Call SendTableState
+	err := client.SendTableState(server, table.ID, logger)
+	if err != nil {
+		t.Fatalf("SendTableState failed: %v", err)
+	}
+
+	// Get response
+	response := <-client.send
+
+	// Parse response
+	var msg WebSocketMessage
+	err = json.Unmarshal(response, &msg)
+	if err != nil {
+		t.Fatalf("failed to parse WebSocket message: %v", err)
+	}
+
+	// Parse payload
+	var payload TableStatePayload
+	err = json.Unmarshal(msg.Payload, &payload)
+	if err != nil {
+		t.Fatalf("failed to parse payload: %v", err)
+	}
+
+	// Verify all seats
+	if len(payload.Seats) != 6 {
+		t.Errorf("expected 6 seats, got %d", len(payload.Seats))
+	}
+
+	// Check seat 0 (occupied with 2000 stack)
+	if payload.Seats[0].Stack == nil {
+		t.Error("expected seat 0 Stack to be non-nil")
+	} else if *payload.Seats[0].Stack != 2000 {
+		t.Errorf("expected seat 0 Stack to be 2000, got %d", *payload.Seats[0].Stack)
+	}
+
+	// Check seat 1 (empty)
+	if payload.Seats[1].Stack != nil {
+		t.Error("expected seat 1 Stack (empty) to be nil")
+	}
+
+	// Check seat 2 (occupied with 1500 stack)
+	if payload.Seats[2].Stack == nil {
+		t.Error("expected seat 2 Stack to be non-nil")
+	} else if *payload.Seats[2].Stack != 1500 {
+		t.Errorf("expected seat 2 Stack to be 1500, got %d", *payload.Seats[2].Stack)
+	}
+
+	// Check seat 3 (empty)
+	if payload.Seats[3].Stack != nil {
+		t.Error("expected seat 3 Stack (empty) to be nil")
+	}
+
+	// Verify JSON contains lowercase "stack" field
+	var rawData map[string]interface{}
+	err = json.Unmarshal(msg.Payload, &rawData)
+	if err != nil {
+		t.Fatalf("failed to parse raw payload: %v", err)
+	}
+
+	seats := rawData["seats"].([]interface{})
+	seat0 := seats[0].(map[string]interface{})
+	if _, hasStack := seat0["stack"]; !hasStack {
+		t.Error("expected seat JSON to have 'stack' field")
+	}
+}
+
+// TestBroadcastTableStateIncludesStack verifies Stack is included when broadcasting table state
+func TestBroadcastTableStateIncludesStack(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up players with different stacks
+	session1, _ := sm.CreateSession("Player1")
+	token1 := session1.Token
+	session2, _ := sm.CreateSession("Player2")
+	token2 := session2.Token
+
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 2500
+
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "waiting"
+	table.Seats[2].Stack = 1800
+	table.mu.Unlock()
+
+	// Create mock clients and register them with the hub
+	client1 := &Client{
+		hub:   hub,
+		send:  make(chan []byte, 256),
+		Token: token1,
+	}
+	client2 := &Client{
+		hub:   hub,
+		send:  make(chan []byte, 256),
+		Token: token2,
+	}
+
+	// Register clients with hub
+	hub.register <- client1
+	hub.register <- client2
+	// Give the hub time to process registrations
+	time.Sleep(100 * time.Millisecond)
+
+	// Call broadcastTableState
+	err := server.broadcastTableState(table.ID, nil)
+	if err != nil {
+		t.Fatalf("broadcastTableState failed: %v", err)
+	}
+
+	// Receive broadcast on client1
+	response := <-client1.send
+
+	// Parse the response
+	var msg WebSocketMessage
+	err = json.Unmarshal(response, &msg)
+	if err != nil {
+		t.Fatalf("failed to parse WebSocket message: %v", err)
+	}
+
+	if msg.Type != "table_state" {
+		t.Errorf("expected message type 'table_state', got %s", msg.Type)
+	}
+
+	// Parse the payload
+	var payload TableStatePayload
+	err = json.Unmarshal(msg.Payload, &payload)
+	if err != nil {
+		t.Fatalf("failed to parse payload: %v", err)
+	}
+
+	// Check seat 0 - should have Stack set to 2500
+	seat0 := payload.Seats[0]
+	if seat0.Index != 0 {
+		t.Errorf("expected seat 0 index to be 0, got %d", seat0.Index)
+	}
+
+	if seat0.Stack == nil {
+		t.Error("expected seat 0 Stack to be non-nil in broadcast")
+	} else if *seat0.Stack != 2500 {
+		t.Errorf("expected seat 0 Stack to be 2500 in broadcast, got %d", *seat0.Stack)
+	}
+
+	// Check seat 1 (empty) - should have nil Stack
+	seat1 := payload.Seats[1]
+	if seat1.Stack != nil {
+		t.Error("expected seat 1 Stack (empty seat) to be nil in broadcast")
+	}
+
+	// Check seat 2 - should have Stack set to 1800
+	seat2 := payload.Seats[2]
+	if seat2.Stack == nil {
+		t.Error("expected seat 2 Stack to be non-nil in broadcast")
+	} else if *seat2.Stack != 1800 {
+		t.Errorf("expected seat 2 Stack to be 1800 in broadcast, got %d", *seat2.Stack)
+	}
+
+	// Check seat 3 (empty) - should have nil Stack
+	seat3 := payload.Seats[3]
+	if seat3.Stack != nil {
+		t.Error("expected seat 3 Stack (empty seat) to be nil in broadcast")
+	}
+}
+
+// TestTableStateIncludesGameStateWhenHandActive verifies game state fields are populated when hand is active
+func TestTableStateIncludesGameStateWhenHandActive(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up players
+	token1 := "player-1"
+	token2 := "player-2"
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start a hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Create a mock client
+	mockClient := &Client{
+		Token: token1,
+		send:  make(chan []byte, 10),
+	}
+
+	// Send table state
+	err = mockClient.SendTableState(server, table.ID, logger)
+	if err != nil {
+		t.Fatalf("failed to send table state: %v", err)
+	}
+
+	// Get the message from the client's send channel
+	if len(mockClient.send) == 0 {
+		t.Fatal("no message sent to client")
+	}
+
+	msgBytes := <-mockClient.send
+	var wsMsg WebSocketMessage
+	err = json.Unmarshal(msgBytes, &wsMsg)
+	if err != nil {
+		t.Fatalf("failed to unmarshal WebSocketMessage: %v", err)
+	}
+
+	// Verify message type
+	if wsMsg.Type != "table_state" {
+		t.Errorf("expected message type 'table_state', got '%s'", wsMsg.Type)
+	}
+
+	// Unmarshal the payload
+	var payload TableStatePayload
+	err = json.Unmarshal(wsMsg.Payload, &payload)
+	if err != nil {
+		t.Fatalf("failed to unmarshal TableStatePayload: %v", err)
+	}
+
+	// Verify HandInProgress is true
+	if !payload.HandInProgress {
+		t.Error("expected HandInProgress to be true when hand is active")
+	}
+
+	// Verify DealerSeat is not nil
+	if payload.DealerSeat == nil {
+		t.Error("expected DealerSeat to be non-nil when hand is active")
+	}
+
+	// Verify SmallBlindSeat is not nil
+	if payload.SmallBlindSeat == nil {
+		t.Error("expected SmallBlindSeat to be non-nil when hand is active")
+	}
+
+	// Verify BigBlindSeat is not nil
+	if payload.BigBlindSeat == nil {
+		t.Error("expected BigBlindSeat to be non-nil when hand is active")
+	}
+
+	// Verify Pot is not nil
+	if payload.Pot == nil {
+		t.Error("expected Pot to be non-nil when hand is active")
+	}
+}
+
+// TestTableStateOmitsGameStateWhenNoHand verifies fields are nil/zero when no hand active
+func TestTableStateOmitsGameStateWhenNoHand(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up players but don't start a hand
+	token1 := "player-1"
+	token2 := "player-2"
+
+	// Assign seats
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "waiting"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "waiting"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Create a mock client
+	mockClient := &Client{
+		Token: token1,
+		send:  make(chan []byte, 10),
+	}
+
+	// Send table state without a hand
+	err := mockClient.SendTableState(server, table.ID, logger)
+	if err != nil {
+		t.Fatalf("failed to send table state: %v", err)
+	}
+
+	// Get the message from the client's send channel
+	if len(mockClient.send) == 0 {
+		t.Fatal("no message sent to client")
+	}
+
+	msgBytes := <-mockClient.send
+	var wsMsg WebSocketMessage
+	err = json.Unmarshal(msgBytes, &wsMsg)
+	if err != nil {
+		t.Fatalf("failed to unmarshal WebSocketMessage: %v", err)
+	}
+
+	// Unmarshal the payload
+	var payload TableStatePayload
+	err = json.Unmarshal(wsMsg.Payload, &payload)
+	if err != nil {
+		t.Fatalf("failed to unmarshal TableStatePayload: %v", err)
+	}
+
+	// Verify HandInProgress is false
+	if payload.HandInProgress {
+		t.Error("expected HandInProgress to be false when no hand is active")
+	}
+
+	// Verify DealerSeat is nil
+	if payload.DealerSeat != nil {
+		t.Error("expected DealerSeat to be nil when no hand is active")
+	}
+
+	// Verify SmallBlindSeat is nil
+	if payload.SmallBlindSeat != nil {
+		t.Error("expected SmallBlindSeat to be nil when no hand is active")
+	}
+
+	// Verify BigBlindSeat is nil
+	if payload.BigBlindSeat != nil {
+		t.Error("expected BigBlindSeat to be nil when no hand is active")
+	}
+
+	// Verify Pot is nil
+	if payload.Pot != nil {
+		t.Error("expected Pot to be nil when no hand is active")
+	}
+}
+
+// TestTableStateGameStateFields verifies dealer, blinds, and pot are correctly set
+func TestTableStateGameStateFields(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up players
+	token1 := "player-1"
+	token2 := "player-2"
+
+	// Assign seats
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start a hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Get the active hand state for verification
+	table.mu.RLock()
+	activeHand := table.CurrentHand
+	activeDealerSeat := *table.DealerSeat
+	table.mu.RUnlock()
+
+	if activeHand == nil {
+		t.Fatal("CurrentHand should not be nil after starting hand")
+	}
+
+	expectedDealerSeat := activeDealerSeat
+	expectedSmallBlindSeat := activeHand.SmallBlindSeat
+	expectedBigBlindSeat := activeHand.BigBlindSeat
+	expectedPot := activeHand.Pot
+
+	// Create a mock client
+	mockClient := &Client{
+		Token: token1,
+		send:  make(chan []byte, 10),
+	}
+
+	// Send table state
+	err = mockClient.SendTableState(server, table.ID, logger)
+	if err != nil {
+		t.Fatalf("failed to send table state: %v", err)
+	}
+
+	// Get the message from the client's send channel
+	if len(mockClient.send) == 0 {
+		t.Fatal("no message sent to client")
+	}
+
+	msgBytes := <-mockClient.send
+	var wsMsg WebSocketMessage
+	err = json.Unmarshal(msgBytes, &wsMsg)
+	if err != nil {
+		t.Fatalf("failed to unmarshal WebSocketMessage: %v", err)
+	}
+
+	// Unmarshal the payload
+	var payload TableStatePayload
+	err = json.Unmarshal(wsMsg.Payload, &payload)
+	if err != nil {
+		t.Fatalf("failed to unmarshal TableStatePayload: %v", err)
+	}
+
+	// Verify DealerSeat matches
+	if payload.DealerSeat == nil {
+		t.Fatal("DealerSeat should not be nil")
+	}
+	if *payload.DealerSeat != expectedDealerSeat {
+		t.Errorf("expected DealerSeat to be %d, got %d", expectedDealerSeat, *payload.DealerSeat)
+	}
+
+	// Verify SmallBlindSeat matches
+	if payload.SmallBlindSeat == nil {
+		t.Fatal("SmallBlindSeat should not be nil")
+	}
+	if *payload.SmallBlindSeat != expectedSmallBlindSeat {
+		t.Errorf("expected SmallBlindSeat to be %d, got %d", expectedSmallBlindSeat, *payload.SmallBlindSeat)
+	}
+
+	// Verify BigBlindSeat matches
+	if payload.BigBlindSeat == nil {
+		t.Fatal("BigBlindSeat should not be nil")
+	}
+	if *payload.BigBlindSeat != expectedBigBlindSeat {
+		t.Errorf("expected BigBlindSeat to be %d, got %d", expectedBigBlindSeat, *payload.BigBlindSeat)
+	}
+
+	// Verify Pot matches
+	if payload.Pot == nil {
+		t.Fatal("Pot should not be nil")
+	}
+	if *payload.Pot != expectedPot {
+		t.Errorf("expected Pot to be %d, got %d", expectedPot, *payload.Pot)
+	}
+}
+
+// TestTableStateIncludesHoleCardsForSeatedPlayer verifies seated player receives their hole cards
+func TestTableStateIncludesHoleCardsForSeatedPlayer(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players using server's session manager
+	session1, _ := server.sessionManager.CreateSession("Player1")
+	token1 := session1.Token
+	session2, _ := server.sessionManager.CreateSession("Player2")
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	server.sessionManager.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	server.sessionManager.UpdateSession(token2, &table.ID, &[]int{1}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start a hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Get hole cards for verification
+	table.mu.RLock()
+	holeCards := table.CurrentHand.HoleCards
+	table.mu.RUnlock()
+
+	// Create a mock client for player 1 (seated at seat 0)
+	client := &Client{
+		Token: token1,
+		send:  make(chan []byte, 10),
+	}
+
+	// Send table state to player 1
+	err = client.SendTableState(server, table.ID, logger)
+	if err != nil {
+		t.Fatalf("SendTableState failed: %v", err)
+	}
+
+	// Get the message from the client's send channel
+	if len(client.send) == 0 {
+		t.Fatal("no message sent to client")
+	}
+
+	msgBytes := <-client.send
+	var wsMsg WebSocketMessage
+	err = json.Unmarshal(msgBytes, &wsMsg)
+	if err != nil {
+		t.Fatalf("failed to unmarshal WebSocketMessage: %v", err)
+	}
+
+	// Unmarshal the payload
+	var payload TableStatePayload
+	err = json.Unmarshal(wsMsg.Payload, &payload)
+	if err != nil {
+		t.Fatalf("failed to unmarshal TableStatePayload: %v", err)
+	}
+
+	// Verify HoleCards field exists and contains player's cards
+	if payload.HoleCards == nil {
+		t.Error("expected HoleCards to be non-nil for seated player")
+	} else if len(payload.HoleCards) == 0 {
+		t.Error("expected HoleCards to contain entries for seated player")
+	}
+
+	// Verify player 1 sees only their own hole cards (seat 0)
+	if cards, ok := payload.HoleCards[0]; ok {
+		if len(cards) != 2 {
+			t.Errorf("expected 2 cards for seat 0, got %d", len(cards))
+		}
+		// Verify these match the actual hole cards dealt
+		if expectedCards, hasExpected := holeCards[0]; hasExpected {
+			if cards[0] != expectedCards[0] || cards[1] != expectedCards[1] {
+				t.Errorf("expected cards %v, got %v", expectedCards, cards)
+			}
+		}
+	} else {
+		t.Error("expected seat 0 to be in HoleCards")
+	}
+
+	// Verify player 1 does NOT see opponent's hole cards (seat 1)
+	if _, ok := payload.HoleCards[1]; ok {
+		t.Error("player should NOT see opponent's hole cards (seat 1)")
+	}
+}
+
+// TestTableStateOmitsHoleCardsForUnseatedPlayer verifies spectators don't get hole cards but see card counts
+func TestTableStateOmitsHoleCardsForUnseatedPlayer(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players
+	session1, _ := server.sessionManager.CreateSession("Player1")
+	token1 := session1.Token
+	session2, _ := server.sessionManager.CreateSession("Player2")
+	token2 := session2.Token
+	// Create spectator session (not seated)
+	sessionSpectator, _ := server.sessionManager.CreateSession("Spectator")
+	tokenSpectator := sessionSpectator.Token
+
+	// Update sessions with table and seat info (only seated players)
+	server.sessionManager.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	server.sessionManager.UpdateSession(token2, &table.ID, &[]int{1}[0])
+	// Spectator has no seat
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start a hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Create a mock client for spectator (not seated)
+	client := &Client{
+		Token: tokenSpectator,
+		send:  make(chan []byte, 10),
+	}
+
+	// Send table state to spectator
+	err = client.SendTableState(server, table.ID, logger)
+	if err != nil {
+		t.Fatalf("SendTableState failed: %v", err)
+	}
+
+	// Get the message from the client's send channel
+	if len(client.send) == 0 {
+		t.Fatal("no message sent to client")
+	}
+
+	msgBytes := <-client.send
+	var wsMsg WebSocketMessage
+	err = json.Unmarshal(msgBytes, &wsMsg)
+	if err != nil {
+		t.Fatalf("failed to unmarshal WebSocketMessage: %v", err)
+	}
+
+	// Unmarshal the payload
+	var payload TableStatePayload
+	err = json.Unmarshal(wsMsg.Payload, &payload)
+	if err != nil {
+		t.Fatalf("failed to unmarshal TableStatePayload: %v", err)
+	}
+
+	// Verify spectator does NOT see any hole cards
+	if payload.HoleCards != nil && len(payload.HoleCards) > 0 {
+		t.Error("spectator should NOT see any hole cards")
+	}
+
+	// Verify spectator DOES see card counts for occupied seats
+	if payload.Seats[0].CardCount == nil {
+		t.Error("expected seat 0 to have CardCount")
+	} else if *payload.Seats[0].CardCount != 2 {
+		t.Errorf("expected seat 0 CardCount to be 2, got %d", *payload.Seats[0].CardCount)
+	}
+
+	if payload.Seats[1].CardCount == nil {
+		t.Error("expected seat 1 to have CardCount")
+	} else if *payload.Seats[1].CardCount != 2 {
+		t.Errorf("expected seat 1 CardCount to be 2, got %d", *payload.Seats[1].CardCount)
+	}
+
+	// Verify empty seats have nil CardCount
+	for i := 2; i < 6; i++ {
+		if payload.Seats[i].CardCount != nil {
+			t.Errorf("expected seat %d to have nil CardCount (empty seat)", i)
+		}
+	}
+}
+
+// TestTableStateHoleCardsPrivacy verifies player only sees their own cards
+func TestTableStateHoleCardsPrivacy(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 3 players
+	session1, _ := server.sessionManager.CreateSession("Player1")
+	token1 := session1.Token
+	session2, _ := server.sessionManager.CreateSession("Player2")
+	token2 := session2.Token
+	session3, _ := server.sessionManager.CreateSession("Player3")
+	token3 := session3.Token
+
+	// Update sessions with table and seat info
+	server.sessionManager.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	server.sessionManager.UpdateSession(token2, &table.ID, &[]int{1}[0])
+	server.sessionManager.UpdateSession(token3, &table.ID, &[]int{2}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.Seats[2].Token = &token3
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+	table.mu.Unlock()
+
+	// Start a hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Get hole cards for verification
+	table.mu.RLock()
+	player1Cards := table.CurrentHand.HoleCards[0]
+	player2Cards := table.CurrentHand.HoleCards[1]
+	player3Cards := table.CurrentHand.HoleCards[2]
+	table.mu.RUnlock()
+
+	// Test each player - should only see their own cards
+	players := []struct {
+		token         string
+		seatIndex     int
+		expectedCards []Card
+	}{
+		{token1, 0, player1Cards},
+		{token2, 1, player2Cards},
+		{token3, 2, player3Cards},
+	}
+
+	for _, player := range players {
+		client := &Client{
+			Token: player.token,
+			send:  make(chan []byte, 10),
+		}
+
+		err = client.SendTableState(server, table.ID, logger)
+		if err != nil {
+			t.Fatalf("SendTableState failed for player at seat %d: %v", player.seatIndex, err)
+		}
+
+		if len(client.send) == 0 {
+			t.Fatalf("no message sent to player at seat %d", player.seatIndex)
+		}
+
+		msgBytes := <-client.send
+		var wsMsg WebSocketMessage
+		err = json.Unmarshal(msgBytes, &wsMsg)
+		if err != nil {
+			t.Fatalf("failed to unmarshal WebSocketMessage: %v", err)
+		}
+
+		var payload TableStatePayload
+		err = json.Unmarshal(wsMsg.Payload, &payload)
+		if err != nil {
+			t.Fatalf("failed to unmarshal TableStatePayload: %v", err)
+		}
+
+		// Verify player sees only their own cards
+		if len(payload.HoleCards) != 1 {
+			t.Errorf("player at seat %d should see exactly 1 entry in HoleCards, got %d", player.seatIndex, len(payload.HoleCards))
+		}
+
+		if cards, ok := payload.HoleCards[player.seatIndex]; ok {
+			if len(cards) != 2 {
+				t.Errorf("expected 2 cards for seat %d, got %d", player.seatIndex, len(cards))
+			}
+			if cards[0] != player.expectedCards[0] || cards[1] != player.expectedCards[1] {
+				t.Errorf("seat %d: expected cards %v, got %v", player.seatIndex, player.expectedCards, cards)
+			}
+		} else {
+			t.Errorf("expected seat %d in HoleCards for player at that seat", player.seatIndex)
+		}
+
+		// Verify player does NOT see any opponent cards
+		for i := 0; i < 3; i++ {
+			if i != player.seatIndex {
+				if _, ok := payload.HoleCards[i]; ok {
+					t.Errorf("player at seat %d should NOT see cards for seat %d", player.seatIndex, i)
+				}
+			}
+		}
+	}
+}
+
+// TestTableStateCardCountsForSpectators verifies card counts are populated for all seats
+func TestTableStateCardCountsForSpectators(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 3 players
+	session1, _ := server.sessionManager.CreateSession("Player1")
+	token1 := session1.Token
+	session2, _ := server.sessionManager.CreateSession("Player2")
+	token2 := session2.Token
+	session3, _ := server.sessionManager.CreateSession("Player3")
+	token3 := session3.Token
+
+	// Update sessions with table and seat info
+	server.sessionManager.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	server.sessionManager.UpdateSession(token2, &table.ID, &[]int{2}[0])
+	server.sessionManager.UpdateSession(token3, &table.ID, &[]int{4}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+	table.Seats[4].Token = &token3
+	table.Seats[4].Status = "active"
+	table.Seats[4].Stack = 1000
+	table.mu.Unlock()
+
+	// Start a hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Create a spectator client
+	sessionSpectator, _ := server.sessionManager.CreateSession("Spectator")
+	spectatorClient := &Client{
+		Token: sessionSpectator.Token,
+		send:  make(chan []byte, 10),
+	}
+
+	// Send table state to spectator
+	err = spectatorClient.SendTableState(server, table.ID, logger)
+	if err != nil {
+		t.Fatalf("SendTableState failed: %v", err)
+	}
+
+	msgBytes := <-spectatorClient.send
+	var wsMsg WebSocketMessage
+	err = json.Unmarshal(msgBytes, &wsMsg)
+	if err != nil {
+		t.Fatalf("failed to unmarshal WebSocketMessage: %v", err)
+	}
+
+	var payload TableStatePayload
+	err = json.Unmarshal(wsMsg.Payload, &payload)
+	if err != nil {
+		t.Fatalf("failed to unmarshal TableStatePayload: %v", err)
+	}
+
+	// Verify occupied seats (0, 2, 4) have CardCount = 2
+	occupiedSeats := []int{0, 2, 4}
+	for _, seat := range occupiedSeats {
+		if payload.Seats[seat].CardCount == nil {
+			t.Errorf("expected seat %d to have CardCount", seat)
+		} else if *payload.Seats[seat].CardCount != 2 {
+			t.Errorf("expected seat %d CardCount to be 2, got %d", seat, *payload.Seats[seat].CardCount)
+		}
+	}
+
+	// Verify empty seats (1, 3, 5) have nil CardCount
+	emptySeats := []int{1, 3, 5}
+	for _, seat := range emptySeats {
+		if payload.Seats[seat].CardCount != nil {
+			t.Errorf("expected seat %d to have nil CardCount (empty seat)", seat)
+		}
+	}
+
+	// Test that a seated player also sees card counts for all seats with cards
+	seatedClient := &Client{
+		Token: token1,
+		send:  make(chan []byte, 10),
+	}
+
+	err = seatedClient.SendTableState(server, table.ID, logger)
+	if err != nil {
+		t.Fatalf("SendTableState failed for seated player: %v", err)
+	}
+
+	msgBytes = <-seatedClient.send
+	var wsMsg2 WebSocketMessage
+	err = json.Unmarshal(msgBytes, &wsMsg2)
+	if err != nil {
+		t.Fatalf("failed to unmarshal WebSocketMessage: %v", err)
+	}
+
+	var payload2 TableStatePayload
+	err = json.Unmarshal(wsMsg2.Payload, &payload2)
+	if err != nil {
+		t.Fatalf("failed to unmarshal TableStatePayload: %v", err)
+	}
+
+	// Verify seated player also sees card counts
+	for _, seat := range occupiedSeats {
+		if payload2.Seats[seat].CardCount == nil {
+			t.Errorf("seated player: expected seat %d to have CardCount", seat)
+		} else if *payload2.Seats[seat].CardCount != 2 {
+			t.Errorf("seated player: expected seat %d CardCount to be 2, got %d", seat, *payload2.Seats[seat].CardCount)
+		}
 	}
 }

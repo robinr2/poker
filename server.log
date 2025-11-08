@@ -270,3 +270,39 @@
 {"time":"2025-11-08T14:18:26.310723909+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-1"}
 {"time":"2025-11-08T14:18:26.310742929+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":4,"excludeClient":true}
 {"time":"2025-11-08T14:18:26.31081332+01:00","level":"INFO","msg":"player joined table","token":"9bfe7aaa-3704-432e-865d-7a6e3a6ef813","tableId":"table-1","seatIndex":3}
+{"time":"2025-11-08T14:21:42.987935423+01:00","level":"INFO","msg":"session updated","token":"9bfe7aaa-3704-432e-865d-7a6e3a6ef813","tableID":null,"seatIndex":null}
+{"time":"2025-11-08T14:21:42.987995474+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":3,"excludeClient":false}
+{"time":"2025-11-08T14:21:42.98809345+01:00","level":"INFO","msg":"player disconnected and seat cleared","token":"9bfe7aaa-3704-432e-865d-7a6e3a6ef813","tableId":"table-1"}
+{"time":"2025-11-08T14:21:42.988118827+01:00","level":"INFO","msg":"client unregistered","total_clients":3}
+{"time":"2025-11-08T14:21:43.029351805+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"::1","Port":51094,"Zone":""}}
+{"time":"2025-11-08T14:21:43.029409281+01:00","level":"INFO","msg":"valid token provided","token":"9bfe7aaa-3704-432e-865d-7a6e3a6ef813"}
+{"time":"2025-11-08T14:21:43.029422957+01:00","level":"INFO","msg":"client registered","total_clients":4}
+{"time":"2025-11-08T14:21:43.029446216+01:00","level":"INFO","msg":"session restored via websocket","token":"9bfe7aaa-3704-432e-865d-7a6e3a6ef813","name":"test4"}
+{"time":"2025-11-08T14:21:43.029477641+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:21:43.589116326+01:00","level":"INFO","msg":"client unregistered","total_clients":3}
+{"time":"2025-11-08T14:21:43.606336644+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"::1","Port":51104,"Zone":""}}
+{"time":"2025-11-08T14:21:43.606415111+01:00","level":"INFO","msg":"valid token provided","token":"9bfe7aaa-3704-432e-865d-7a6e3a6ef813"}
+{"time":"2025-11-08T14:21:43.606436993+01:00","level":"INFO","msg":"client registered","total_clients":4}
+{"time":"2025-11-08T14:21:43.60644909+01:00","level":"INFO","msg":"session restored via websocket","token":"9bfe7aaa-3704-432e-865d-7a6e3a6ef813","name":"test4"}
+{"time":"2025-11-08T14:21:43.606476805+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:21:59.346557769+01:00","level":"INFO","msg":"client unregistered","total_clients":3}
+{"time":"2025-11-08T14:21:59.372695571+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"::1","Port":50020,"Zone":""}}
+{"time":"2025-11-08T14:21:59.37278107+01:00","level":"INFO","msg":"valid token provided","token":"9bfe7aaa-3704-432e-865d-7a6e3a6ef813"}
+{"time":"2025-11-08T14:21:59.37274463+01:00","level":"INFO","msg":"client registered","total_clients":4}
+{"time":"2025-11-08T14:21:59.372849748+01:00","level":"INFO","msg":"session restored via websocket","token":"9bfe7aaa-3704-432e-865d-7a6e3a6ef813","name":"test4"}
+{"time":"2025-11-08T14:21:59.372888162+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:22:00.086659874+01:00","level":"INFO","msg":"client unregistered","total_clients":3}
+{"time":"2025-11-08T14:22:00.10556663+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"::1","Port":50028,"Zone":""}}
+{"time":"2025-11-08T14:22:00.105638966+01:00","level":"INFO","msg":"valid token provided","token":"9bfe7aaa-3704-432e-865d-7a6e3a6ef813"}
+{"time":"2025-11-08T14:22:00.105636447+01:00","level":"INFO","msg":"client registered","total_clients":4}
+{"time":"2025-11-08T14:22:00.105707175+01:00","level":"INFO","msg":"session restored via websocket","token":"9bfe7aaa-3704-432e-865d-7a6e3a6ef813","name":"test4"}
+{"time":"2025-11-08T14:22:00.105740785+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:22:00.215573396+01:00","level":"INFO","msg":"client unregistered","total_clients":3}
+{"time":"2025-11-08T14:22:00.230694793+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"::1","Port":50036,"Zone":""}}
+{"time":"2025-11-08T14:22:00.230762695+01:00","level":"INFO","msg":"valid token provided","token":"9bfe7aaa-3704-432e-865d-7a6e3a6ef813"}
+{"time":"2025-11-08T14:22:00.230780132+01:00","level":"INFO","msg":"client registered","total_clients":4}
+{"time":"2025-11-08T14:22:00.230819904+01:00","level":"INFO","msg":"session restored via websocket","token":"9bfe7aaa-3704-432e-865d-7a6e3a6ef813","name":"test4"}
+{"time":"2025-11-08T14:22:00.230867736+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-08T14:22:18.094941983+01:00","level":"INFO","msg":"shutdown signal received","signal":"terminated"}
+{"time":"2025-11-08T14:22:18.095044847+01:00","level":"ERROR","msg":"server error","error":"http: Server closed"}
+{"time":"2025-11-08T14:22:18.095160422+01:00","level":"INFO","msg":"server shutdown complete"}

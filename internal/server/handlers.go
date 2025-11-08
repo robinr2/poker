@@ -538,15 +538,25 @@ type TableStateSeat struct {
 	Index      int     `json:"index"`
 	PlayerName *string `json:"playerName"`
 	Status     string  `json:"status"`
+	Stack      *int    `json:"stack"`
+	CardCount  *int    `json:"cardCount,omitempty"`
 }
 
 // TableStatePayload represents the payload for table_state messages
 type TableStatePayload struct {
-	TableId string           `json:"tableId"`
-	Seats   []TableStateSeat `json:"seats"`
+	TableId        string           `json:"tableId"`
+	Seats          []TableStateSeat `json:"seats"`
+	HandInProgress bool             `json:"handInProgress"`
+	DealerSeat     *int             `json:"dealerSeat,omitempty"`
+	SmallBlindSeat *int             `json:"smallBlindSeat,omitempty"`
+	BigBlindSeat   *int             `json:"bigBlindSeat,omitempty"`
+	Pot            *int             `json:"pot,omitempty"`
+	HoleCards      map[int][]Card   `json:"holeCards,omitempty"`
 }
 
 // SendTableState sends a table_state message to a single client
+// If the client is seated and a hand is active, includes their hole cards
+// Always includes card counts for occupied seats so spectators can render card backs
 func (c *Client) SendTableState(server *Server, tableID string, logger *slog.Logger) error {
 	// Get the table
 	var table *Table
@@ -561,6 +571,13 @@ func (c *Client) SendTableState(server *Server, tableID string, logger *slog.Log
 
 	if table == nil {
 		return fmt.Errorf("table not found: %s", tableID)
+	}
+
+	// Determine which seat (if any) the client is sitting at
+	var clientSeatIndex *int
+	session, err := server.sessionManager.GetSession(c.Token)
+	if err == nil && session.SeatIndex != nil {
+		clientSeatIndex = session.SeatIndex
 	}
 
 	// Build seats array with player names
@@ -579,16 +596,70 @@ func (c *Client) SendTableState(server *Server, tableID string, logger *slog.Log
 			} else {
 				seats[i].PlayerName = &playerName
 			}
+			// Set stack for occupied seat
+			stack := seat.Stack
+			seats[i].Stack = &stack
 		} else {
 			seats[i].PlayerName = nil
+			seats[i].Stack = nil
 		}
 	}
+
+	// Get game state info when hand is active
+	var dealerSeat *int
+	var smallBlindSeat *int
+	var bigBlindSeat *int
+	var pot *int
+	handInProgress := false
+
+	if table.CurrentHand != nil {
+		handInProgress = true
+		dealerSeat = table.DealerSeat
+		sbSeat := table.CurrentHand.SmallBlindSeat
+		bbSeat := table.CurrentHand.BigBlindSeat
+		potAmount := table.CurrentHand.Pot
+		smallBlindSeat = &sbSeat
+		bigBlindSeat = &bbSeat
+		pot = &potAmount
+	}
+
+	// Populate card counts for all occupied seats during active hand
+	if table.CurrentHand != nil {
+		for i, seat := range table.Seats {
+			if seat.Token != nil {
+				// This seat has a player
+				if cardList, hasCards := table.CurrentHand.HoleCards[i]; hasCards {
+					cardCount := len(cardList)
+					seats[i].CardCount = &cardCount
+				}
+			}
+		}
+	}
+
 	table.mu.RUnlock()
+
+	// Populate hole cards - only if client is seated and hand is active
+	var holeCards map[int][]Card
+	if clientSeatIndex != nil && table.CurrentHand != nil {
+		// Client is seated - give them their own cards only (privacy)
+		holeCards = make(map[int][]Card)
+		table.mu.RLock()
+		if clientCards, hasCards := table.CurrentHand.HoleCards[*clientSeatIndex]; hasCards {
+			holeCards[*clientSeatIndex] = clientCards
+		}
+		table.mu.RUnlock()
+	}
 
 	// Create payload
 	payloadObj := TableStatePayload{
-		TableId: tableID,
-		Seats:   seats,
+		TableId:        tableID,
+		Seats:          seats,
+		HandInProgress: handInProgress,
+		DealerSeat:     dealerSeat,
+		SmallBlindSeat: smallBlindSeat,
+		BigBlindSeat:   bigBlindSeat,
+		Pot:            pot,
+		HoleCards:      holeCards,
 	}
 
 	payloadBytes, err := json.Marshal(payloadObj)
@@ -613,6 +684,7 @@ func (c *Client) SendTableState(server *Server, tableID string, logger *slog.Log
 }
 
 // broadcastTableState sends the current table state to all clients at a specific table except the sender
+// Personalizes the table_state for each client (hole cards only for their own seat, card counts for all occupied seats)
 func (s *Server) broadcastTableState(tableID string, excludeClient *Client) error {
 	// Get all clients at the table
 	clients := s.GetClientsAtTable(tableID)
@@ -633,6 +705,33 @@ func (s *Server) broadcastTableState(tableID string, excludeClient *Client) erro
 		return fmt.Errorf("table not found: %s", tableID)
 	}
 
+	// Send personalized table_state to each client
+	for _, client := range clients {
+		if excludeClient != nil && client == excludeClient {
+			continue
+		}
+
+		// Build a personalized table_state for this client
+		err := s.sendPersonalizedTableState(client, table)
+		if err != nil {
+			s.logger.Warn("failed to send personalized table_state", "error", err)
+			continue
+		}
+	}
+
+	return nil
+}
+
+// sendPersonalizedTableState sends a personalized table_state to a specific client
+// The client sees their own hole cards (if seated) and card counts for all occupied seats
+func (s *Server) sendPersonalizedTableState(client *Client, table *Table) error {
+	// Determine which seat (if any) the client is sitting at
+	var clientSeatIndex *int
+	session, err := s.sessionManager.GetSession(client.Token)
+	if err == nil && session.SeatIndex != nil {
+		clientSeatIndex = session.SeatIndex
+	}
+
 	// Build seats array with player names
 	seats := make([]TableStateSeat, 6)
 	table.mu.RLock()
@@ -649,16 +748,70 @@ func (s *Server) broadcastTableState(tableID string, excludeClient *Client) erro
 			} else {
 				seats[i].PlayerName = &playerName
 			}
+			// Set stack for occupied seat
+			stack := seat.Stack
+			seats[i].Stack = &stack
 		} else {
 			seats[i].PlayerName = nil
+			seats[i].Stack = nil
 		}
 	}
+
+	// Get game state info when hand is active
+	var dealerSeat *int
+	var smallBlindSeat *int
+	var bigBlindSeat *int
+	var pot *int
+	handInProgress := false
+
+	if table.CurrentHand != nil {
+		handInProgress = true
+		dealerSeat = table.DealerSeat
+		sbSeat := table.CurrentHand.SmallBlindSeat
+		bbSeat := table.CurrentHand.BigBlindSeat
+		potAmount := table.CurrentHand.Pot
+		smallBlindSeat = &sbSeat
+		bigBlindSeat = &bbSeat
+		pot = &potAmount
+	}
+
+	// Populate card counts for all occupied seats during active hand
+	if table.CurrentHand != nil {
+		for i, seat := range table.Seats {
+			if seat.Token != nil {
+				// This seat has a player
+				if cardList, hasCards := table.CurrentHand.HoleCards[i]; hasCards {
+					cardCount := len(cardList)
+					seats[i].CardCount = &cardCount
+				}
+			}
+		}
+	}
+
 	table.mu.RUnlock()
+
+	// Populate hole cards - only if client is seated and hand is active
+	var holeCards map[int][]Card
+	if clientSeatIndex != nil && table.CurrentHand != nil {
+		// Client is seated - give them their own cards only (privacy)
+		holeCards = make(map[int][]Card)
+		table.mu.RLock()
+		if clientCards, hasCards := table.CurrentHand.HoleCards[*clientSeatIndex]; hasCards {
+			holeCards[*clientSeatIndex] = clientCards
+		}
+		table.mu.RUnlock()
+	}
 
 	// Create payload
 	payloadObj := TableStatePayload{
-		TableId: tableID,
-		Seats:   seats,
+		TableId:        table.ID,
+		Seats:          seats,
+		HandInProgress: handInProgress,
+		DealerSeat:     dealerSeat,
+		SmallBlindSeat: smallBlindSeat,
+		BigBlindSeat:   bigBlindSeat,
+		Pot:            pot,
+		HoleCards:      holeCards,
 	}
 
 	payloadBytes, err := json.Marshal(payloadObj)
@@ -676,16 +829,17 @@ func (s *Server) broadcastTableState(tableID string, excludeClient *Client) erro
 		return fmt.Errorf("failed to marshal response: %w", err)
 	}
 
-	// Send to all clients at the table except the excludeClient
-	for _, client := range clients {
-		if excludeClient != nil && client == excludeClient {
-			continue
+	// Send to this client (safely handle closed channel)
+	defer func() {
+		if r := recover(); r != nil {
+			s.logger.Debug("recovered from send on closed channel", "error", r)
 		}
-		select {
-		case client.send <- responseBytes:
-		default:
-			s.logger.Warn("client send channel full, skipping table_state message")
-		}
+	}()
+
+	select {
+	case client.send <- responseBytes:
+	default:
+		s.logger.Warn("client send channel full, skipping table_state message")
 	}
 
 	return nil
