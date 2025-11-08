@@ -646,3 +646,329 @@ func TestTableClearSeatResetStack(t *testing.T) {
 		t.Errorf("expected Stack to be 0 after clearing, got %d", table.Seats[0].Stack)
 	}
 }
+
+// TestNextDealerFirstHand verifies first hand assigns dealer to first active seat
+func TestNextDealerFirstHand(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	// Set up: seat 0 and 2 are active, seat 1 is waiting
+	token0 := "player-0"
+	token1 := "player-1"
+	token2 := "player-2"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "waiting"
+	table.Seats[1].Stack = 1000
+
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+
+	// First hand: dealer should be assigned to seat 0 (first active)
+	dealer := table.NextDealer()
+
+	if dealer != 0 {
+		t.Errorf("expected first dealer to be seat 0, got %d", dealer)
+	}
+
+	if table.DealerSeat == nil || *table.DealerSeat != 0 {
+		t.Errorf("expected DealerSeat to be 0, got %v", table.DealerSeat)
+	}
+}
+
+// TestNextDealerRotation verifies dealer rotates clockwise through active players
+func TestNextDealerRotation(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	// Set up: seats 0, 2, 4 are active
+	token0 := "player-0"
+	token2 := "player-2"
+	token4 := "player-4"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+
+	table.Seats[4].Token = &token4
+	table.Seats[4].Status = "active"
+	table.Seats[4].Stack = 1000
+
+	// First hand: dealer = seat 0
+	dealer1 := table.NextDealer()
+	if dealer1 != 0 {
+		t.Errorf("expected first dealer to be seat 0, got %d", dealer1)
+	}
+
+	// Second hand: dealer should rotate to seat 2
+	dealer2 := table.NextDealer()
+	if dealer2 != 2 {
+		t.Errorf("expected second dealer to be seat 2, got %d", dealer2)
+	}
+
+	// Third hand: dealer should rotate to seat 4
+	dealer3 := table.NextDealer()
+	if dealer3 != 4 {
+		t.Errorf("expected third dealer to be seat 4, got %d", dealer3)
+	}
+
+	// Fourth hand: dealer should wrap around to seat 0
+	dealer4 := table.NextDealer()
+	if dealer4 != 0 {
+		t.Errorf("expected fourth dealer to wrap to seat 0, got %d", dealer4)
+	}
+}
+
+// TestNextDealerSkipsWaiting verifies dealer skips seats with "waiting" status
+func TestNextDealerSkipsWaiting(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	// Set up: seat 0 active, seat 1 waiting, seat 2 active
+	token0 := "player-0"
+	token1 := "player-1"
+	token2 := "player-2"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "waiting"
+	table.Seats[1].Stack = 1000
+
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+
+	// First hand: dealer = seat 0
+	dealer1 := table.NextDealer()
+	if dealer1 != 0 {
+		t.Errorf("expected first dealer to be seat 0, got %d", dealer1)
+	}
+
+	// Second hand: dealer should skip seat 1 (waiting) and go to seat 2 (active)
+	dealer2 := table.NextDealer()
+	if dealer2 != 2 {
+		t.Errorf("expected dealer to skip waiting seat 1 and go to seat 2, got %d", dealer2)
+	}
+}
+
+// TestGetBlindPositionsNormal verifies blind positions for 3+ players (SB=next after dealer, BB=next after SB)
+func TestGetBlindPositionsNormal(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	// Set up: seats 0, 1, 2, 3 are active
+	for i := 0; i < 4; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Dealer at seat 0: SB should be seat 1, BB should be seat 2
+	sb, bb, err := table.GetBlindPositions(0)
+	if err != nil {
+		t.Errorf("expected no error for 4 active players, got %v", err)
+	}
+
+	if sb != 1 {
+		t.Errorf("expected SB at seat 1, got %d", sb)
+	}
+
+	if bb != 2 {
+		t.Errorf("expected BB at seat 2, got %d", bb)
+	}
+
+	// Dealer at seat 2: SB should be seat 3, BB should be seat 0
+	sb, bb, err = table.GetBlindPositions(2)
+	if err != nil {
+		t.Errorf("expected no error for 4 active players, got %v", err)
+	}
+
+	if sb != 3 {
+		t.Errorf("expected SB at seat 3, got %d", sb)
+	}
+
+	if bb != 0 {
+		t.Errorf("expected BB at seat 0 (wrapped), got %d", bb)
+	}
+}
+
+// TestGetBlindPositionsHeadsUp verifies blind positions for 2 players (dealer IS SB, other is BB)
+func TestGetBlindPositionsHeadsUp(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	// Set up: only seats 0 and 3 are active (heads-up)
+	token0 := "player-0"
+	token3 := "player-3"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[3].Token = &token3
+	table.Seats[3].Status = "active"
+	table.Seats[3].Stack = 1000
+
+	// Heads-up with dealer at seat 0: dealer IS SB (seat 0), other player IS BB (seat 3)
+	sb, bb, err := table.GetBlindPositions(0)
+	if err != nil {
+		t.Errorf("expected no error for 2 active players (heads-up), got %v", err)
+	}
+
+	if sb != 0 {
+		t.Errorf("expected SB to be dealer seat 0 in heads-up, got %d", sb)
+	}
+
+	if bb != 3 {
+		t.Errorf("expected BB to be other player at seat 3 in heads-up, got %d", bb)
+	}
+
+	// Heads-up with dealer at seat 3: dealer IS SB (seat 3), other player IS BB (seat 0)
+	sb, bb, err = table.GetBlindPositions(3)
+	if err != nil {
+		t.Errorf("expected no error for 2 active players (heads-up), got %v", err)
+	}
+
+	if sb != 3 {
+		t.Errorf("expected SB to be dealer seat 3 in heads-up, got %d", sb)
+	}
+
+	if bb != 0 {
+		t.Errorf("expected BB to be other player at seat 0 in heads-up, got %d", bb)
+	}
+}
+
+// TestGetBlindPositionsInsufficientPlayers verifies error for <2 active players
+func TestGetBlindPositionsInsufficientPlayers(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	// No active players
+	sb, bb, err := table.GetBlindPositions(0)
+	if err == nil {
+		t.Fatal("expected error for 0 active players, got nil")
+	}
+
+	if sb != 0 || bb != 0 {
+		t.Errorf("expected sb=0, bb=0 on error, got sb=%d, bb=%d", sb, bb)
+	}
+
+	// Only 1 active player
+	token0 := "player-0"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	sb, bb, err = table.GetBlindPositions(0)
+	if err == nil {
+		t.Fatal("expected error for 1 active player, got nil")
+	}
+
+	if sb != 0 || bb != 0 {
+		t.Errorf("expected sb=0, bb=0 on error, got sb=%d, bb=%d", sb, bb)
+	}
+}
+
+// TestGetBlindPositionsScatteredSeats verifies blind positions with non-consecutive active seats
+func TestGetBlindPositionsScatteredSeats(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	// Set up: seats 1, 3, 5 are active (scattered, non-consecutive)
+	token1 := "player-1"
+	token3 := "player-3"
+	token5 := "player-5"
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	table.Seats[3].Token = &token3
+	table.Seats[3].Status = "active"
+	table.Seats[3].Stack = 1000
+
+	table.Seats[5].Token = &token5
+	table.Seats[5].Status = "active"
+	table.Seats[5].Stack = 1000
+
+	// Dealer at seat 5: SB should be seat 1 (next active), BB should be seat 3
+	sb, bb, err := table.GetBlindPositions(5)
+	if err != nil {
+		t.Errorf("expected no error for 3 active players with scattered seats, got %v", err)
+	}
+
+	if sb != 1 {
+		t.Errorf("expected SB at seat 1, got %d", sb)
+	}
+
+	if bb != 3 {
+		t.Errorf("expected BB at seat 3, got %d", bb)
+	}
+
+	// Dealer at seat 1: SB should be seat 3 (next active), BB should be seat 5
+	sb, bb, err = table.GetBlindPositions(1)
+	if err != nil {
+		t.Errorf("expected no error for 3 active players with scattered seats, got %v", err)
+	}
+
+	if sb != 3 {
+		t.Errorf("expected SB at seat 3, got %d", sb)
+	}
+
+	if bb != 5 {
+		t.Errorf("expected BB at seat 5, got %d", bb)
+	}
+}
+
+// TestGetBlindPositionsInvalidDealer verifies error when dealer seat is not active
+func TestGetBlindPositionsInvalidDealer(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	// Set up: seats 1, 3, 5 are active
+	token1 := "player-1"
+	token3 := "player-3"
+	token5 := "player-5"
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	table.Seats[3].Token = &token3
+	table.Seats[3].Status = "active"
+	table.Seats[3].Stack = 1000
+
+	table.Seats[5].Token = &token5
+	table.Seats[5].Status = "active"
+	table.Seats[5].Stack = 1000
+
+	// Try to get blinds with dealer at seat 0 (not active)
+	sb, bb, err := table.GetBlindPositions(0)
+	if err == nil {
+		t.Fatal("expected error when dealer seat 0 is not active, got nil")
+	}
+
+	if sb != 0 || bb != 0 {
+		t.Errorf("expected sb=0, bb=0 on error, got sb=%d, bb=%d", sb, bb)
+	}
+
+	// Verify error message mentions the dealer seat
+	if err.Error() != "dealer seat 0 is not active" {
+		t.Errorf("expected error message 'dealer seat 0 is not active', got '%s'", err.Error())
+	}
+
+	// Try with dealer at seat 2 (also not active)
+	sb, bb, err = table.GetBlindPositions(2)
+	if err == nil {
+		t.Fatal("expected error when dealer seat 2 is not active, got nil")
+	}
+
+	if err.Error() != "dealer seat 2 is not active" {
+		t.Errorf("expected error message 'dealer seat 2 is not active', got '%s'", err.Error())
+	}
+}

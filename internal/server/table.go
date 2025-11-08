@@ -50,11 +50,12 @@ type Seat struct {
 
 // Table represents a poker table
 type Table struct {
-	ID       string
-	Name     string
-	MaxSeats int     // Always 6
-	Seats    [6]Seat // Fixed array of 6 seats
-	mu       sync.RWMutex
+	ID         string
+	Name       string
+	MaxSeats   int     // Always 6
+	Seats      [6]Seat // Fixed array of 6 seats
+	DealerSeat *int    // Seat number of the current dealer (nil = no dealer assigned yet)
+	mu         sync.RWMutex
 }
 
 // NewTable creates and returns a new Table instance with 6 empty seats
@@ -148,4 +149,101 @@ func (t *Table) GetSeatByToken(token *string) (Seat, bool) {
 
 	// Not found
 	return Seat{}, false
+}
+
+// NextDealer assigns the next dealer seat and returns the seat number.
+// For the first hand (DealerSeat is nil), it finds the first active seat.
+// For subsequent hands, it rotates clockwise to the next active seat.
+// Only seats with "active" status are eligible for dealer position.
+func (t *Table) NextDealer() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	var nextDealer int
+
+	// If no dealer assigned yet (first hand), find first active seat
+	if t.DealerSeat == nil {
+		for i := 0; i < 6; i++ {
+			if t.Seats[i].Status == "active" {
+				nextDealer = i
+				break
+			}
+		}
+	} else {
+		// Find next active seat after current dealer
+		currentDealer := *t.DealerSeat
+		nextDealer = currentDealer
+
+		// Search for next active seat starting after current dealer
+		for j := 0; j < 6; j++ {
+			checkSeat := (currentDealer + 1 + j) % 6
+			if t.Seats[checkSeat].Status == "active" {
+				nextDealer = checkSeat
+				break
+			}
+		}
+	}
+
+	// Update DealerSeat field
+	t.DealerSeat = &nextDealer
+	return nextDealer
+}
+
+// GetBlindPositions returns the seat numbers for small blind and big blind.
+// - Returns error if fewer than 2 active players
+// - For heads-up (exactly 2 active players): dealer is small blind, other is big blind
+// - For normal (3+ active players): small blind is next active after dealer, big blind is next after small blind
+func (t *Table) GetBlindPositions(dealerSeat int) (int, int, error) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	// Count active players and find their seat numbers
+	activePlayers := []int{}
+	for i := 0; i < 6; i++ {
+		if t.Seats[i].Status == "active" {
+			activePlayers = append(activePlayers, i)
+		}
+	}
+
+	// Error if fewer than 2 active players
+	if len(activePlayers) < 2 {
+		return 0, 0, fmt.Errorf("insufficient active players for blinds: %d active, need at least 2", len(activePlayers))
+	}
+
+	// Heads-up (exactly 2 active players): dealer is SB, other is BB
+	if len(activePlayers) == 2 {
+		// Find the other active player (not the dealer)
+		var otherPlayer int
+		if activePlayers[0] == dealerSeat {
+			otherPlayer = activePlayers[1]
+		} else {
+			otherPlayer = activePlayers[0]
+		}
+		return dealerSeat, otherPlayer, nil
+	}
+
+	// Normal case (3+ active players): SB is next active after dealer, BB is next after SB
+	// Find index of dealer in activePlayers array
+	dealerIndex := -1
+	for i, seat := range activePlayers {
+		if seat == dealerSeat {
+			dealerIndex = i
+			break
+		}
+	}
+
+	// Validate that dealer seat is active
+	if dealerIndex == -1 {
+		return 0, 0, fmt.Errorf("dealer seat %d is not active", dealerSeat)
+	}
+
+	// SB is next active player after dealer
+	sbIndex := (dealerIndex + 1) % len(activePlayers)
+	smallBlind := activePlayers[sbIndex]
+
+	// BB is next active player after SB
+	bbIndex := (sbIndex + 1) % len(activePlayers)
+	bigBlind := activePlayers[bbIndex]
+
+	return smallBlind, bigBlind, nil
 }
