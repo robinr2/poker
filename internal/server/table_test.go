@@ -1416,3 +1416,308 @@ func TestDealHoleCardsInsufficientCards(t *testing.T) {
 		t.Errorf("expected deck to remain 3 cards after error, got %d", len(hand.Deck))
 	}
 }
+
+// TestCanStartHandRequiresTwoActive verifies CanStartHand returns false with <2 active players
+func TestCanStartHandRequiresTwoActive(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	// No active players
+	if table.CanStartHand() {
+		t.Error("expected CanStartHand to return false with 0 active players, got true")
+	}
+
+	// Only 1 active player
+	token0 := "player-0"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	if table.CanStartHand() {
+		t.Error("expected CanStartHand to return false with 1 active player, got true")
+	}
+}
+
+// TestCanStartHandRequiresNoActiveHand verifies CanStartHand returns false if hand already running
+func TestCanStartHandRequiresNoActiveHand(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	// Set up 2 active players
+	token0 := "player-0"
+	token1 := "player-1"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	// With no active hand, should return true
+	if !table.CanStartHand() {
+		t.Error("expected CanStartHand to return true with 2 active players and no hand, got false")
+	}
+
+	// Set a hand as active
+	table.CurrentHand = &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            30,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+	}
+
+	// Now it should return false because a hand is already running
+	if table.CanStartHand() {
+		t.Error("expected CanStartHand to return false with active hand, got true")
+	}
+}
+
+// TestCanStartHandTrue verifies CanStartHand returns true when ≥2 active and no active hand
+func TestCanStartHandTrue(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	// Set up 2 active players (heads-up)
+	token0 := "player-0"
+	token1 := "player-1"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	if !table.CanStartHand() {
+		t.Error("expected CanStartHand to return true with 2 active players, got false")
+	}
+
+	// Set up 6 active players (full table)
+	table2 := NewTable("table-2", "Table 2")
+	for i := 0; i < 6; i++ {
+		token := "player-" + string(rune('0'+i))
+		table2.Seats[i].Token = &token
+		table2.Seats[i].Status = "active"
+		table2.Seats[i].Stack = 1000
+	}
+
+	if !table2.CanStartHand() {
+		t.Error("expected CanStartHand to return true with 6 active players, got false")
+	}
+}
+
+// TestStartHandInitializesDealer verifies StartHand sets dealer via NextDealer()
+func TestStartHandInitializesDealer(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	// Set up 2 active players
+	token0 := "player-0"
+	token1 := "player-1"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Verify dealer was set
+	if table.CurrentHand == nil {
+		t.Fatal("expected CurrentHand to be set, got nil")
+	}
+
+	if table.CurrentHand.DealerSeat != 0 {
+		t.Errorf("expected dealer seat 0, got %d", table.CurrentHand.DealerSeat)
+	}
+
+	if table.DealerSeat == nil || *table.DealerSeat != 0 {
+		t.Errorf("expected table.DealerSeat to be 0, got %v", table.DealerSeat)
+	}
+}
+
+// TestStartHandPostsBlinds verifies StartHand deducts SB(10) and BB(20) from stacks, pot = 30
+func TestStartHandPostsBlinds(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	// Set up 2 active players (heads-up)
+	token0 := "player-0"
+	token1 := "player-1"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// In heads-up: dealer (seat 0) is SB (10), seat 1 is BB (20)
+	expectedDealer := 0
+	expectedSB := 0
+	expectedBB := 1
+
+	if table.CurrentHand.DealerSeat != expectedDealer {
+		t.Errorf("expected dealer seat %d, got %d", expectedDealer, table.CurrentHand.DealerSeat)
+	}
+
+	if table.CurrentHand.SmallBlindSeat != expectedSB {
+		t.Errorf("expected SB seat %d, got %d", expectedSB, table.CurrentHand.SmallBlindSeat)
+	}
+
+	if table.CurrentHand.BigBlindSeat != expectedBB {
+		t.Errorf("expected BB seat %d, got %d", expectedBB, table.CurrentHand.BigBlindSeat)
+	}
+
+	// Verify stacks were updated
+	// Dealer (seat 0) should have 1000 - 10 = 990 (posted SB)
+	if table.Seats[0].Stack != 990 {
+		t.Errorf("expected seat 0 stack 990 (1000 - 10 SB), got %d", table.Seats[0].Stack)
+	}
+
+	// Non-dealer (seat 1) should have 1000 - 20 = 980 (posted BB)
+	if table.Seats[1].Stack != 980 {
+		t.Errorf("expected seat 1 stack 980 (1000 - 20 BB), got %d", table.Seats[1].Stack)
+	}
+
+	// Verify pot = 30 (SB 10 + BB 20)
+	if table.CurrentHand.Pot != 30 {
+		t.Errorf("expected pot 30, got %d", table.CurrentHand.Pot)
+	}
+}
+
+// TestStartHandDealsCards verifies each active player has 2 cards in CurrentHand.HoleCards
+func TestStartHandDealsCards(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	// Set up 3 active players
+	for i := 0; i < 3; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Verify all active players have 2 hole cards
+	for seatIdx := 0; seatIdx < 3; seatIdx++ {
+		cards, exists := table.CurrentHand.HoleCards[seatIdx]
+		if !exists {
+			t.Errorf("seat %d: expected hole cards, got none", seatIdx)
+		}
+		if len(cards) != 2 {
+			t.Errorf("seat %d: expected 2 hole cards, got %d", seatIdx, len(cards))
+		}
+	}
+
+	// Verify non-active seats don't have cards
+	for seatIdx := 3; seatIdx < 6; seatIdx++ {
+		if _, exists := table.CurrentHand.HoleCards[seatIdx]; exists {
+			t.Errorf("seat %d (empty): expected no hole cards, but found some", seatIdx)
+		}
+	}
+}
+
+// TestStartHandSetsPot verifies pot equals SB + BB = 30
+func TestStartHandSetsPot(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	// Set up 6 active players (full table)
+	for i := 0; i < 6; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Verify pot = SB 10 + BB 20 = 30
+	if table.CurrentHand.Pot != 30 {
+		t.Errorf("expected pot 30, got %d", table.CurrentHand.Pot)
+	}
+}
+
+// TestStartHandAllInBlind verifies handling player with stack < blind amount (goes all-in)
+func TestStartHandAllInBlind(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	// Set up 3 active players where SB player has only 5 chips (less than 10)
+	token0 := "player-0"
+	token1 := "player-1" // Will be SB with only 5 chips (all-in)
+	token2 := "player-2"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 5 // Only 5 chips for SB (10 required) - will go all-in
+
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Dealer should be seat 0 (first active)
+	if table.CurrentHand.DealerSeat != 0 {
+		t.Errorf("expected dealer seat 0, got %d", table.CurrentHand.DealerSeat)
+	}
+
+	// SB should be seat 1 (all-in with 5)
+	if table.CurrentHand.SmallBlindSeat != 1 {
+		t.Errorf("expected SB seat 1, got %d", table.CurrentHand.SmallBlindSeat)
+	}
+
+	// BB should be seat 2
+	if table.CurrentHand.BigBlindSeat != 2 {
+		t.Errorf("expected BB seat 2, got %d", table.CurrentHand.BigBlindSeat)
+	}
+
+	// Verify stacks: seat 0 (dealer) unchanged, seat 1 (SB) at 0 (all-in with 5), seat 2 (BB) at 980 (1000 - 20)
+	if table.Seats[0].Stack != 1000 {
+		t.Errorf("expected seat 0 stack 1000 (no blind), got %d", table.Seats[0].Stack)
+	}
+
+	if table.Seats[1].Stack != 0 {
+		t.Errorf("expected seat 1 stack 0 (all-in with 5), got %d", table.Seats[1].Stack)
+	}
+
+	if table.Seats[2].Stack != 980 {
+		t.Errorf("expected seat 2 stack 980 (1000 - 20 BB), got %d", table.Seats[2].Stack)
+	}
+
+	// Verify pot = SB(5 all-in) + BB(20) = 25
+	if table.CurrentHand.Pot != 25 {
+		t.Errorf("expected pot 25 (5 SB all-in + 20 BB), got %d", table.CurrentHand.Pot)
+	}
+}

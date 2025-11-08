@@ -52,12 +52,13 @@ type Seat struct {
 
 // Table represents a poker table
 type Table struct {
-	ID         string
-	Name       string
-	MaxSeats   int     // Always 6
-	Seats      [6]Seat // Fixed array of 6 seats
-	DealerSeat *int    // Seat number of the current dealer (nil = no dealer assigned yet)
-	mu         sync.RWMutex
+	ID          string
+	Name        string
+	MaxSeats    int     // Always 6
+	Seats       [6]Seat // Fixed array of 6 seats
+	DealerSeat  *int    // Seat number of the current dealer (nil = no dealer assigned yet)
+	CurrentHand *Hand   // Currently active hand (nil = no hand running)
+	mu          sync.RWMutex
 }
 
 // NewTable creates and returns a new Table instance with 6 empty seats
@@ -312,4 +313,215 @@ func (h *Hand) DealHoleCards(seats [6]Seat) error {
 	h.Deck = h.Deck[cardIndex:]
 
 	return nil
+}
+
+// CanStartHand checks if a new hand can be started
+// Returns true if:
+// - At least 2 active players exist
+// - No hand is currently running (CurrentHand == nil)
+// Returns false otherwise
+func (t *Table) CanStartHand() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	// Check if a hand is already running
+	if t.CurrentHand != nil {
+		return false
+	}
+
+	// Count active players
+	activeCount := 0
+	for i := 0; i < 6; i++ {
+		if t.Seats[i].Status == "active" {
+			activeCount++
+		}
+	}
+
+	// Need at least 2 active players
+	return activeCount >= 2
+}
+
+// StartHand initializes and starts a new poker hand
+// This method orchestrates the full hand start sequence:
+// 1. Validates that a hand can be started (CanStartHand)
+// 2. Assigns dealer via NextDealer()
+// 3. Gets blind positions
+// 4. Creates new deck and shuffles
+// 5. Posts blinds (SB=10, BB=20), handles all-in if stack < blind
+// 6. Deals hole cards to all active players
+// 7. Sets CurrentHand with all game state
+// Returns error if hand cannot be started or if operations fail
+func (t *Table) StartHand() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// Check if hand can be started (must do this with lock held)
+	// Count active players
+	activeCount := 0
+	for i := 0; i < 6; i++ {
+		if t.Seats[i].Status == "active" {
+			activeCount++
+		}
+	}
+
+	if activeCount < 2 {
+		return fmt.Errorf("insufficient active players to start hand: %d active, need at least 2", activeCount)
+	}
+
+	if t.CurrentHand != nil {
+		return fmt.Errorf("hand already running")
+	}
+
+	// Step 1: Assign dealer via NextDealer
+	dealerSeat := t.assignDealerLocked()
+
+	// Step 2: Get blind positions
+	sbSeat, bbSeat, err := t.getBlindPositionsLocked(dealerSeat)
+	if err != nil {
+		return fmt.Errorf("failed to get blind positions: %w", err)
+	}
+
+	// Step 3: Create new hand and deck
+	hand := &Hand{
+		DealerSeat:     dealerSeat,
+		SmallBlindSeat: sbSeat,
+		BigBlindSeat:   bbSeat,
+		Pot:            0,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+	}
+
+	// Step 4: Shuffle the deck
+	err = ShuffleDeck(hand.Deck)
+	if err != nil {
+		return fmt.Errorf("failed to shuffle deck: %w", err)
+	}
+
+	// Step 5: Post blinds (handle all-in if necessary)
+	const smallBlind = 10
+	const bigBlind = 20
+
+	// Post small blind
+	sbPosted := smallBlind
+	if t.Seats[sbSeat].Stack < smallBlind {
+		// All-in with remaining chips
+		sbPosted = t.Seats[sbSeat].Stack
+		t.Seats[sbSeat].Stack = 0
+	} else {
+		t.Seats[sbSeat].Stack -= smallBlind
+	}
+
+	// Post big blind
+	bbPosted := bigBlind
+	if t.Seats[bbSeat].Stack < bigBlind {
+		// All-in with remaining chips
+		bbPosted = t.Seats[bbSeat].Stack
+		t.Seats[bbSeat].Stack = 0
+	} else {
+		t.Seats[bbSeat].Stack -= bigBlind
+	}
+
+	hand.Pot = sbPosted + bbPosted
+
+	// Step 6: Deal hole cards to all active players
+	err = hand.DealHoleCards(t.Seats)
+	if err != nil {
+		return fmt.Errorf("failed to deal hole cards: %w", err)
+	}
+
+	// Step 7: Set CurrentHand
+	t.CurrentHand = hand
+
+	return nil
+}
+
+// assignDealerLocked assigns the next dealer seat (internal, must be called with lock held)
+// For the first hand (DealerSeat is nil), it finds the first active seat.
+// For subsequent hands, it rotates clockwise to the next active seat.
+// Only seats with "active" status are eligible for dealer position.
+func (t *Table) assignDealerLocked() int {
+	var nextDealer int
+
+	// If no dealer assigned yet (first hand), find first active seat
+	if t.DealerSeat == nil {
+		for i := 0; i < 6; i++ {
+			if t.Seats[i].Status == "active" {
+				nextDealer = i
+				break
+			}
+		}
+	} else {
+		// Find next active seat after current dealer
+		currentDealer := *t.DealerSeat
+		nextDealer = currentDealer
+
+		// Search for next active seat starting after current dealer
+		for j := 0; j < 6; j++ {
+			checkSeat := (currentDealer + 1 + j) % 6
+			if t.Seats[checkSeat].Status == "active" {
+				nextDealer = checkSeat
+				break
+			}
+		}
+	}
+
+	// Update DealerSeat field
+	t.DealerSeat = &nextDealer
+	return nextDealer
+}
+
+// getBlindPositionsLocked returns the seat numbers for small blind and big blind (internal, must be called with lock held)
+// - Returns error if fewer than 2 active players
+// - For heads-up (exactly 2 active players): dealer is small blind, other is big blind
+// - For normal (3+ active players): small blind is next active after dealer, big blind is next after small blind
+func (t *Table) getBlindPositionsLocked(dealerSeat int) (int, int, error) {
+	// Count active players and find their seat numbers
+	activePlayers := []int{}
+	for i := 0; i < 6; i++ {
+		if t.Seats[i].Status == "active" {
+			activePlayers = append(activePlayers, i)
+		}
+	}
+
+	// Error if fewer than 2 active players
+	if len(activePlayers) < 2 {
+		return 0, 0, fmt.Errorf("insufficient active players for blinds: %d active, need at least 2", len(activePlayers))
+	}
+
+	// Heads-up (exactly 2 active players): dealer is SB, other is BB
+	if len(activePlayers) == 2 {
+		// Find the other active player (not the dealer)
+		var otherPlayer int
+		if activePlayers[0] == dealerSeat {
+			otherPlayer = activePlayers[1]
+		} else {
+			otherPlayer = activePlayers[0]
+		}
+		return dealerSeat, otherPlayer, nil
+	}
+
+	// Normal case (3+ active players): SB is next active after dealer, BB is next after SB
+	// Find index of dealer in activePlayers array
+	dealerIndex := -1
+	for i, seat := range activePlayers {
+		if seat == dealerSeat {
+			dealerIndex = i
+			break
+		}
+	}
+
+	// Validate that dealer seat is active
+	if dealerIndex == -1 {
+		return 0, 0, fmt.Errorf("dealer seat %d is not active", dealerSeat)
+	}
+
+	// SB is next active player after dealer
+	sbIndex := (dealerIndex + 1) % len(activePlayers)
+	smallBlind := activePlayers[sbIndex]
+
+	// BB is next active player after SB
+	bbIndex := (sbIndex + 1) % len(activePlayers)
+	bigBlind := activePlayers[bbIndex]
+
+	return smallBlind, bigBlind, nil
 }
