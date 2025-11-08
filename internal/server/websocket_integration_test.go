@@ -734,3 +734,485 @@ func TestWebSocketSendsLobbyStateOnRestore(t *testing.T) {
 		t.Errorf("expected 4 tables in lobby state, got %d", len(lobbyState))
 	}
 }
+
+// TestHandleJoinTableSuccess tests successful join_table with seat assignment
+func TestHandleJoinTableSuccess(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+
+	// Create a session
+	session, err := server.sessionManager.CreateSession("Player")
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	// Create a test HTTP server with the WebSocket handler
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.HandleWebSocket(hub)(w, r)
+	}))
+	defer testServer.Close()
+
+	// Convert http:// to ws://
+	wsURL := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session.Token
+
+	// Connect with valid token
+	dialer := websocket.Dialer{}
+	ws, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer ws.Close()
+
+	// Receive session_restored message
+	_ = readMessage(t, ws)
+
+	// Receive lobby_state message
+	_ = readMessage(t, ws)
+
+	// Send join_table message
+	sendMessage(t, ws, "join_table", JoinTablePayload{TableId: "table-1"})
+
+	// Receive seat_assigned message
+	msg := readMessage(t, ws)
+	if msg.Type != "seat_assigned" {
+		t.Errorf("expected message type 'seat_assigned', got %q", msg.Type)
+	}
+
+	// Parse seat_assigned payload
+	payloadBytes, _ := json.Marshal(msg.Payload)
+	var payload SeatAssignedPayload
+	err = json.Unmarshal(payloadBytes, &payload)
+	if err != nil {
+		t.Fatalf("failed to parse seat_assigned payload: %v", err)
+	}
+
+	if payload.TableId != "table-1" {
+		t.Errorf("expected tableId 'table-1', got %q", payload.TableId)
+	}
+
+	if payload.SeatIndex != 0 {
+		t.Errorf("expected seatIndex 0, got %d", payload.SeatIndex)
+	}
+
+	if payload.Status != "waiting" {
+		t.Errorf("expected status 'waiting', got %q", payload.Status)
+	}
+
+	// Verify session was updated with table and seat info
+	updatedSession, err := server.sessionManager.GetSession(session.Token)
+	if err != nil {
+		t.Fatalf("failed to retrieve session: %v", err)
+	}
+
+	if updatedSession.TableID == nil || *updatedSession.TableID != "table-1" {
+		t.Errorf("expected session TableID 'table-1', got %v", updatedSession.TableID)
+	}
+
+	if updatedSession.SeatIndex == nil || *updatedSession.SeatIndex != 0 {
+		t.Errorf("expected session SeatIndex 0, got %v", updatedSession.SeatIndex)
+	}
+}
+
+// TestHandleJoinTableFull tests join_table returns error when table is full
+func TestHandleJoinTableFull(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+
+	// Fill all 6 seats on table-1 with dummy tokens
+	for i := 0; i < 6; i++ {
+		token := "dummy-token-" + string(rune('0'+i))
+		_, _ = server.tables[0].AssignSeat(&token)
+	}
+
+	// Create a session for our player
+	session, err := server.sessionManager.CreateSession("Player")
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	// Create a test HTTP server with the WebSocket handler
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.HandleWebSocket(hub)(w, r)
+	}))
+	defer testServer.Close()
+
+	// Convert http:// to ws://
+	wsURL := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session.Token
+
+	// Connect with valid token
+	dialer := websocket.Dialer{}
+	ws, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer ws.Close()
+
+	// Receive session_restored message
+	_ = readMessage(t, ws)
+
+	// Receive lobby_state message
+	_ = readMessage(t, ws)
+
+	// Send join_table message for full table
+	sendMessage(t, ws, "join_table", JoinTablePayload{TableId: "table-1"})
+
+	// Should receive error message
+	msg := readMessage(t, ws)
+	if msg.Type != "error" {
+		t.Errorf("expected message type 'error', got %q", msg.Type)
+	}
+
+	// Parse error payload
+	payloadBytes, _ := json.Marshal(msg.Payload)
+	var payload ErrorPayload
+	err = json.Unmarshal(payloadBytes, &payload)
+	if err != nil {
+		t.Fatalf("failed to parse error payload: %v", err)
+	}
+
+	if payload.Message != "table_full" {
+		t.Errorf("expected error message 'table_full', got %q", payload.Message)
+	}
+}
+
+// TestHandleJoinTableAlreadySeated tests join_table returns error when player already seated
+func TestHandleJoinTableAlreadySeated(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+
+	// Create a session
+	session, err := server.sessionManager.CreateSession("Player")
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	// Manually seat player at table-1
+	_, _ = server.tables[0].AssignSeat(&session.Token)
+	server.sessionManager.UpdateSession(session.Token, &server.tables[0].ID, nil)
+
+	// Create a test HTTP server with the WebSocket handler
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.HandleWebSocket(hub)(w, r)
+	}))
+	defer testServer.Close()
+
+	// Convert http:// to ws://
+	wsURL := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session.Token
+
+	// Connect with valid token
+	dialer := websocket.Dialer{}
+	ws, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer ws.Close()
+
+	// Receive session_restored message
+	_ = readMessage(t, ws)
+
+	// Receive lobby_state message
+	_ = readMessage(t, ws)
+
+	// Send join_table message for another table while already seated
+	sendMessage(t, ws, "join_table", JoinTablePayload{TableId: "table-2"})
+
+	// Should receive error message
+	msg := readMessage(t, ws)
+	if msg.Type != "error" {
+		t.Errorf("expected message type 'error', got %q", msg.Type)
+	}
+
+	// Parse error payload
+	payloadBytes, _ := json.Marshal(msg.Payload)
+	var payload ErrorPayload
+	err = json.Unmarshal(payloadBytes, &payload)
+	if err != nil {
+		t.Fatalf("failed to parse error payload: %v", err)
+	}
+
+	if payload.Message != "already_seated" {
+		t.Errorf("expected error message 'already_seated', got %q", payload.Message)
+	}
+}
+
+// TestHandleJoinTableInvalidTableID tests join_table returns error for non-existent table
+func TestHandleJoinTableInvalidTableID(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+
+	// Create a session
+	session, err := server.sessionManager.CreateSession("Player")
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	// Create a test HTTP server with the WebSocket handler
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.HandleWebSocket(hub)(w, r)
+	}))
+	defer testServer.Close()
+
+	// Convert http:// to ws://
+	wsURL := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session.Token
+
+	// Connect with valid token
+	dialer := websocket.Dialer{}
+	ws, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer ws.Close()
+
+	// Receive session_restored message
+	_ = readMessage(t, ws)
+
+	// Receive lobby_state message
+	_ = readMessage(t, ws)
+
+	// Send join_table message for non-existent table
+	sendMessage(t, ws, "join_table", JoinTablePayload{TableId: "table-999"})
+
+	// Should receive error message
+	msg := readMessage(t, ws)
+	if msg.Type != "error" {
+		t.Errorf("expected message type 'error', got %q", msg.Type)
+	}
+
+	// Parse error payload
+	payloadBytes, _ := json.Marshal(msg.Payload)
+	var payload ErrorPayload
+	err = json.Unmarshal(payloadBytes, &payload)
+	if err != nil {
+		t.Fatalf("failed to parse error payload: %v", err)
+	}
+
+	if payload.Message != "invalid_table" {
+		t.Errorf("expected error message 'invalid_table', got %q", payload.Message)
+	}
+}
+
+// TestSeatAssignedMessage tests seat_assigned message format
+func TestSeatAssignedMessage(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+
+	// Create a session
+	session, err := server.sessionManager.CreateSession("Player")
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	// Create a test HTTP server with the WebSocket handler
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.HandleWebSocket(hub)(w, r)
+	}))
+	defer testServer.Close()
+
+	// Convert http:// to ws://
+	wsURL := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session.Token
+
+	// Connect with valid token
+	dialer := websocket.Dialer{}
+	ws, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer ws.Close()
+
+	// Receive session_restored message
+	_ = readMessage(t, ws)
+
+	// Receive lobby_state message
+	_ = readMessage(t, ws)
+
+	// Send join_table message
+	sendMessage(t, ws, "join_table", JoinTablePayload{TableId: "table-2"})
+
+	// Receive seat_assigned message
+	msg := readMessage(t, ws)
+	if msg.Type != "seat_assigned" {
+		t.Fatalf("expected message type 'seat_assigned', got %q", msg.Type)
+	}
+
+	// Verify payload has all required fields
+	payloadBytes, _ := json.Marshal(msg.Payload)
+	var payload SeatAssignedPayload
+	err = json.Unmarshal(payloadBytes, &payload)
+	if err != nil {
+		t.Fatalf("failed to parse seat_assigned payload: %v", err)
+	}
+
+	if payload.TableId == "" {
+		t.Error("expected tableId in seat_assigned payload")
+	}
+
+	if payload.SeatIndex < 0 || payload.SeatIndex > 5 {
+		t.Errorf("expected seatIndex between 0-5, got %d", payload.SeatIndex)
+	}
+
+	if payload.Status == "" {
+		t.Error("expected status in seat_assigned payload")
+	}
+}
+
+// TestJoinTableUpdatesSession tests that session is updated with TableID and SeatIndex
+func TestJoinTableUpdatesSession(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+
+	// Create a session
+	session, err := server.sessionManager.CreateSession("Player")
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	// Verify session initially has no table/seat
+	initialSession, _ := server.sessionManager.GetSession(session.Token)
+	if initialSession.TableID != nil {
+		t.Fatal("expected initial session to have nil TableID")
+	}
+
+	if initialSession.SeatIndex != nil {
+		t.Fatal("expected initial session to have nil SeatIndex")
+	}
+
+	// Create a test HTTP server with the WebSocket handler
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.HandleWebSocket(hub)(w, r)
+	}))
+	defer testServer.Close()
+
+	// Convert http:// to ws://
+	wsURL := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session.Token
+
+	// Connect with valid token
+	dialer := websocket.Dialer{}
+	ws, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer ws.Close()
+
+	// Receive session_restored message
+	_ = readMessage(t, ws)
+
+	// Receive lobby_state message
+	_ = readMessage(t, ws)
+
+	// Send join_table message
+	sendMessage(t, ws, "join_table", JoinTablePayload{TableId: "table-3"})
+
+	// Receive seat_assigned message
+	_ = readMessage(t, ws)
+
+	// Verify session was updated
+	updatedSession, _ := server.sessionManager.GetSession(session.Token)
+	if updatedSession.TableID == nil || *updatedSession.TableID != "table-3" {
+		t.Errorf("expected session TableID to be 'table-3', got %v", updatedSession.TableID)
+	}
+
+	if updatedSession.SeatIndex == nil || *updatedSession.SeatIndex < 0 || *updatedSession.SeatIndex > 5 {
+		t.Errorf("expected session SeatIndex to be 0-5, got %v", updatedSession.SeatIndex)
+	}
+}
+
+// TestJoinTableBroadcastsLobbyState tests that lobby_state is broadcast after join
+func TestJoinTableBroadcastsLobbyState(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+
+	// Create two sessions
+	session1, err := server.sessionManager.CreateSession("Player1")
+	if err != nil {
+		t.Fatalf("failed to create session1: %v", err)
+	}
+
+	session2, err := server.sessionManager.CreateSession("Player2")
+	if err != nil {
+		t.Fatalf("failed to create session2: %v", err)
+	}
+
+	// Create a test HTTP server with the WebSocket handler
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.HandleWebSocket(hub)(w, r)
+	}))
+	defer testServer.Close()
+
+	// Connect first client
+	wsURL1 := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session1.Token
+	dialer := websocket.Dialer{}
+	ws1, _, err := dialer.Dial(wsURL1, nil)
+	if err != nil {
+		t.Fatalf("failed to connect ws1: %v", err)
+	}
+	defer ws1.Close()
+
+	// Receive session_restored and lobby_state
+	_ = readMessage(t, ws1)
+	_ = readMessage(t, ws1)
+
+	// Connect second client
+	wsURL2 := "ws" + strings.TrimPrefix(testServer.URL, "http") + "?token=" + session2.Token
+	ws2, _, err := dialer.Dial(wsURL2, nil)
+	if err != nil {
+		t.Fatalf("failed to connect ws2: %v", err)
+	}
+	defer ws2.Close()
+
+	// Receive session_restored and lobby_state for second client
+	_ = readMessage(t, ws2)
+	_ = readMessage(t, ws2)
+
+	// Player 1 joins a table
+	sendMessage(t, ws1, "join_table", JoinTablePayload{TableId: "table-1"})
+
+	// Player 1 receives seat_assigned
+	msg1 := readMessage(t, ws1)
+	if msg1.Type != "seat_assigned" {
+		t.Fatalf("expected seat_assigned for player1, got %q", msg1.Type)
+	}
+
+	// Player 2 should receive lobby_state broadcast
+	msg2 := readMessage(t, ws2)
+	if msg2.Type != "lobby_state" {
+		t.Fatalf("expected lobby_state for player2, got %q", msg2.Type)
+	}
+
+	// Verify the lobby_state shows updated seat count
+	var payloadStr string
+	err = json.Unmarshal(msg2.Payload, &payloadStr)
+	if err != nil {
+		t.Fatalf("failed to parse lobby_state payload as string: %v", err)
+	}
+
+	var tables []map[string]interface{}
+	err = json.Unmarshal([]byte(payloadStr), &tables)
+	if err != nil {
+		t.Fatalf("failed to parse lobby_state tables array: %v", err)
+	}
+
+	// Find table-1 in the lobby state
+	var table1 map[string]interface{}
+	for _, table := range tables {
+		if id, ok := table["id"].(string); ok && id == "table-1" {
+			table1 = table
+			break
+		}
+	}
+
+	if table1 == nil {
+		t.Fatal("table-1 not found in lobby_state")
+	}
+
+	seatsOccupied, ok := table1["seats_occupied"].(float64)
+	if !ok || int(seatsOccupied) != 1 {
+		t.Errorf("expected seats_occupied to be 1 for table-1, got %v", seatsOccupied)
+	}
+}

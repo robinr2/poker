@@ -46,6 +46,21 @@ func TestSeatInitialization(t *testing.T) {
 	}
 }
 
+// TestSeatStatusField verifies Seat has Status field with valid "empty" value for new tables
+func TestSeatStatusField(t *testing.T) {
+	table := NewTable("table-1", "Table 1")
+
+	if len(table.Seats) != 6 {
+		t.Errorf("expected 6 seats, got %d", len(table.Seats))
+	}
+
+	for i := 0; i < 6; i++ {
+		if table.Seats[i].Status != "empty" {
+			t.Errorf("seat %d: expected Status 'empty', got '%s'", i, table.Seats[i].Status)
+		}
+	}
+}
+
 // TestGetOccupiedSeatCount verifies returns 0 for empty table
 func TestGetOccupiedSeatCount(t *testing.T) {
 	table := NewTable("table-1", "Table 1")
@@ -201,9 +216,18 @@ func TestTableAssignSeat(t *testing.T) {
 		t.Errorf("expected token '%s', got %v", token, seat.Token)
 	}
 
-	// Verify it's in the table's seats
+	// Verify Status is set to "waiting"
+	if seat.Status != "waiting" {
+		t.Errorf("expected Status 'waiting', got '%s'", seat.Status)
+	}
+
+	// Verify it's in the table's seats with correct status
 	if table.Seats[0].Token == nil || *table.Seats[0].Token != token {
 		t.Errorf("expected table.Seats[0].Token to be '%s'", token)
+	}
+
+	if table.Seats[0].Status != "waiting" {
+		t.Errorf("expected table.Seats[0].Status to be 'waiting', got '%s'", table.Seats[0].Status)
 	}
 
 	// Assign to seat 1 (next empty)
@@ -219,6 +243,10 @@ func TestTableAssignSeat(t *testing.T) {
 
 	if seat2.Token == nil || *seat2.Token != token2 {
 		t.Errorf("expected token '%s', got %v", token2, seat2.Token)
+	}
+
+	if seat2.Status != "waiting" {
+		t.Errorf("expected Status 'waiting' for seat2, got '%s'", seat2.Status)
 	}
 }
 
@@ -273,7 +301,7 @@ func TestTableAssignSeatWhenFull(t *testing.T) {
 	}
 }
 
-// TestTableClearSeat verifies clears seat by token, sets Token to nil
+// TestTableClearSeat verifies clears seat by token, sets Token to nil and Status to "empty"
 func TestTableClearSeat(t *testing.T) {
 	table := NewTable("table-1", "Table 1")
 	token1 := "player-1"
@@ -283,13 +311,21 @@ func TestTableClearSeat(t *testing.T) {
 	_, _ = table.AssignSeat(&token1)
 	_, _ = table.AssignSeat(&token2)
 
-	// Verify they're assigned
+	// Verify they're assigned with "waiting" status
 	if table.Seats[0].Token == nil || *table.Seats[0].Token != token1 {
 		t.Fatal("expected seat 0 to have token1")
 	}
 
+	if table.Seats[0].Status != "waiting" {
+		t.Errorf("expected seat 0 Status to be 'waiting', got '%s'", table.Seats[0].Status)
+	}
+
 	if table.Seats[1].Token == nil || *table.Seats[1].Token != token2 {
 		t.Fatal("expected seat 1 to have token2")
+	}
+
+	if table.Seats[1].Status != "waiting" {
+		t.Errorf("expected seat 1 Status to be 'waiting', got '%s'", table.Seats[1].Status)
 	}
 
 	// Clear seat 1 (token2)
@@ -298,14 +334,22 @@ func TestTableClearSeat(t *testing.T) {
 		t.Fatalf("expected no error when clearing seat, got %v", err)
 	}
 
-	// Verify seat 1 is now empty
+	// Verify seat 1 is now empty with "empty" status
 	if table.Seats[1].Token != nil {
 		t.Errorf("expected seat 1 Token to be nil after clearing, got %v", table.Seats[1].Token)
 	}
 
-	// Verify seat 0 is still occupied
+	if table.Seats[1].Status != "empty" {
+		t.Errorf("expected seat 1 Status to be 'empty', got '%s'", table.Seats[1].Status)
+	}
+
+	// Verify seat 0 is still occupied with "waiting" status
 	if table.Seats[0].Token == nil || *table.Seats[0].Token != token1 {
 		t.Errorf("expected seat 0 to still have token1")
+	}
+
+	if table.Seats[0].Status != "waiting" {
+		t.Errorf("expected seat 0 Status to still be 'waiting', got '%s'", table.Seats[0].Status)
 	}
 
 	// Verify occupied count is 1

@@ -44,6 +44,18 @@ type ErrorPayload struct {
 	Message string `json:"message"`
 }
 
+// JoinTablePayload represents the payload for join_table messages
+type JoinTablePayload struct {
+	TableId string `json:"tableId"`
+}
+
+// SeatAssignedPayload represents the payload for seat_assigned messages
+type SeatAssignedPayload struct {
+	TableId   string `json:"tableId"`
+	SeatIndex int    `json:"seatIndex"`
+	Status    string `json:"status"`
+}
+
 // HandleSetName processes a set_name message and creates a session for the client
 func (c *Client) HandleSetName(sm *SessionManager, server *Server, logger *slog.Logger, payload []byte) error {
 	var setNamePayload SetNamePayload
@@ -246,5 +258,97 @@ func (s *Server) broadcastLobbyState() error {
 		// Channel full, skip broadcast
 	}
 
+	return nil
+}
+
+// HandleJoinTable processes a join_table message and assigns the player to a table seat
+func (c *Client) HandleJoinTable(sm *SessionManager, server *Server, logger *slog.Logger, payload []byte) error {
+	var joinTablePayload JoinTablePayload
+	err := json.Unmarshal(payload, &joinTablePayload)
+	if err != nil {
+		return fmt.Errorf("invalid join_table payload: %w", err)
+	}
+
+	// Verify session exists
+	_, err = sm.GetSession(c.Token)
+	if err != nil {
+		return fmt.Errorf("session not found: %w", err)
+	}
+
+	// Check if player is already seated at another table
+	playerSeat := server.FindPlayerSeat(&c.Token)
+	if playerSeat != nil {
+		return fmt.Errorf("already_seated")
+	}
+
+	// Get table by ID
+	var table *Table
+	server.mu.RLock()
+	for _, t := range server.tables {
+		if t != nil && t.ID == joinTablePayload.TableId {
+			table = t
+			break
+		}
+	}
+	server.mu.RUnlock()
+
+	if table == nil {
+		return fmt.Errorf("invalid_table")
+	}
+
+	// Assign seat on the table
+	seat, err := table.AssignSeat(&c.Token)
+	if err != nil {
+		return fmt.Errorf("table_full")
+	}
+
+	// Update session with table and seat info
+	_, err = sm.UpdateSession(c.Token, &table.ID, &seat.Index)
+	if err != nil {
+		return fmt.Errorf("failed to update session: %w", err)
+	}
+
+	// Send seat_assigned message to client
+	err = c.SendSeatAssigned(table.ID, seat.Index, seat.Status, logger)
+	if err != nil {
+		return fmt.Errorf("failed to send seat_assigned: %w", err)
+	}
+
+	// Broadcast lobby_state to all clients
+	err = server.broadcastLobbyState()
+	if err != nil {
+		logger.Warn("failed to broadcast lobby state", "error", err)
+	}
+
+	logger.Info("player joined table", "token", c.Token, "tableId", table.ID, "seatIndex", seat.Index)
+
+	return nil
+}
+
+// SendSeatAssigned sends a seat_assigned message to the client
+func (c *Client) SendSeatAssigned(tableID string, seatIndex int, status string, logger *slog.Logger) error {
+	payloadObj := SeatAssignedPayload{
+		TableId:   tableID,
+		SeatIndex: seatIndex,
+		Status:    status,
+	}
+	payloadBytes, err := json.Marshal(payloadObj)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	response := WebSocketMessage{
+		Type:    "seat_assigned",
+		Payload: json.RawMessage(payloadBytes),
+	}
+
+	responseBytes, err := json.Marshal(response)
+	if err != nil {
+		return fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	logger.Info("seat_assigned sent to client", "tableId", tableID, "seatIndex", seatIndex)
+
+	c.send <- responseBytes
 	return nil
 }

@@ -7,8 +7,9 @@ import (
 
 // Seat represents a seat at a poker table
 type Seat struct {
-	Index int     // 0-5
-	Token *string // nil = empty, non-nil = occupied
+	Index  int     // 0-5
+	Token  *string // nil = empty, non-nil = occupied
+	Status string  // "empty", "waiting", "active"
 }
 
 // Table represents a poker table
@@ -31,8 +32,9 @@ func NewTable(id, name string) *Table {
 	// Initialize all seats with Index and nil Token
 	for i := 0; i < 6; i++ {
 		table.Seats[i] = Seat{
-			Index: i,
-			Token: nil,
+			Index:  i,
+			Token:  nil,
+			Status: "empty",
 		}
 	}
 
@@ -64,6 +66,7 @@ func (t *Table) AssignSeat(token *string) (Seat, error) {
 	for i := 0; i < 6; i++ {
 		if t.Seats[i].Token == nil {
 			t.Seats[i].Token = token
+			t.Seats[i].Status = "waiting"
 			return t.Seats[i], nil
 		}
 	}
@@ -83,6 +86,7 @@ func (t *Table) ClearSeat(token *string) error {
 	for i := 0; i < 6; i++ {
 		if t.Seats[i].Token != nil && *t.Seats[i].Token == *token {
 			t.Seats[i].Token = nil
+			t.Seats[i].Status = "empty"
 			return nil
 		}
 	}

@@ -164,6 +164,12 @@ func (c *Client) readPump(sm *SessionManager, server *Server, logger *slog.Logge
 				c.SendError(err.Error(), logger)
 				logger.Warn("failed to handle set_name", "error", err)
 			}
+		case "join_table":
+			err := c.HandleJoinTable(sm, server, logger, wsMsg.Payload)
+			if err != nil {
+				c.SendError(err.Error(), logger)
+				logger.Warn("failed to handle join_table", "error", err)
+			}
 		default:
 			c.SendError("Unknown message type: "+wsMsg.Type, logger)
 			logger.Warn("unknown message type", "type", wsMsg.Type)
