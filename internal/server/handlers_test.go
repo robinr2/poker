@@ -1842,3 +1842,107 @@ func TestHandlePlayerAction_OutOfTurn(t *testing.T) {
 		t.Errorf("expected error for out of turn action, got nil")
 	}
 }
+
+// TestHandlePlayerAction_BroadcastsResult verifies action_result is broadcast after action
+func TestHandlePlayerAction_BroadcastsResult(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players with sessions
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	sm.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	sm.UpdateSession(token2, &table.ID, &[]int{1}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Create two mock clients with send channels so we can verify broadcasts
+	client1 := &Client{
+		hub:   hub,
+		send:  make(chan []byte, 256),
+		Token: token1,
+	}
+	client2 := &Client{
+		hub:   hub,
+		send:  make(chan []byte, 256),
+		Token: token2,
+	}
+
+	// Register clients in hub
+	hub.register <- client1
+	hub.register <- client2
+	// Give time for hub to process registrations
+	time.Sleep(50 * time.Millisecond)
+
+	// Player at seat 0 calls
+	err = server.HandlePlayerAction(sm, client1, 0, "call")
+	if err != nil {
+		t.Errorf("expected no error for valid call, got %v", err)
+	}
+
+	// Give time for broadcast
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify both clients received action_result
+	select {
+	case msg := <-client1.send:
+		var wsMsg WebSocketMessage
+		err := json.Unmarshal(msg, &wsMsg)
+		if err != nil {
+			t.Errorf("client1: failed to unmarshal message: %v", err)
+		}
+		if wsMsg.Type != "action_result" {
+			t.Errorf("client1: expected message type 'action_result', got %q", wsMsg.Type)
+		}
+		var payload ActionResultPayload
+		err = json.Unmarshal(wsMsg.Payload, &payload)
+		if err != nil {
+			t.Errorf("client1: failed to unmarshal payload: %v", err)
+		}
+		if payload.Action != "call" {
+			t.Errorf("client1: expected action 'call', got %q", payload.Action)
+		}
+	default:
+		t.Error("client1: did not receive action_result message")
+	}
+
+	select {
+	case msg := <-client2.send:
+		var wsMsg WebSocketMessage
+		err := json.Unmarshal(msg, &wsMsg)
+		if err != nil {
+			t.Errorf("client2: failed to unmarshal message: %v", err)
+		}
+		if wsMsg.Type != "action_result" {
+			t.Errorf("client2: expected message type 'action_result', got %q", wsMsg.Type)
+		}
+	default:
+		t.Error("client2: did not receive action_result message")
+	}
+}

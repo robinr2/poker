@@ -2837,3 +2837,55 @@ func TestStartHand_InitializesActionState(t *testing.T) {
 		t.Errorf("expected CurrentActor to be 0 (UTG), got %d", *table.CurrentHand.CurrentActor)
 	}
 }
+
+// TestStartHandBroadcastsFirstActionRequest verifies first action_request is broadcast
+// This just tests that the pattern is set up correctly in StartHand for later broadcast
+func TestStartHandBroadcastsFirstActionRequest(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players
+	sm := NewSessionManager(logger)
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Assign seats and set to waiting (will transition to active)
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "waiting"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "waiting"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Verify CurrentActor is set (will be used to broadcast action_request)
+	table.mu.RLock()
+	defer table.mu.RUnlock()
+
+	if table.CurrentHand == nil {
+		t.Fatal("CurrentHand should be set")
+	}
+
+	if table.CurrentHand.CurrentActor == nil {
+		t.Fatal("CurrentActor should be set for first action_request")
+	}
+
+	// Verify it's a valid seat
+	if *table.CurrentHand.CurrentActor < 0 || *table.CurrentHand.CurrentActor > 1 {
+		t.Errorf("CurrentActor %d is not valid for 2-player setup", *table.CurrentHand.CurrentActor)
+	}
+}

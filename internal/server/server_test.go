@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"testing"
@@ -155,5 +156,191 @@ func TestServerFindPlayerSeatNotFound(t *testing.T) {
 	foundSeat = server.FindPlayerSeat(&tokenNotSeated)
 	if foundSeat != nil {
 		t.Errorf("expected nil for different token, got %v", foundSeat)
+	}
+}
+
+// TestBroadcastActionRequest verifies action_request is sent to all clients at table
+func TestBroadcastActionRequest(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+
+	// Start the hub
+	go hub.Run()
+
+	// Create two mock clients with send channels
+	client1 := &Client{
+		hub:   hub,
+		send:  make(chan []byte, 256),
+		Token: "token1",
+	}
+	client2 := &Client{
+		hub:   hub,
+		send:  make(chan []byte, 256),
+		Token: "token2",
+	}
+
+	// Register clients in hub
+	hub.register <- client1
+	hub.register <- client2
+	time.Sleep(50 * time.Millisecond)
+
+	// Seat both clients at table-1
+	table := server.tables[0]
+	table.Seats[0].Token = &client1.Token
+	table.Seats[0].Status = "active"
+	table.Seats[1].Token = &client2.Token
+	table.Seats[1].Status = "active"
+
+	// Create mock session manager and add sessions for both clients
+	sm := server.sessionManager
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	client1.Token = session1.Token
+	client2.Token = session2.Token
+	sm.UpdateSession(session1.Token, &table.ID, &table.Seats[0].Index)
+	sm.UpdateSession(session2.Token, &table.ID, &table.Seats[1].Index)
+
+	// Update client tokens in hub
+	hub.mu.Lock()
+	hub.clients[client1] = true
+	hub.clients[client2] = true
+	hub.mu.Unlock()
+
+	// Call BroadcastActionRequest
+	err := server.BroadcastActionRequest(table.ID, 0, []string{"call", "fold"}, 20, 10, 100)
+	if err != nil {
+		t.Fatalf("BroadcastActionRequest failed: %v", err)
+	}
+
+	// Give time for broadcast
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify both clients received the message
+	select {
+	case msg := <-client1.send:
+		var wsMsg WebSocketMessage
+		err := json.Unmarshal(msg, &wsMsg)
+		if err != nil {
+			t.Errorf("client1: failed to unmarshal message: %v", err)
+		}
+		if wsMsg.Type != "action_request" {
+			t.Errorf("client1: expected message type 'action_request', got %q", wsMsg.Type)
+		}
+	default:
+		t.Error("client1: did not receive action_request message")
+	}
+
+	select {
+	case msg := <-client2.send:
+		var wsMsg WebSocketMessage
+		err := json.Unmarshal(msg, &wsMsg)
+		if err != nil {
+			t.Errorf("client2: failed to unmarshal message: %v", err)
+		}
+		if wsMsg.Type != "action_request" {
+			t.Errorf("client2: expected message type 'action_request', got %q", wsMsg.Type)
+		}
+	default:
+		t.Error("client2: did not receive action_request message")
+	}
+}
+
+// TestBroadcastActionResult verifies action_result is sent to all clients at table
+func TestBroadcastActionResult(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+
+	// Start the hub
+	go hub.Run()
+
+	// Create two mock clients with send channels
+	client1 := &Client{
+		hub:   hub,
+		send:  make(chan []byte, 256),
+		Token: "token1",
+	}
+	client2 := &Client{
+		hub:   hub,
+		send:  make(chan []byte, 256),
+		Token: "token2",
+	}
+
+	// Register clients in hub
+	hub.register <- client1
+	hub.register <- client2
+	time.Sleep(50 * time.Millisecond)
+
+	// Seat both clients at table-1
+	table := server.tables[0]
+	table.Seats[0].Token = &client1.Token
+	table.Seats[0].Status = "active"
+	table.Seats[1].Token = &client2.Token
+	table.Seats[1].Status = "active"
+
+	// Create mock session manager and add sessions for both clients
+	sm := server.sessionManager
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	client1.Token = session1.Token
+	client2.Token = session2.Token
+	sm.UpdateSession(session1.Token, &table.ID, &table.Seats[0].Index)
+	sm.UpdateSession(session2.Token, &table.ID, &table.Seats[1].Index)
+
+	// Update client tokens in hub
+	hub.mu.Lock()
+	hub.clients[client1] = true
+	hub.clients[client2] = true
+	hub.mu.Unlock()
+
+	// Call BroadcastActionResult
+	nextActor := 1
+	err := server.BroadcastActionResult(table.ID, 0, "call", 20, 80, 150, &nextActor, false, nil)
+	if err != nil {
+		t.Fatalf("BroadcastActionResult failed: %v", err)
+	}
+
+	// Give time for broadcast
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify both clients received the message
+	select {
+	case msg := <-client1.send:
+		var wsMsg WebSocketMessage
+		err := json.Unmarshal(msg, &wsMsg)
+		if err != nil {
+			t.Errorf("client1: failed to unmarshal message: %v", err)
+		}
+		if wsMsg.Type != "action_result" {
+			t.Errorf("client1: expected message type 'action_result', got %q", wsMsg.Type)
+		}
+		var payload ActionResultPayload
+		err = json.Unmarshal(wsMsg.Payload, &payload)
+		if err != nil {
+			t.Errorf("client1: failed to unmarshal payload: %v", err)
+		}
+		if payload.SeatIndex != 0 {
+			t.Errorf("client1: expected seatIndex 0, got %d", payload.SeatIndex)
+		}
+		if payload.Action != "call" {
+			t.Errorf("client1: expected action 'call', got %q", payload.Action)
+		}
+	default:
+		t.Error("client1: did not receive action_result message")
+	}
+
+	select {
+	case msg := <-client2.send:
+		var wsMsg WebSocketMessage
+		err := json.Unmarshal(msg, &wsMsg)
+		if err != nil {
+			t.Errorf("client2: failed to unmarshal message: %v", err)
+		}
+		if wsMsg.Type != "action_result" {
+			t.Errorf("client2: expected message type 'action_result', got %q", wsMsg.Type)
+		}
+	default:
+		t.Error("client2: did not receive action_result message")
 	}
 }

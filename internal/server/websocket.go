@@ -183,6 +183,12 @@ func (c *Client) readPump(sm *SessionManager, server *Server, logger *slog.Logge
 				c.SendError(err.Error(), logger)
 				logger.Warn("failed to handle start_hand", "error", err)
 			}
+		case "player_action":
+			err := c.HandlePlayerActionMessage(sm, server, logger, wsMsg.Payload)
+			if err != nil {
+				c.SendError(err.Error(), logger)
+				logger.Warn("failed to handle player_action", "error", err)
+			}
 		default:
 			c.SendError("Unknown message type: "+wsMsg.Type, logger)
 			logger.Warn("unknown message type", "type", wsMsg.Type)

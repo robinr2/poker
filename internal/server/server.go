@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -275,4 +276,102 @@ func (s *Server) GetClientsAtTable(tableID string) []*Client {
 	}
 
 	return clients
+}
+
+// BroadcastActionRequest sends an action_request message to all clients at a specific table
+// It notifies them that a player needs to act
+func (s *Server) BroadcastActionRequest(tableID string, seatIndex int, validActions []string, callAmount, currentBet, pot int) error {
+	// Create the action request payload
+	payload := ActionRequestPayload{
+		SeatIndex:    seatIndex,
+		ValidActions: validActions,
+		CallAmount:   callAmount,
+		CurrentBet:   currentBet,
+		PlayerBet:    currentBet,
+		Pot:          pot,
+	}
+
+	// Marshal the payload to JSON
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal action_request payload: %w", err)
+	}
+
+	// Create the WebSocket message
+	msg := WebSocketMessage{
+		Type:    "action_request",
+		Payload: payloadBytes,
+	}
+
+	// Marshal the message
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal action_request message: %w", err)
+	}
+
+	// Get all clients at the table
+	clients := s.GetClientsAtTable(tableID)
+
+	// Send to all clients at the table
+	for _, client := range clients {
+		select {
+		case client.send <- msgBytes:
+			// Message sent
+		default:
+			// Client's send channel is full, skip
+			s.logger.Warn("client send channel full, skipping action_request", "tableId", tableID, "token", client.Token)
+		}
+	}
+
+	return nil
+}
+
+// BroadcastActionResult sends an action_result message to all clients at a specific table
+// It notifies them that a player has acted and provides the result
+func (s *Server) BroadcastActionResult(tableID string, seatIndex int, action string, amountActed, newStack, pot int, nextActor *int, roundOver bool, roundWinner *int) error {
+	// Create the action result payload
+	payload := ActionResultPayload{
+		SeatIndex:   seatIndex,
+		Action:      action,
+		AmountActed: amountActed,
+		NewStack:    newStack,
+		Pot:         pot,
+		NextActor:   nextActor,
+		RoundOver:   roundOver,
+		RoundWinner: roundWinner,
+	}
+
+	// Marshal the payload to JSON
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal action_result payload: %w", err)
+	}
+
+	// Create the WebSocket message
+	msg := WebSocketMessage{
+		Type:    "action_result",
+		Payload: payloadBytes,
+	}
+
+	// Marshal the message
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal action_result message: %w", err)
+	}
+
+	// Get all clients at the table
+	clients := s.GetClientsAtTable(tableID)
+
+	// Send to all clients at the table
+	for _, client := range clients {
+		select {
+		case client.send <- msgBytes:
+			// Message sent
+		default:
+			// Client's send channel is full, skip
+			s.logger.Warn("client send channel full, skipping action_result", "tableId", tableID, "token", client.Token)
+		}
+	}
+
+	return nil
 }

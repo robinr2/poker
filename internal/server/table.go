@@ -516,6 +516,35 @@ func (t *Table) StartHand() error {
 		// Broadcast table state to sync card counts for all clients
 		// This ensures players see card backs for opponents
 		t.Server.broadcastTableState(t.ID, nil)
+
+		// Broadcast the first action_request to the initial actor
+		t.mu.RLock()
+		hasCurrentActor := t.CurrentHand != nil && t.CurrentHand.CurrentActor != nil
+		var seatIndex int
+		var validActions []string
+		var callAmount, currentBet, pot int
+		if hasCurrentActor {
+			seatIndex = *t.CurrentHand.CurrentActor
+			validActions = t.CurrentHand.GetValidActions(seatIndex)
+			callAmount = t.CurrentHand.GetCallAmount(seatIndex)
+			currentBet = t.CurrentHand.CurrentBet
+			pot = t.CurrentHand.Pot
+		}
+		t.mu.RUnlock()
+
+		if hasCurrentActor {
+			err = t.Server.BroadcastActionRequest(
+				t.ID,
+				seatIndex,
+				validActions,
+				callAmount,
+				currentBet,
+				pot,
+			)
+			if err != nil {
+				t.Server.logger.Warn("failed to broadcast first action_request", "error", err)
+			}
+		}
 	}
 
 	return nil

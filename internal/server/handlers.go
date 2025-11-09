@@ -1144,15 +1144,27 @@ func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, sea
 	}
 
 	// Process the action
-	_, err = table.CurrentHand.ProcessAction(seatIndex, action, table.Seats[seatIndex].Stack)
+	amountActed, err := table.CurrentHand.ProcessAction(seatIndex, action, table.Seats[seatIndex].Stack)
 	if err != nil {
 		return fmt.Errorf("failed to process action: %w", err)
 	}
 
+	// Get the new stack after action (Seats might be updated during ProcessAction)
+	newStack := table.Seats[seatIndex].Stack
+
 	// Check if betting round is complete
 	if table.CurrentHand.IsBettingRoundComplete(table.Seats) {
-		// Betting round is over - this will be handled later (e.g., street progression)
-		// For now, just mark that the round is complete
+		// Betting round is over - broadcast with no next actor
+		// Temporarily unlock to broadcast
+		table.mu.Unlock()
+		err = server.BroadcastActionResult(
+			table.ID, seatIndex, action, amountActed, newStack, table.CurrentHand.Pot,
+			nil, true, nil,
+		)
+		table.mu.Lock()
+		if err != nil {
+			server.logger.Warn("failed to broadcast action_result", "error", err)
+		}
 		// TODO: Move to next street or determine winner
 		return nil
 	}
@@ -1165,11 +1177,51 @@ func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, sea
 
 	if nextActor == nil {
 		// Only one player left (others folded) - betting round complete
+		// Broadcast with no next actor
+		table.mu.Unlock()
+		err = server.BroadcastActionResult(
+			table.ID, seatIndex, action, amountActed, newStack, table.CurrentHand.Pot,
+			nil, true, nil,
+		)
+		table.mu.Lock()
+		if err != nil {
+			server.logger.Warn("failed to broadcast action_result", "error", err)
+		}
 		return nil
 	}
 
 	// Update CurrentActor to the next player
 	table.CurrentHand.CurrentActor = nextActor
+
+	// Broadcast the action result with the next actor
+	// Temporarily unlock to broadcast
+	table.mu.Unlock()
+	err = server.BroadcastActionResult(
+		table.ID, seatIndex, action, amountActed, newStack, table.CurrentHand.Pot,
+		nextActor, false, nil,
+	)
+	table.mu.Lock()
+	if err != nil {
+		server.logger.Warn("failed to broadcast action_result", "error", err)
+	}
+
+	return nil
+}
+
+// HandlePlayerActionMessage processes a player_action message from the WebSocket
+// This is the entry point that extracts the action from the payload and calls HandlePlayerAction
+func (c *Client) HandlePlayerActionMessage(sm *SessionManager, server *Server, logger *slog.Logger, payload []byte) error {
+	var actionPayload PlayerActionPayload
+	err := json.Unmarshal(payload, &actionPayload)
+	if err != nil {
+		return fmt.Errorf("invalid player_action payload: %w", err)
+	}
+
+	// Call the main handler
+	err = server.HandlePlayerAction(sm, c, actionPayload.SeatIndex, actionPayload.Action)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
