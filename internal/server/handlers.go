@@ -118,6 +118,19 @@ type BoardDealtPayload struct {
 	Street     string `json:"street"`
 }
 
+// ShowdownResultPayload represents the result of a showdown
+type ShowdownResultPayload struct {
+	WinnerSeats []int       `json:"winnerSeats"` // Seat indices of winners
+	WinningHand string      `json:"winningHand"` // Human-readable hand name
+	PotAmount   int         `json:"potAmount"`   // Total pot size
+	AmountsWon  map[int]int `json:"amountsWon"`  // Map of seat index to amount won
+}
+
+// HandCompletePayload represents hand completion
+type HandCompletePayload struct {
+	Message string `json:"message"` // Completion message
+}
+
 // HandleSetName processes a set_name message and creates a session for the client
 func (c *Client) HandleSetName(sm *SessionManager, server *Server, logger *slog.Logger, payload []byte) error {
 	var setNamePayload SetNamePayload
@@ -1098,6 +1111,124 @@ func (s *Server) broadcastBoardDealt(table *Table, street string) error {
 	}
 
 	return nil
+}
+
+// handRankToString converts a numeric rank to human-readable hand name
+func handRankToString(rank int) string {
+	switch rank {
+	case 8:
+		return "Straight Flush"
+	case 7:
+		return "Four of a Kind"
+	case 6:
+		return "Full House"
+	case 5:
+		return "Flush"
+	case 4:
+		return "Straight"
+	case 3:
+		return "Three of a Kind"
+	case 2:
+		return "Two Pair"
+	case 1:
+		return "One Pair"
+	case 0:
+		return "High Card"
+	default:
+		return "Unknown Hand"
+	}
+}
+
+// broadcastShowdown sends showdown results to all players at the table
+func (s *Server) broadcastShowdown(table *Table, winners []int, rank *HandRank, amountsWon map[int]int) {
+	clients := s.GetClientsAtTable(table.ID)
+	s.logger.Info("broadcasting showdown_result", "tableID", table.ID, "num_clients", len(clients))
+
+	winningHandName := "Unknown Hand"
+	if rank != nil {
+		winningHandName = handRankToString(rank.Rank)
+	}
+
+	// Get the pot amount from the distribution
+	potAmount := 0
+	for _, amount := range amountsWon {
+		potAmount += amount
+	}
+
+	payload := ShowdownResultPayload{
+		WinnerSeats: winners,
+		WinningHand: winningHandName,
+		PotAmount:   potAmount,
+		AmountsWon:  amountsWon,
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		s.logger.Error("failed to marshal showdown result", "error", err)
+		return
+	}
+
+	response := WebSocketMessage{
+		Type:    "showdown_result",
+		Payload: json.RawMessage(payloadBytes),
+	}
+
+	responseBytes, err := json.Marshal(response)
+	if err != nil {
+		s.logger.Error("failed to marshal showdown message", "error", err)
+		return
+	}
+
+	sentCount := 0
+	for _, client := range clients {
+		select {
+		case client.send <- responseBytes:
+			sentCount++
+		default:
+			s.logger.Warn("failed to send showdown to client - buffer full")
+		}
+	}
+
+	s.logger.Info("showdown_result broadcast complete", "tableID", table.ID, "sentCount", sentCount)
+}
+
+// broadcastHandComplete sends hand completion message to all players at the table
+func (s *Server) broadcastHandComplete(table *Table) {
+	clients := s.GetClientsAtTable(table.ID)
+	s.logger.Info("broadcasting hand_complete", "tableID", table.ID, "num_clients", len(clients))
+
+	payload := HandCompletePayload{
+		Message: "Hand complete. Click 'Start Hand' to begin next hand.",
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		s.logger.Error("failed to marshal hand complete", "error", err)
+		return
+	}
+
+	response := WebSocketMessage{
+		Type:    "hand_complete",
+		Payload: json.RawMessage(payloadBytes),
+	}
+
+	responseBytes, err := json.Marshal(response)
+	if err != nil {
+		s.logger.Error("failed to marshal hand complete message", "error", err)
+		return
+	}
+
+	sentCount := 0
+	for _, client := range clients {
+		select {
+		case client.send <- responseBytes:
+			sentCount++
+		default:
+			s.logger.Warn("failed to send hand_complete to client - buffer full")
+		}
+	}
+
+	s.logger.Info("hand_complete broadcast complete", "tableID", table.ID, "sentCount", sentCount)
 }
 
 // HandleStartHand processes a start_hand message to manually trigger hand start (temporary testing feature)

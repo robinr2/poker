@@ -253,7 +253,7 @@ func (s *Server) GetClientsAtTable(tableID string) []*Client {
 	}
 	s.mu.RUnlock()
 
-	if table == nil {
+	if table == nil || s.hub == nil {
 		return clients
 	}
 

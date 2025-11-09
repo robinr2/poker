@@ -161,10 +161,10 @@ func (h *Hand) DetermineWinner(seats []*Seat) (winners []int, winningRank *HandR
 // Handles both full showdown with multiple players and early winner when all others fold
 func (t *Table) HandleShowdown() {
 	t.mu.Lock()
-	defer t.mu.Unlock()
 
 	// Verify hand exists
 	if t.CurrentHand == nil {
+		t.mu.Unlock()
 		return
 	}
 
@@ -185,8 +185,11 @@ func (t *Table) HandleShowdown() {
 					t.Server.logger.Info("early winner (all folded)", "tableID", t.ID, "winner", i)
 				}
 
+				// Capture pot amount before clearing hand
+				potAmount := t.CurrentHand.Pot
+
 				// Distribute pot to the early winner
-				distribution := t.DistributePot([]int{i}, t.CurrentHand.Pot)
+				distribution := t.DistributePot([]int{i}, potAmount)
 				for seatIdx, amount := range distribution {
 					t.Seats[seatIdx].Stack += amount
 				}
@@ -198,6 +201,13 @@ func (t *Table) HandleShowdown() {
 				t.assignDealerLocked()
 				t.DealerRotatedThisRound = true
 				t.CurrentHand = nil
+				t.mu.Unlock()
+
+				// Broadcast showdown and hand complete for early winner
+				if t.Server != nil {
+					t.Server.broadcastShowdown(t, []int{i}, nil, distribution)
+					t.Server.broadcastHandComplete(t)
+				}
 				return
 			}
 		}
@@ -218,6 +228,12 @@ func (t *Table) HandleShowdown() {
 		t.assignDealerLocked()
 		t.DealerRotatedThisRound = true
 		t.CurrentHand = nil
+		t.mu.Unlock()
+
+		// Broadcast hand complete even with no winners
+		if t.Server != nil {
+			t.Server.broadcastHandComplete(t)
+		}
 		return
 	}
 
@@ -243,6 +259,13 @@ func (t *Table) HandleShowdown() {
 	t.assignDealerLocked()
 	t.DealerRotatedThisRound = true
 	t.CurrentHand = nil
+	t.mu.Unlock()
+
+	// Broadcast showdown results and hand complete
+	if t.Server != nil {
+		t.Server.broadcastShowdown(t, winners, winningRank, distribution)
+		t.Server.broadcastHandComplete(t)
+	}
 }
 
 // DistributePot divides the pot among winners, with remainder going to the first winner
