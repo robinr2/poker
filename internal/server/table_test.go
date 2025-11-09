@@ -4092,3 +4092,232 @@ func TestProcessAction_RaiseHeadsUp(t *testing.T) {
 		t.Errorf("expected LastRaise=50 (75-25), got %d", table.CurrentHand.LastRaise)
 	}
 }
+
+// ============ PHASE 2: STREET PROGRESSION TRIGGER LOGIC TESTS ============
+
+// TestHand_AdvanceToNextStreet_PreflopToFlop verifies preflop advances to flop and deals 3 cards
+func TestHand_AdvanceToNextStreet_PreflopToFlop(t *testing.T) {
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            30,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+		BoardCards:     []Card{},
+		Street:         "preflop",
+		CurrentBet:     20,
+		PlayerBets:     make(map[int]int),
+		ActedPlayers:   make(map[int]bool),
+		FoldedPlayers:  make(map[int]bool),
+		CurrentActor:   nil,
+	}
+
+	err := ShuffleDeck(hand.Deck)
+	if err != nil {
+		t.Fatalf("failed to shuffle deck: %v", err)
+	}
+
+	// Advance from preflop to flop
+	err = hand.AdvanceToNextStreet()
+	if err != nil {
+		t.Fatalf("expected no error advancing to flop, got %v", err)
+	}
+
+	// Verify street changed to flop
+	if hand.Street != "flop" {
+		t.Errorf("expected street to be 'flop', got '%s'", hand.Street)
+	}
+
+	// Verify 3 board cards were dealt
+	if len(hand.BoardCards) != 3 {
+		t.Errorf("expected 3 board cards after flop, got %d", len(hand.BoardCards))
+	}
+
+	// Verify betting state was reset
+	if hand.CurrentBet != 0 {
+		t.Errorf("expected CurrentBet to be reset to 0, got %d", hand.CurrentBet)
+	}
+	if len(hand.ActedPlayers) != 0 {
+		t.Errorf("expected ActedPlayers to be reset, got %d entries", len(hand.ActedPlayers))
+	}
+	if len(hand.PlayerBets) != 0 {
+		t.Errorf("expected PlayerBets to be reset, got %d entries", len(hand.PlayerBets))
+	}
+}
+
+// TestHand_AdvanceToNextStreet_FlopToTurn verifies flop advances to turn and deals 1 card
+func TestHand_AdvanceToNextStreet_FlopToTurn(t *testing.T) {
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            50,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+		BoardCards:     []Card{{Rank: "A", Suit: "s"}, {Rank: "K", Suit: "h"}, {Rank: "Q", Suit: "d"}},
+		Street:         "flop",
+		CurrentBet:     20,
+		PlayerBets:     make(map[int]int),
+		ActedPlayers:   make(map[int]bool),
+		FoldedPlayers:  make(map[int]bool),
+		CurrentActor:   nil,
+	}
+
+	err := ShuffleDeck(hand.Deck)
+	if err != nil {
+		t.Fatalf("failed to shuffle deck: %v", err)
+	}
+
+	// Advance from flop to turn
+	err = hand.AdvanceToNextStreet()
+	if err != nil {
+		t.Fatalf("expected no error advancing to turn, got %v", err)
+	}
+
+	// Verify street changed to turn
+	if hand.Street != "turn" {
+		t.Errorf("expected street to be 'turn', got '%s'", hand.Street)
+	}
+
+	// Verify 4 board cards total (3 flop + 1 turn)
+	if len(hand.BoardCards) != 4 {
+		t.Errorf("expected 4 board cards after turn, got %d", len(hand.BoardCards))
+	}
+
+	// Verify betting state was reset
+	if hand.CurrentBet != 0 {
+		t.Errorf("expected CurrentBet to be reset to 0, got %d", hand.CurrentBet)
+	}
+}
+
+// TestHand_AdvanceToNextStreet_TurnToRiver verifies turn advances to river and deals 1 card
+func TestHand_AdvanceToNextStreet_TurnToRiver(t *testing.T) {
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            70,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+		BoardCards: []Card{
+			{Rank: "A", Suit: "s"}, {Rank: "K", Suit: "h"}, {Rank: "Q", Suit: "d"},
+			{Rank: "J", Suit: "c"},
+		},
+		Street:        "turn",
+		CurrentBet:    20,
+		PlayerBets:    make(map[int]int),
+		ActedPlayers:  make(map[int]bool),
+		FoldedPlayers: make(map[int]bool),
+		CurrentActor:  nil,
+	}
+
+	err := ShuffleDeck(hand.Deck)
+	if err != nil {
+		t.Fatalf("failed to shuffle deck: %v", err)
+	}
+
+	// Advance from turn to river
+	err = hand.AdvanceToNextStreet()
+	if err != nil {
+		t.Fatalf("expected no error advancing to river, got %v", err)
+	}
+
+	// Verify street changed to river
+	if hand.Street != "river" {
+		t.Errorf("expected street to be 'river', got '%s'", hand.Street)
+	}
+
+	// Verify 5 board cards total (4 turn + 1 river)
+	if len(hand.BoardCards) != 5 {
+		t.Errorf("expected 5 board cards after river, got %d", len(hand.BoardCards))
+	}
+
+	// Verify betting state was reset
+	if hand.CurrentBet != 0 {
+		t.Errorf("expected CurrentBet to be reset to 0, got %d", hand.CurrentBet)
+	}
+}
+
+// TestHand_AdvanceToNextStreet_RiverDoesNotAdvance verifies river does not advance further
+func TestHand_AdvanceToNextStreet_RiverDoesNotAdvance(t *testing.T) {
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            100,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+		BoardCards: []Card{
+			{Rank: "A", Suit: "s"}, {Rank: "K", Suit: "h"}, {Rank: "Q", Suit: "d"},
+			{Rank: "J", Suit: "c"}, {Rank: "T", Suit: "s"},
+		},
+		Street:        "river",
+		CurrentBet:    0,
+		PlayerBets:    make(map[int]int),
+		ActedPlayers:  make(map[int]bool),
+		FoldedPlayers: make(map[int]bool),
+		CurrentActor:  nil,
+	}
+
+	err := ShuffleDeck(hand.Deck)
+	if err != nil {
+		t.Fatalf("failed to shuffle deck: %v", err)
+	}
+
+	initialBoardSize := len(hand.BoardCards)
+
+	// Try to advance from river (should not error, but should not deal cards)
+	err = hand.AdvanceToNextStreet()
+	if err != nil {
+		t.Fatalf("expected no error advancing from river, got %v", err)
+	}
+
+	// Verify street remains river
+	if hand.Street != "river" {
+		t.Errorf("expected street to remain 'river', got '%s'", hand.Street)
+	}
+
+	// Verify board cards unchanged
+	if len(hand.BoardCards) != initialBoardSize {
+		t.Errorf("expected board cards to remain at %d, got %d", initialBoardSize, len(hand.BoardCards))
+	}
+}
+
+// TestHand_AdvanceToNextStreet_ErrorsIfInsufficientDeck verifies error when deck exhausted
+func TestHand_AdvanceToNextStreet_ErrorsIfInsufficientDeck(t *testing.T) {
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            30,
+		Deck: []Card{
+			{Rank: "A", Suit: "s"},
+			{Rank: "K", Suit: "h"},
+		},
+		HoleCards:     make(map[int][]Card),
+		BoardCards:    []Card{},
+		Street:        "preflop",
+		CurrentBet:    20,
+		PlayerBets:    make(map[int]int),
+		ActedPlayers:  make(map[int]bool),
+		FoldedPlayers: make(map[int]bool),
+		CurrentActor:  nil,
+	}
+
+	// Try to advance to flop with only 2 cards (need 4)
+	err := hand.AdvanceToNextStreet()
+	if err == nil {
+		t.Fatal("expected error when deck has insufficient cards for flop, got nil")
+	}
+
+	// Verify street did not change
+	if hand.Street != "preflop" {
+		t.Errorf("expected street to remain 'preflop' on error, got '%s'", hand.Street)
+	}
+
+	// Verify no board cards were dealt
+	if len(hand.BoardCards) != 0 {
+		t.Errorf("expected board to remain empty on error, got %d cards", len(hand.BoardCards))
+	}
+}

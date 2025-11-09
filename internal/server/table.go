@@ -1155,3 +1155,44 @@ func (h *Hand) AdvanceStreet() {
 	h.ActedPlayers = make(map[int]bool)
 	h.CurrentActor = nil
 }
+
+// AdvanceToNextStreet advances the hand to the next street by dealing board cards and resetting betting state
+// Streets: preflop -> flop -> turn -> river
+// - On preflop: deals flop (3 cards)
+// - On flop: deals turn (1 card)
+// - On turn: deals river (1 card)
+// - On river: no advancement (hand is complete)
+// Returns error if dealing fails (e.g., insufficient cards in deck)
+// This method combines board card dealing with betting state reset
+func (h *Hand) AdvanceToNextStreet() error {
+	// Deal board cards based on current street before advancing
+	var err error
+	switch h.Street {
+	case "preflop":
+		// Deal flop (3 cards)
+		err = h.DealFlop()
+		if err != nil {
+			return err
+		}
+	case "flop":
+		// Deal turn (1 card)
+		err = h.DealTurn()
+		if err != nil {
+			return err
+		}
+	case "turn":
+		// Deal river (1 card)
+		err = h.DealRiver()
+		if err != nil {
+			return err
+		}
+	case "river":
+		// Hand is complete, no more streets to advance to
+		return nil
+	}
+
+	// Advance street and reset betting state
+	h.AdvanceStreet()
+
+	return nil
+}
