@@ -1194,6 +1194,10 @@ func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, sea
 	// Update CurrentActor to the next player
 	table.CurrentHand.CurrentActor = nextActor
 
+	// Get valid actions and call amount for the next actor
+	nextValidActions := table.CurrentHand.GetValidActions(*nextActor)
+	nextCallAmount := table.CurrentHand.GetCallAmount(*nextActor)
+
 	// Broadcast the action result with the next actor
 	// Temporarily unlock to broadcast
 	table.mu.Unlock()
@@ -1201,9 +1205,18 @@ func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, sea
 		table.ID, seatIndex, action, amountActed, newStack, table.CurrentHand.Pot,
 		nextActor, false, nil,
 	)
-	table.mu.Lock()
 	if err != nil {
 		server.logger.Warn("failed to broadcast action_result", "error", err)
+	}
+
+	// Send action_request to the next actor with updated call amount
+	err = server.BroadcastActionRequest(
+		table.ID, *nextActor, nextValidActions, nextCallAmount,
+		table.CurrentHand.CurrentBet, table.CurrentHand.Pot,
+	)
+	table.mu.Lock()
+	if err != nil {
+		server.logger.Warn("failed to broadcast action_request for next actor", "error", err)
 	}
 
 	return nil
