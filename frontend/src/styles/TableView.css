@@ -57,6 +57,22 @@
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
+/* Turn Indicator */
+.seat.turn-active {
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.5);
+  }
+}
+
 .seat-number {
   font-size: 0.875rem;
   font-weight: 600;
@@ -275,6 +291,62 @@
 .start-hand-button:active {
   transform: translateY(0);
   box-shadow: 0 1px 4px rgba(16, 185, 129, 0.3);
+}
+
+.start-hand-button:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(16, 185, 129, 0.3);
+}
+
+/* Action Bar */
+.action-bar {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  padding: 16px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  margin: 16px 0;
+}
+
+.action-bar button {
+  padding: 12px 24px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 100px;
+}
+
+.action-bar button:first-child {
+  background-color: #ef4444;
+}
+
+.action-bar button:first-child:hover {
+  background-color: #dc2626;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.action-bar button:first-child:active {
+  transform: translateY(0);
+}
+
+.action-bar button:not(:first-child) {
+  background-color: #3b82f6;
+}
+
+.action-bar button:not(:first-child):hover {
+  background-color: #2563eb;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.action-bar button:not(:first-child):active {
+  transform: translateY(0);
 }
 
 @media (max-width: 768px) {

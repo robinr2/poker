@@ -12,6 +12,11 @@ interface GameState {
   bigBlindSeat: number | null;
   holeCards: [string, string] | null;
   pot: number;
+  currentActor?: number | null;
+  validActions?: string[] | null;
+  callAmount?: number | null;
+  foldedPlayers?: number[];
+  roundOver?: boolean | null;
 }
 
 interface TableViewProps {
@@ -72,16 +77,29 @@ export function TableView({
     }
   };
 
+  const handleAction = (action: string) => {
+    if (onSendMessage && currentSeatIndex !== null) {
+      const message = JSON.stringify({
+        type: 'player_action',
+        payload: {
+          seatIndex: currentSeatIndex,
+          action: action,
+        },
+      });
+      onSendMessage(message);
+    }
+  };
+
   return (
     <div className="table-view">
       <h1>Table: {tableId}</h1>
       <div className="table-container">
         <div className="seats-grid">
-          {seats.map((seat) => (
-            <div
-              key={seat.index}
-              className={`seat ${seat.index === currentSeatIndex ? 'own-seat' : ''}`}
-            >
+           {seats.map((seat) => (
+             <div
+               key={seat.index}
+               className={`seat ${seat.index === currentSeatIndex ? 'own-seat' : ''} ${gameState?.currentActor === seat.index ? 'turn-active' : ''}`}
+             >
               {/* Dealer Button */}
               {gameState?.dealerSeat === seat.index && (
                 <span className="dealer-badge">D</span>
@@ -133,10 +151,24 @@ export function TableView({
         </div>
 
         {/* Pot Display in Center */}
-        {gameState && <div className="pot-display">Pot: {gameState.pot}</div>}
-      </div>
+         {gameState && <div className="pot-display">Pot: {gameState.pot}</div>}
+       </div>
 
-      <div className="button-group">
+       {/* Action Bar */}
+       {gameState?.currentActor === currentSeatIndex && (
+         <div className="action-bar">
+           <button onClick={() => handleAction('fold')}>Fold</button>
+           {gameState.callAmount === 0 ? (
+             <button onClick={() => handleAction('check')}>Check</button>
+           ) : (
+             <button onClick={() => handleAction('call')}>
+               Call {gameState.callAmount}
+             </button>
+           )}
+         </div>
+       )}
+
+       <div className="button-group">
         {showStartHandButton && (
           <button onClick={handleStartHand} className="start-hand-button">
             Start Hand
