@@ -103,8 +103,8 @@
 /* Dealer Button Styling */
 .dealer-badge {
   position: absolute;
-  top: -12px;
-  left: -12px;
+  top: 8px;
+  left: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -123,8 +123,8 @@
 /* Small Blind Badge */
 .sb-badge {
   position: absolute;
-  top: -12px;
-  left: 24px;
+  top: 8px;
+  left: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -143,8 +143,8 @@
 /* Big Blind Badge */
 .bb-badge {
   position: absolute;
-  top: -12px;
-  left: 60px;
+  top: 8px;
+  left: 80px;
   display: flex;
   align-items: center;
   justify-content: center;
