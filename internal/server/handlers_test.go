@@ -1587,6 +1587,12 @@ func TestHandlePlayerAction_ValidCall(t *testing.T) {
 	if !table.CurrentHand.ActedPlayers[0] {
 		t.Errorf("expected seat 0 to be marked as acted")
 	}
+	// Verify stack was updated (dealer posts SB=10, calls BB=20, so needs to add 10 more)
+	// Initial stack 1000 - 10 (SB) - 10 (call to match BB) = 980
+	expectedStack := 1000 - 10 - 10
+	if table.Seats[0].Stack != expectedStack {
+		t.Errorf("expected seat 0 stack to be %d after call, got %d", expectedStack, table.Seats[0].Stack)
+	}
 	table.mu.RUnlock()
 }
 

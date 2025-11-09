@@ -1149,7 +1149,8 @@ func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, sea
 		return fmt.Errorf("failed to process action: %w", err)
 	}
 
-	// Get the new stack after action (Seats might be updated during ProcessAction)
+	// Update the player's stack after action (subtract chips moved)
+	table.Seats[seatIndex].Stack -= amountActed
 	newStack := table.Seats[seatIndex].Stack
 
 	// Check if betting round is complete
