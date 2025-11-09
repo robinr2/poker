@@ -833,6 +833,335 @@ describe('TableView', () => {
    });
 });
 
+describe('Bet Amount Display Tests', () => {
+  const mockSeats: SeatInfo[] = [
+    { index: 0, playerName: 'Alice', status: 'occupied', stack: 1000 },
+    { index: 1, playerName: 'Bob', status: 'occupied', stack: 980 },
+    { index: 2, playerName: 'Charlie', status: 'occupied', stack: 1000 },
+    { index: 3, playerName: null, status: 'empty' },
+    { index: 4, playerName: null, status: 'empty' },
+    { index: 5, playerName: null, status: 'empty' },
+  ];
+
+  interface ExtendedGameState extends GameState {
+    playerBets?: Record<number, number>;
+  }
+
+  describe('TestTableView_BetAmountDisplay', () => {
+    it('should display bet amount when player has bet > 0', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 150,
+        playerBets: {
+          0: 50,
+          1: 50,
+          2: 50,
+        },
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      // Check that bet amounts are displayed
+      const betAmounts = screen.getAllByText(/💵 50/);
+      expect(betAmounts.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('should not display bet amount for players with no bets', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 50,
+        playerBets: {
+          0: 50,
+          // Bob and Charlie have no bets
+        },
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      // Alice should have bet amount
+      expect(screen.getByText(/💵 50/)).toBeInTheDocument();
+
+      // Should only be one bet amount displayed
+      const betAmounts = screen.getAllByText(/💵/);
+      expect(betAmounts.length).toBe(1);
+    });
+
+    it('should not display bet amount for empty seats', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 50,
+        playerBets: {
+          0: 50,
+          3: 50, // Empty seat - should not display
+        },
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      // Should only display bet for Alice (seat 0)
+      const betAmounts = screen.getAllByText(/💵/);
+      expect(betAmounts.length).toBe(1);
+    });
+
+    it('should display different bet amounts for different players', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 180,
+        playerBets: {
+          0: 100,
+          1: 50,
+          2: 30,
+        },
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      expect(screen.getByText(/💵 100/)).toBeInTheDocument();
+      expect(screen.getByText(/💵 50/)).toBeInTheDocument();
+      expect(screen.getByText(/💵 30/)).toBeInTheDocument();
+    });
+
+    it('should not display bet amounts when playerBets is undefined', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: GameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 0,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      // Should not display any bet amounts
+      const betAmounts = screen.queryAllByText(/💵/);
+      expect(betAmounts.length).toBe(0);
+    });
+
+    it('should not display bet amount when amount is 0', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 50,
+        playerBets: {
+          0: 50,
+          1: 0, // Explicitly 0 - should not display
+          2: 0,
+        },
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      // Should only display bet for Alice (seat 0)
+      const betAmounts = screen.getAllByText(/💵/);
+      expect(betAmounts.length).toBe(1);
+    });
+
+    it('should update bet amounts when gameState changes', () => {
+      const mockOnLeave = vi.fn();
+      const initialGameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 50,
+        playerBets: {
+          0: 50,
+        },
+      };
+
+      const { rerender } = render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={initialGameState}
+        />
+      );
+
+      // Initially Alice has bet 50
+      expect(screen.getByText(/💵 50/)).toBeInTheDocument();
+
+      // Update game state - Bob now bets 100
+      const updatedGameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 150,
+        playerBets: {
+          0: 50,
+          1: 100,
+        },
+      };
+
+      rerender(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={updatedGameState}
+        />
+      );
+
+      // Both bet amounts should be visible
+      expect(screen.getByText(/💵 50/)).toBeInTheDocument();
+      expect(screen.getByText(/💵 100/)).toBeInTheDocument();
+    });
+
+    it('should clear bet amounts on new hand', () => {
+      const mockOnLeave = vi.fn();
+      const gameStateWithBets: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 150,
+        playerBets: {
+          0: 50,
+          1: 50,
+          2: 50,
+        },
+      };
+
+      const { rerender } = render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameStateWithBets}
+        />
+      );
+
+      // Initially bets should be displayed
+      expect(screen.getAllByText(/💵/).length).toBeGreaterThan(0);
+
+      // New hand starts - playerBets cleared
+      const newHandGameState: ExtendedGameState = {
+        dealerSeat: 1,
+        smallBlindSeat: 2,
+        bigBlindSeat: 0,
+        holeCards: null,
+        pot: 0,
+        playerBets: {},
+      };
+
+      rerender(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={newHandGameState}
+        />
+      );
+
+      // No bet amounts should be displayed
+      const betAmounts = screen.queryAllByText(/💵/);
+      expect(betAmounts.length).toBe(0);
+    });
+
+    it('should apply bet-amount CSS class to bet display', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 50,
+        playerBets: {
+          0: 50,
+        },
+      };
+
+      const { container } = render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      // Find bet amount element and verify CSS class
+      const betAmountElement = container.querySelector('.bet-amount');
+      expect(betAmountElement).toBeInTheDocument();
+      expect(betAmountElement?.textContent).toContain('💵 50');
+    });
+  });
+});
+
 describe('Action Bar Tests - Phase 5', () => {
   const mockSeats: SeatInfo[] = [
     { index: 0, playerName: 'Alice', status: 'occupied', stack: 1000 },
@@ -1500,6 +1829,46 @@ describe('Action Bar Tests - Phase 5', () => {
 
       const raiseButton = screen.getByRole('button', { name: /^Raise$/ });
       expect(raiseButton).not.toBeDisabled();
+    });
+
+    it('should clear raise input after any action', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 1,
+        validActions: ['fold', 'call', 'raise'],
+        callAmount: 20,
+        minRaise: 40,
+        maxRaise: 980,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      // Set raise amount
+      const raiseInput = screen.getByRole('textbox', { name: /Raise Amount/i }) as HTMLInputElement;
+      fireEvent.change(raiseInput, { target: { value: '100' } });
+      expect(raiseInput.value).toBe('100');
+
+      // Click Raise button
+      const raiseButton = screen.getByRole('button', { name: /^Raise$/ });
+      fireEvent.click(raiseButton);
+
+      // Raise input should be cleared
+      expect(raiseInput.value).toBe('');
     });
   });
 });

@@ -1121,7 +1121,7 @@ describe('Action Request and Result Handlers', () => {
         payload: {
           seatIndex: 1,
           action: 'call',
-          amount: 20,
+          amountActed: 20,
           newStack: 960,
           pot: 50,
           nextActor: 2,
@@ -1171,7 +1171,7 @@ describe('Action Request and Result Handlers', () => {
         payload: {
           seatIndex: 0,
           action: 'fold',
-          amount: 0,
+          amountActed: 0,
           newStack: 1000,
           pot: 30,
           nextActor: 1,
@@ -1202,7 +1202,7 @@ describe('Action Request and Result Handlers', () => {
         payload: {
           seatIndex: 2,
           action: 'call',
-          amount: 20,
+          amountActed: 20,
           newStack: 980,
           pot: 60,
           nextActor: null,

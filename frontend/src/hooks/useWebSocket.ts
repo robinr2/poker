@@ -44,6 +44,7 @@ interface GameState {
   handInProgress?: boolean;
   minRaise?: number;
   maxRaise?: number;
+  playerBets: Record<number, number>; // Track each player's bet amount in current round
 }
 
 interface HandStartedPayload {
@@ -78,7 +79,7 @@ interface ActionRequestPayload {
 interface ActionResultPayload {
   seatIndex: number;
   action: string;
-  amount: number;
+  amountActed: number;
   newStack: number;
   pot: number;
   nextActor: number | null;
@@ -125,6 +126,7 @@ export function useWebSocket(
     callAmount: null,
     foldedPlayers: [],
     roundOver: null,
+    playerBets: {},
   });
   const serviceRef = useRef<WebSocketService | null>(null);
   const onMessageRef = useRef(options?.onMessage);
@@ -273,10 +275,11 @@ export function useWebSocket(
             dealerSeat: payload.dealerSeat,
             smallBlindSeat: payload.smallBlindSeat,
             bigBlindSeat: payload.bigBlindSeat,
+            playerBets: {}, // Clear player bets for new hand
           }));
           console.log('[useWebSocket] gameState updated with dealer:', payload.dealerSeat, 'SB:', payload.smallBlindSeat, 'BB:', payload.bigBlindSeat);
         } else if (message.type === 'blind_posted' && message.payload) {
-          // Handle blind_posted message - update pot
+          // Handle blind_posted message - update pot and player bets
           // Payload can be either a string (needs parsing) or already an object
           console.log('[useWebSocket] blind_posted received, payload:', message.payload);
           const payload = typeof message.payload === 'string'
@@ -286,6 +289,10 @@ export function useWebSocket(
           setGameState((prev) => ({
             ...prev,
             pot: prev.pot + payload.amount,
+            playerBets: {
+              ...prev.playerBets,
+              [payload.seatIndex]: (prev.playerBets[payload.seatIndex] || 0) + payload.amount,
+            },
           }));
           console.log('[useWebSocket] gameState updated, pot:', payload.amount);
           // Also update table state with new stack
@@ -376,6 +383,24 @@ export function useWebSocket(
             updated.pot = payload.pot;
             updated.currentActor = payload.nextActor;
             updated.roundOver = payload.roundOver;
+            
+            // Update player bets based on action
+            if (payload.action === 'call' || payload.action === 'raise') {
+              // Add the amount acted to the player's current bet
+              updated.playerBets = {
+                ...prev.playerBets,
+                [payload.seatIndex]: (prev.playerBets[payload.seatIndex] || 0) + payload.amountActed,
+              };
+            } else if (payload.action === 'check') {
+              // Check doesn't add to bets, but ensure player has entry
+              if (!(payload.seatIndex in prev.playerBets)) {
+                updated.playerBets = {
+                  ...prev.playerBets,
+                  [payload.seatIndex]: 0,
+                };
+              }
+            }
+            // Note: fold doesn't update playerBets, keeps their existing bet visible
             
             // If player folded, add to folded players list
             if (payload.action === 'fold') {

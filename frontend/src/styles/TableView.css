@@ -160,6 +160,26 @@
   z-index: 10;
 }
 
+/* Bet Amount Display */
+.bet-amount {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #16a34a;
+  background-color: #dcfce7;
+  border: 2px solid #16a34a;
+  border-radius: 6px;
+  padding: 4px 12px;
+  margin: 6px 0;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(22, 163, 74, 0.2);
+}
+
+.seat.own-seat .bet-amount {
+  color: #15803d;
+  background-color: #bbf7d0;
+  border-color: #15803d;
+}
+
 /* Hole Cards Display */
 .hole-cards {
   display: flex;

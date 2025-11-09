@@ -21,6 +21,7 @@ interface GameState {
   roundOver?: boolean | null;
   minRaise?: number;
   maxRaise?: number;
+  playerBets?: Record<number, number>;
 }
 
 interface TableViewProps {
@@ -107,6 +108,8 @@ export function TableView({
         payload,
       });
       onSendMessage(message);
+      // Clear raise input after any action
+      setRaiseAmount('');
     }
   };
 
@@ -155,6 +158,13 @@ export function TableView({
 
               <p className="seat-number">Seat {seat.index}</p>
               <p className="seat-player">{seat.playerName || 'Empty'}</p>
+
+              {/* Bet Amount Display */}
+              {seat.playerName && gameState?.playerBets && gameState.playerBets[seat.index] !== undefined && gameState.playerBets[seat.index] > 0 && (
+                <div className="bet-amount">
+                  💵 {gameState.playerBets[seat.index]}
+                </div>
+              )}
 
               {/* Hole Cards Display */}
               {seat.index === currentSeatIndex && gameState?.holeCards && (
