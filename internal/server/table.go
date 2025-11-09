@@ -156,8 +156,8 @@ func (h *Hand) DetermineWinner(seats []*Seat) (winners []int, winningRank *HandR
 }
 
 // HandleShowdown orchestrates the showdown logic
-// Determines winner(s) and prepares for pot distribution (Phase 3)
-// For now, just logs the winner(s)
+// Determines winner(s) and distributes pot (Phase 3 complete)
+// Handles both full showdown with multiple players and early winner when all others fold
 func (t *Table) HandleShowdown() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -183,6 +183,16 @@ func (t *Table) HandleShowdown() {
 				if t.Server != nil {
 					t.Server.logger.Info("early winner (all folded)", "tableID", t.ID, "winner", i)
 				}
+
+				// Distribute pot to the early winner
+				distribution := t.DistributePot([]int{i}, t.CurrentHand.Pot)
+				for seatIdx, amount := range distribution {
+					t.Seats[seatIdx].Stack += amount
+				}
+
+				// Handle bust-outs (clear seats with stack == 0)
+				t.handleBustOutsLocked()
+
 				return
 			}
 		}
@@ -202,7 +212,7 @@ func (t *Table) HandleShowdown() {
 		return
 	}
 
-	// Log winners (pot distribution will be implemented in Phase 3)
+	// Log winners
 	if t.Server != nil {
 		if len(winners) == 1 {
 			t.Server.logger.Info("showdown winner determined", "tableID", t.ID, "winner", winners[0], "rank", winningRank.Rank)
@@ -210,6 +220,59 @@ func (t *Table) HandleShowdown() {
 			t.Server.logger.Info("showdown tie", "tableID", t.ID, "winners", winners, "rank", winningRank.Rank)
 		}
 	}
+
+	// Distribute the pot to winners
+	distribution := t.DistributePot(winners, t.CurrentHand.Pot)
+	for seatIdx, amount := range distribution {
+		t.Seats[seatIdx].Stack += amount
+	}
+
+	// Handle bust-outs (clear seats with stack == 0) - use locked version since we already hold lock
+	t.handleBustOutsLocked()
+}
+
+// DistributePot divides the pot among winners, with remainder going to the first winner
+// Returns map of seat index to amount won. Remainder chip goes to first winner in list.
+func (t *Table) DistributePot(winners []int, pot int) map[int]int {
+	result := make(map[int]int)
+	if len(winners) == 0 {
+		return result
+	}
+
+	// Calculate share per winner
+	share := pot / len(winners)
+	remainder := pot % len(winners)
+
+	// Distribute equal share to all winners
+	for _, seatIdx := range winners {
+		result[seatIdx] = share
+	}
+
+	// Give remainder to first winner
+	if remainder > 0 {
+		result[winners[0]] += remainder
+	}
+
+	return result
+}
+
+// HandleBustOuts clears seats with stack == 0 (Token = nil, Status = "empty")
+// This version assumes the lock is already held (use for internal calls within locked sections)
+func (t *Table) handleBustOutsLocked() {
+	for i := 0; i < 6; i++ {
+		if t.Seats[i].Stack == 0 && t.Seats[i].Token != nil {
+			t.Seats[i].Token = nil
+			t.Seats[i].Status = "empty"
+		}
+	}
+}
+
+// HandleBustOuts clears seats with stack == 0 (Token = nil, Status = "empty") - thread-safe
+func (t *Table) HandleBustOuts() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	t.handleBustOutsLocked()
 }
 
 // GetOccupiedSeatCount returns the count of seats with non-nil Token (thread-safe)
