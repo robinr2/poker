@@ -1,0 +1,17 @@
+
+interface ActionRequestPayload {
+  seatIndex: number;
+  validActions: string[];
+  callAmount: number;
+}
+
+interface ActionResultPayload {
+  seatIndex: number;
+  action: string;
+  amount: number;
+  newStack: number;
+  pot: number;
+  nextActor: number | null;
+  roundOver: boolean;
+  validActions?: string[];
+}

@@ -763,3 +763,199 @@ describe('useWebSocket', () => {
      });
    });
 });
+
+describe('Action Request and Result Handlers', () => {
+  describe('TestUseWebSocket_ActionRequest', () => {
+    it('should update game state when action_request message is received', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      const actionRequestMessage = JSON.stringify({
+        type: 'action_request',
+        payload: {
+          seatIndex: 2,
+          validActions: ['fold', 'call'],
+          callAmount: 20,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(actionRequestMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.currentActor).toBe(2);
+        expect(result.current.gameState.validActions).toEqual(['fold', 'call']);
+        expect(result.current.gameState.callAmount).toBe(20);
+      });
+    });
+
+    it('should handle action_request with check available', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      const actionRequestMessage = JSON.stringify({
+        type: 'action_request',
+        payload: {
+          seatIndex: 1,
+          validActions: ['fold', 'check'],
+          callAmount: 0,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(actionRequestMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.currentActor).toBe(1);
+        expect(result.current.gameState.validActions).toEqual(['fold', 'check']);
+        expect(result.current.gameState.callAmount).toBe(0);
+      });
+    });
+  });
+
+  describe('TestUseWebSocket_ActionResult', () => {
+    it('should update game state when action_result message is received', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      // Set initial table state
+      const initialTableState = JSON.stringify({
+        type: 'table_state',
+        payload: {
+          tableId: 'table-1',
+          seats: [
+            { index: 0, playerName: 'Alice', status: 'occupied', stack: 1000 },
+            { index: 1, playerName: 'Bob', status: 'occupied', stack: 980 },
+            { index: 2, playerName: 'Charlie', status: 'occupied', stack: 1000 },
+          ],
+          pot: 30,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(initialTableState));
+      });
+
+      await waitFor(() => {
+        expect(result.current.tableState?.seats[1].stack).toBe(980);
+        expect(result.current.gameState.pot).toBe(30);
+      });
+
+      // Player 1 calls 20
+      const actionResultMessage = JSON.stringify({
+        type: 'action_result',
+        payload: {
+          seatIndex: 1,
+          action: 'call',
+          amount: 20,
+          newStack: 960,
+          pot: 50,
+          nextActor: 2,
+          roundOver: false,
+          validActions: ['fold', 'call'],
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(actionResultMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.tableState?.seats[1].stack).toBe(960);
+        expect(result.current.gameState.pot).toBe(50);
+        expect(result.current.gameState.currentActor).toBe(2);
+        expect(result.current.gameState.validActions).toEqual(['fold', 'call']);
+      });
+    });
+
+    it('should mark player as folded when fold action result received', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      // Set initial table state
+      const initialTableState = JSON.stringify({
+        type: 'table_state',
+        payload: {
+          tableId: 'table-1',
+          seats: [
+            { index: 0, playerName: 'Alice', status: 'occupied', stack: 1000 },
+            { index: 1, playerName: 'Bob', status: 'occupied', stack: 1000 },
+          ],
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(initialTableState));
+      });
+
+      // Player 0 folds
+      const actionResultMessage = JSON.stringify({
+        type: 'action_result',
+        payload: {
+          seatIndex: 0,
+          action: 'fold',
+          amount: 0,
+          newStack: 1000,
+          pot: 30,
+          nextActor: 1,
+          roundOver: false,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(actionResultMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.foldedPlayers).toContain(0);
+        expect(result.current.gameState.pot).toBe(30);
+        expect(result.current.gameState.currentActor).toBe(1);
+      });
+    });
+
+    it('should handle betting round completion when roundOver is true', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      const actionResultMessage = JSON.stringify({
+        type: 'action_result',
+        payload: {
+          seatIndex: 2,
+          action: 'call',
+          amount: 20,
+          newStack: 980,
+          pot: 60,
+          nextActor: null,
+          roundOver: true,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(actionResultMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.pot).toBe(60);
+        expect(result.current.gameState.currentActor).toBeNull();
+        expect(result.current.gameState.roundOver).toBe(true);
+      });
+    });
+  });
+});

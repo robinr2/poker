@@ -36,11 +36,6 @@ interface GameState {
   bigBlindSeat: number | null;
   holeCards: [string, string] | null;
   pot: number;
-  currentActor: number | null;
-  validActions: string[] | null;
-  callAmount: number | null;
-  foldedPlayers: number[];
-  roundOver: boolean | null;
   handInProgress?: boolean;
 }
 
@@ -63,23 +58,6 @@ interface Card {
 
 interface CardsDealtPayload {
   holeCards: Record<number, Card[]>;
-}
-
-interface ActionRequestPayload {
-  seatIndex: number;
-  validActions: string[];
-  callAmount: number;
-}
-
-interface ActionResultPayload {
-  seatIndex: number;
-  action: string;
-  amount: number;
-  newStack: number;
-  pot: number;
-  nextActor: number | null;
-  roundOver: boolean;
-  validActions?: string[];
 }
 
 interface UseWebSocketReturn {
@@ -114,11 +92,6 @@ export function useWebSocket(
     bigBlindSeat: null,
     holeCards: null,
     pot: 0,
-    currentActor: null,
-    validActions: null,
-    callAmount: null,
-    foldedPlayers: [],
-    roundOver: null,
   });
   const serviceRef = useRef<WebSocketService | null>(null);
   const onMessageRef = useRef(options?.onMessage);
@@ -311,59 +284,6 @@ export function useWebSocket(
               console.log('[useWebSocket] gameState updated with hole cards:', cardStrings);
             }
           }
-        } else if (message.type === 'action_request' && message.payload) {
-          // Handle action_request message
-          console.log('[useWebSocket] action_request received, payload:', message.payload);
-          const payload = typeof message.payload === 'string'
-            ? JSON.parse(message.payload) as ActionRequestPayload
-            : message.payload as ActionRequestPayload;
-          console.log('[useWebSocket] action_request payload:', payload);
-          setGameState((prev) => ({
-            ...prev,
-            currentActor: payload.seatIndex,
-            validActions: payload.validActions,
-            callAmount: payload.callAmount,
-          }));
-        } else if (message.type === 'action_result' && message.payload) {
-          // Handle action_result message
-          console.log('[useWebSocket] action_result received, payload:', message.payload);
-          const payload = typeof message.payload === 'string'
-            ? JSON.parse(message.payload) as ActionResultPayload
-            : message.payload as ActionResultPayload;
-          console.log('[useWebSocket] action_result payload:', payload);
-          
-          // Update table state with new stack
-          setTableState((prev) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              seats: prev.seats.map((seat) =>
-                seat.index === payload.seatIndex
-                  ? { ...seat, stack: payload.newStack }
-                  : seat
-              ),
-            };
-          });
-
-          // Update game state
-          setGameState((prev) => {
-            const updated = { ...prev };
-            updated.pot = payload.pot;
-            updated.currentActor = payload.nextActor;
-            updated.roundOver = payload.roundOver;
-            
-            // If player folded, add to folded players list
-            if (payload.action === 'fold') {
-              updated.foldedPlayers = [...prev.foldedPlayers, payload.seatIndex];
-            }
-            
-            // Update valid actions if provided
-            if (payload.validActions) {
-              updated.validActions = payload.validActions;
-            }
-            
-            return updated;
-          });
         }
       } catch {
         // Silently ignore parsing errors for non-JSON messages

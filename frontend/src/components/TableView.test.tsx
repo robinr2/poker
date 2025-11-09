@@ -832,3 +832,315 @@ describe('TableView', () => {
      });
    });
 });
+
+describe('Action Bar Tests - Phase 5', () => {
+  const mockSeats: SeatInfo[] = [
+    { index: 0, playerName: 'Alice', status: 'occupied', stack: 1000 },
+    { index: 1, playerName: 'Bob', status: 'occupied', stack: 980 },
+    { index: 2, playerName: 'Charlie', status: 'occupied', stack: 1000 },
+  ];
+
+  interface ExtendedGameState extends GameState {
+    currentActor?: number | null;
+    validActions?: string[] | null;
+    callAmount?: number | null;
+    foldedPlayers?: number[];
+    roundOver?: boolean | null;
+  }
+
+  describe('TestTableView_ActionButtonsVisible', () => {
+    it('should show action buttons only when player is current actor', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 1, // Bob is current actor
+        validActions: ['fold', 'call'],
+        callAmount: 20,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1} // Current player is Bob
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      // Action buttons should be visible
+      expect(screen.getByRole('button', { name: /Fold/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Call/i })).toBeInTheDocument();
+    });
+
+    it('should not show action buttons when player is not current actor', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 0, // Alice is current actor
+        validActions: ['fold', 'call'],
+        callAmount: 20,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1} // Current player is Bob (not the actor)
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      // Action buttons should not be visible
+      expect(screen.queryByRole('button', { name: /Fold/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Call/i })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('TestTableView_CallButtonAmount', () => {
+    it('should display Call button with amount', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 1,
+        validActions: ['fold', 'call'],
+        callAmount: 20,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      const callButton = screen.getByRole('button', { name: /Call 20/i });
+      expect(callButton).toBeInTheDocument();
+    });
+  });
+
+  describe('TestTableView_CheckVsCall', () => {
+    it('should display Check button when call amount is 0', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 1,
+        validActions: ['fold', 'check'],
+        callAmount: 0,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      expect(screen.getByRole('button', { name: /Check/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Call/i })).not.toBeInTheDocument();
+    });
+
+    it('should display Call button when call amount is greater than 0', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 1,
+        validActions: ['fold', 'call'],
+        callAmount: 50,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      expect(screen.getByRole('button', { name: /Call 50/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Check/i })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('TestTableView_TurnIndicator', () => {
+    it('should highlight current actor seat with turn-active class', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 30,
+        currentActor: 1,
+        validActions: ['fold', 'call'],
+        callAmount: 20,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      const seatContainers = document.querySelectorAll('.seat');
+      expect(seatContainers[1].classList.contains('turn-active')).toBe(true);
+      expect(seatContainers[0].classList.contains('turn-active')).toBe(false);
+      expect(seatContainers[2].classList.contains('turn-active')).toBe(false);
+    });
+  });
+
+  describe('TestTableView_ActionButtonClicks', () => {
+    it('should send fold action when Fold button clicked', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 1,
+        validActions: ['fold', 'call'],
+        callAmount: 20,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      const foldButton = screen.getByRole('button', { name: /Fold/i });
+      fireEvent.click(foldButton);
+
+      expect(mockSendMessage).toHaveBeenCalledOnce();
+      const sentMessage = mockSendMessage.mock.calls[0][0];
+      const message = JSON.parse(sentMessage);
+      expect(message.type).toBe('player_action');
+      expect(message.payload.action).toBe('fold');
+      expect(message.payload.seatIndex).toBe(1);
+    });
+
+    it('should send call action when Call button clicked', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 1,
+        validActions: ['fold', 'call'],
+        callAmount: 20,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      const callButton = screen.getByRole('button', { name: /Call 20/i });
+      fireEvent.click(callButton);
+
+      expect(mockSendMessage).toHaveBeenCalledOnce();
+      const sentMessage = mockSendMessage.mock.calls[0][0];
+      const message = JSON.parse(sentMessage);
+      expect(message.type).toBe('player_action');
+      expect(message.payload.action).toBe('call');
+      expect(message.payload.seatIndex).toBe(1);
+    });
+
+    it('should send check action when Check button clicked', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 1,
+        validActions: ['fold', 'check'],
+        callAmount: 0,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      const checkButton = screen.getByRole('button', { name: /Check/i });
+      fireEvent.click(checkButton);
+
+      expect(mockSendMessage).toHaveBeenCalledOnce();
+      const sentMessage = mockSendMessage.mock.calls[0][0];
+      const message = JSON.parse(sentMessage);
+      expect(message.type).toBe('player_action');
+      expect(message.payload.action).toBe('check');
+      expect(message.payload.seatIndex).toBe(1);
+    });
+  });
+});

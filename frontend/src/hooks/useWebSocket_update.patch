@@ -1,0 +1,14 @@
+--- useWebSocket.ts
++++ useWebSocket.ts
+@@ -33,6 +33,10 @@ interface GameState {
+   smallBlindSeat: number | null;
+   bigBlindSeat: number | null;
+   holeCards: [string, string] | null;
+   pot: number;
++  currentActor: number | null;
++  validActions: string[] | null;
++  callAmount: number | null;
++  foldedPlayers: number[];
++  roundOver: boolean | null;
+   handInProgress?: boolean;
+ }
