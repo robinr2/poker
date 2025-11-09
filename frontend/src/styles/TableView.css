@@ -249,22 +249,44 @@
 
 /* Pot Display */
 .pot-display {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background-color: rgba(31, 41, 55, 0.9);
-  color: #fbbf24;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-size: 1.25rem;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  z-index: 5;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  white-space: nowrap;
-  pointer-events: none;
-}
+   position: absolute;
+   top: 50%;
+   left: 50%;
+   transform: translate(-50%, -50%);
+   background-color: rgba(31, 41, 55, 0.9);
+   color: #fbbf24;
+   padding: 12px 24px;
+   border-radius: 8px;
+   font-size: 1.25rem;
+   font-weight: 700;
+   letter-spacing: 0.5px;
+   z-index: 5;
+   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+   white-space: nowrap;
+   pointer-events: none;
+ }
+
+/* Game Info Section - Street Indicator */
+.game-info {
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   gap: 12px;
+   margin: 20px 0;
+ }
+
+.street-indicator {
+   display: inline-block;
+   background-color: #6366f1;
+   color: white;
+   padding: 10px 20px;
+   border-radius: 8px;
+   font-size: 1.1rem;
+   font-weight: 700;
+   letter-spacing: 1px;
+   box-shadow: 0 4px 8px rgba(99, 102, 241, 0.3);
+   text-transform: uppercase;
+ }
 
 /* Board Cards Display */
 .board-cards {

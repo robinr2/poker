@@ -34,20 +34,21 @@ func NewDeck() []Card {
 
 // Hand represents the current game hand state
 type Hand struct {
-	DealerSeat     int            // Seat number of the dealer
-	SmallBlindSeat int            // Seat number of the small blind
-	BigBlindSeat   int            // Seat number of the big blind
-	Pot            int            // Current pot amount
-	Deck           []Card         // Cards remaining in the deck
-	HoleCards      map[int][]Card // Hole cards for each seat (key = seat number, value = 2 cards)
-	BoardCards     []Card         // Community cards on the board (flop=3, turn=4, river=5)
-	CurrentActor   *int           // Seat number of the player whose turn it is (nil if no active action)
-	CurrentBet     int            // Current bet amount in this round (what players must match)
-	PlayerBets     map[int]int    // Amount each player has bet in current round (key = seat number)
-	FoldedPlayers  map[int]bool   // Players who have folded (key = seat number, value = true if folded)
-	ActedPlayers   map[int]bool   // Players who have acted this round (key = seat number, value = true if acted)
-	Street         string         // Current street: "preflop", "flop", "turn", "river"
-	LastRaise      int            // Amount of the last raise increment (used to compute min-raise)
+	DealerSeat        int            // Seat number of the dealer
+	SmallBlindSeat    int            // Seat number of the small blind
+	BigBlindSeat      int            // Seat number of the big blind
+	Pot               int            // Current pot amount
+	Deck              []Card         // Cards remaining in the deck
+	HoleCards         map[int][]Card // Hole cards for each seat (key = seat number, value = 2 cards)
+	BoardCards        []Card         // Community cards on the board (flop=3, turn=4, river=5)
+	CurrentActor      *int           // Seat number of the player whose turn it is (nil if no active action)
+	CurrentBet        int            // Current bet amount in this round (what players must match)
+	PlayerBets        map[int]int    // Amount each player has bet in current round (key = seat number)
+	FoldedPlayers     map[int]bool   // Players who have folded (key = seat number, value = true if folded)
+	ActedPlayers      map[int]bool   // Players who have acted this round (key = seat number, value = true if acted)
+	Street            string         // Current street: "preflop", "flop", "turn", "river"
+	LastRaise         int            // Amount of the last raise increment (used to compute min-raise)
+	BigBlindHasOption bool           // True when BB has the option to close preflop betting (preflop only)
 }
 
 // Seat represents a seat at a poker table
@@ -466,19 +467,20 @@ func (t *Table) StartHand() error {
 
 	// Step 3: Create new hand and deck with action state initialized
 	hand := &Hand{
-		DealerSeat:     dealerSeat,
-		SmallBlindSeat: sbSeat,
-		BigBlindSeat:   bbSeat,
-		Pot:            0,
-		Deck:           NewDeck(),
-		HoleCards:      make(map[int][]Card),
-		BoardCards:     []Card{},
-		Street:         "preflop",
-		CurrentBet:     bigBlind,
-		PlayerBets:     make(map[int]int),
-		FoldedPlayers:  make(map[int]bool),
-		ActedPlayers:   make(map[int]bool),
-		LastRaise:      bigBlind,
+		DealerSeat:        dealerSeat,
+		SmallBlindSeat:    sbSeat,
+		BigBlindSeat:      bbSeat,
+		Pot:               0,
+		Deck:              NewDeck(),
+		HoleCards:         make(map[int][]Card),
+		BoardCards:        []Card{},
+		Street:            "preflop",
+		CurrentBet:        bigBlind,
+		PlayerBets:        make(map[int]int),
+		FoldedPlayers:     make(map[int]bool),
+		ActedPlayers:      make(map[int]bool),
+		LastRaise:         bigBlind,
+		BigBlindHasOption: true,
 	}
 
 	// Step 4: Shuffle the deck
@@ -971,6 +973,11 @@ func (h *Hand) ProcessAction(seatIndex int, action string, playerStack int, amou
 		// Mark player as folded
 		h.FoldedPlayers[seatIndex] = true
 		h.ActedPlayers[seatIndex] = true
+
+		// Clear BigBlindHasOption if BB acted
+		if seatIndex == h.BigBlindSeat {
+			h.BigBlindHasOption = false
+		}
 		return 0, nil
 
 	case "check":
@@ -982,6 +989,11 @@ func (h *Hand) ProcessAction(seatIndex int, action string, playerStack int, amou
 
 		// Mark player as acted
 		h.ActedPlayers[seatIndex] = true
+
+		// Clear BigBlindHasOption if BB acted
+		if seatIndex == h.BigBlindSeat {
+			h.BigBlindHasOption = false
+		}
 		return 0, nil
 
 	case "call":
@@ -1003,6 +1015,11 @@ func (h *Hand) ProcessAction(seatIndex int, action string, playerStack int, amou
 
 		// Mark player as acted
 		h.ActedPlayers[seatIndex] = true
+
+		// Clear BigBlindHasOption if BB acted
+		if seatIndex == h.BigBlindSeat {
+			h.BigBlindHasOption = false
+		}
 		return chipsToBet, nil
 
 	case "raise":
@@ -1048,6 +1065,9 @@ func (h *Hand) ProcessAction(seatIndex int, action string, playerStack int, amou
 
 		// Mark player as acted
 		h.ActedPlayers[seatIndex] = true
+
+		// Clear BigBlindHasOption on any raise
+		h.BigBlindHasOption = false
 
 		return chipsToBet, nil
 
@@ -1154,6 +1174,7 @@ func (h *Hand) AdvanceStreet() {
 	h.PlayerBets = make(map[int]int)
 	h.ActedPlayers = make(map[int]bool)
 	h.CurrentActor = nil
+	h.BigBlindHasOption = false
 }
 
 // AdvanceToNextStreet advances the hand to the next street by dealing board cards and resetting betting state

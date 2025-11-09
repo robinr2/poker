@@ -4321,3 +4321,334 @@ func TestHand_AdvanceToNextStreet_ErrorsIfInsufficientDeck(t *testing.T) {
 		t.Errorf("expected board to remain empty on error, got %d cards", len(hand.BoardCards))
 	}
 }
+
+// TestHand_FullHandProgression_PreflopToRiver verifies full hand progression through all 4 streets
+func TestHand_FullHandProgression_PreflopToRiver(t *testing.T) {
+	// Create hand starting in preflop
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            30,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+		BoardCards:     []Card{},
+		Street:         "preflop",
+		CurrentBet:     0,
+		PlayerBets:     make(map[int]int),
+		ActedPlayers:   make(map[int]bool),
+		FoldedPlayers:  make(map[int]bool),
+		CurrentActor:   nil,
+	}
+
+	// Shuffle deck
+	err := ShuffleDeck(hand.Deck)
+	if err != nil {
+		t.Fatalf("failed to shuffle deck: %v", err)
+	}
+
+	// Verify initial state
+	if hand.Street != "preflop" {
+		t.Fatalf("expected initial street to be 'preflop', got '%s'", hand.Street)
+	}
+	if len(hand.BoardCards) != 0 {
+		t.Errorf("expected 0 board cards preflop, got %d", len(hand.BoardCards))
+	}
+
+	// Step 1: Advance to flop
+	err = hand.AdvanceToNextStreet()
+	if err != nil {
+		t.Fatalf("failed to advance to flop: %v", err)
+	}
+	if hand.Street != "flop" {
+		t.Errorf("expected street to be 'flop', got '%s'", hand.Street)
+	}
+	if len(hand.BoardCards) != 3 {
+		t.Errorf("expected 3 board cards on flop, got %d", len(hand.BoardCards))
+	}
+
+	// Step 2: Advance to turn
+	err = hand.AdvanceToNextStreet()
+	if err != nil {
+		t.Fatalf("failed to advance to turn: %v", err)
+	}
+	if hand.Street != "turn" {
+		t.Errorf("expected street to be 'turn', got '%s'", hand.Street)
+	}
+	if len(hand.BoardCards) != 4 {
+		t.Errorf("expected 4 board cards on turn, got %d", len(hand.BoardCards))
+	}
+
+	// Step 3: Advance to river
+	err = hand.AdvanceToNextStreet()
+	if err != nil {
+		t.Fatalf("failed to advance to river: %v", err)
+	}
+	if hand.Street != "river" {
+		t.Errorf("expected street to be 'river', got '%s'", hand.Street)
+	}
+	if len(hand.BoardCards) != 5 {
+		t.Errorf("expected 5 board cards on river, got %d", len(hand.BoardCards))
+	}
+
+	// Verify betting state reset after each street advancement
+	if hand.CurrentBet != 0 {
+		t.Errorf("expected CurrentBet to be reset after street advancement, got %d", hand.CurrentBet)
+	}
+}
+
+// TestHand_ActionFlow_ContinuesAcrossStreets verifies actions work smoothly across street transitions
+func TestHand_ActionFlow_ContinuesAcrossStreets(t *testing.T) {
+	// Create hand starting in preflop with multiple players
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            30,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+		BoardCards:     []Card{},
+		Street:         "preflop",
+		CurrentBet:     20,
+		PlayerBets:     map[int]int{0: 0, 1: 10, 2: 20},
+		ActedPlayers:   map[int]bool{1: true, 2: true},
+		FoldedPlayers:  make(map[int]bool),
+		CurrentActor:   nil,
+	}
+
+	// Shuffle deck
+	err := ShuffleDeck(hand.Deck)
+	if err != nil {
+		t.Fatalf("failed to shuffle deck: %v", err)
+	}
+
+	// Verify preflop state
+	if hand.Street != "preflop" {
+		t.Fatalf("expected initial street to be 'preflop', got '%s'", hand.Street)
+	}
+
+	// Step 1: Advance to flop - verify board cards and betting reset
+	err = hand.AdvanceToNextStreet()
+	if err != nil {
+		t.Fatalf("failed to advance to flop: %v", err)
+	}
+	if hand.Street != "flop" {
+		t.Errorf("expected street to be 'flop' after advancement, got '%s'", hand.Street)
+	}
+	if len(hand.BoardCards) != 3 {
+		t.Errorf("expected 3 board cards on flop, got %d", len(hand.BoardCards))
+	}
+	// Betting state should be reset for new street
+	if hand.CurrentBet != 0 {
+		t.Errorf("expected CurrentBet to reset on flop, got %d", hand.CurrentBet)
+	}
+
+	// Step 2: Advance to turn - verify board cards and betting reset
+	err = hand.AdvanceToNextStreet()
+	if err != nil {
+		t.Fatalf("failed to advance to turn: %v", err)
+	}
+	if hand.Street != "turn" {
+		t.Errorf("expected street to be 'turn' after advancement, got '%s'", hand.Street)
+	}
+	if len(hand.BoardCards) != 4 {
+		t.Errorf("expected 4 board cards on turn, got %d", len(hand.BoardCards))
+	}
+	// Betting state should be reset for new street
+	if hand.CurrentBet != 0 {
+		t.Errorf("expected CurrentBet to reset on turn, got %d", hand.CurrentBet)
+	}
+
+	// Step 3: Advance to river - verify board cards and betting reset
+	err = hand.AdvanceToNextStreet()
+	if err != nil {
+		t.Fatalf("failed to advance to river: %v", err)
+	}
+	if hand.Street != "river" {
+		t.Errorf("expected street to be 'river' after advancement, got '%s'", hand.Street)
+	}
+	if len(hand.BoardCards) != 5 {
+		t.Errorf("expected 5 board cards on river, got %d", len(hand.BoardCards))
+	}
+	// Betting state should be reset for new street
+	if hand.CurrentBet != 0 {
+		t.Errorf("expected CurrentBet to reset on river, got %d", hand.CurrentBet)
+	}
+}
+
+// TestHand_BigBlindHasOption_InitiallyTrue verifies flag is true after StartHand()
+func TestHand_BigBlindHasOption_InitiallyTrue(t *testing.T) {
+	// Create a new table
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Seat two players as "active"
+	token1 := "player1"
+	token2 := "player2"
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Stack = 1000
+
+	// Start a hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Verify BigBlindHasOption is true on preflop after StartHand
+	if table.CurrentHand == nil {
+		t.Fatal("expected CurrentHand to be set after StartHand")
+	}
+
+	if !table.CurrentHand.BigBlindHasOption {
+		t.Errorf("expected BigBlindHasOption to be true after StartHand, got %v", table.CurrentHand.BigBlindHasOption)
+	}
+
+	// Verify we're on preflop
+	if table.CurrentHand.Street != "preflop" {
+		t.Errorf("expected street to be 'preflop', got '%s'", table.CurrentHand.Street)
+	}
+}
+
+// TestHand_BigBlindHasOption_ClearedWhenBBChecks verifies flag cleared when BB checks
+func TestHand_BigBlindHasOption_ClearedWhenBBChecks(t *testing.T) {
+	// Create a hand in preflop with BB as next actor
+	hand := &Hand{
+		DealerSeat:        0,
+		SmallBlindSeat:    0,
+		BigBlindSeat:      1,
+		Pot:               30,
+		Deck:              NewDeck(),
+		HoleCards:         make(map[int][]Card),
+		BoardCards:        []Card{},
+		Street:            "preflop",
+		CurrentBet:        20,
+		PlayerBets:        map[int]int{0: 10, 1: 20},
+		ActedPlayers:      map[int]bool{0: true},
+		FoldedPlayers:     make(map[int]bool),
+		BigBlindHasOption: true,
+		CurrentActor:      nil,
+	}
+
+	// BB checks (already matched the bet at 20)
+	_, err := hand.ProcessAction(1, "check", 980)
+	if err != nil {
+		t.Fatalf("failed to process BB check: %v", err)
+	}
+
+	// Verify BigBlindHasOption is now false after BB checks
+	if hand.BigBlindHasOption {
+		t.Errorf("expected BigBlindHasOption to be false after BB checks, got %v", hand.BigBlindHasOption)
+	}
+}
+
+// TestHand_BigBlindHasOption_ClearedWhenBBRaises verifies flag cleared when BB raises
+func TestHand_BigBlindHasOption_ClearedWhenBBRaises(t *testing.T) {
+	// Create a hand in preflop with BB as next actor
+	hand := &Hand{
+		DealerSeat:        0,
+		SmallBlindSeat:    0,
+		BigBlindSeat:      1,
+		Pot:               30,
+		Deck:              NewDeck(),
+		HoleCards:         make(map[int][]Card),
+		BoardCards:        []Card{},
+		Street:            "preflop",
+		CurrentBet:        20,
+		PlayerBets:        map[int]int{0: 10, 1: 20},
+		ActedPlayers:      map[int]bool{0: true},
+		FoldedPlayers:     make(map[int]bool),
+		BigBlindHasOption: true,
+		LastRaise:         20,
+		CurrentActor:      nil,
+	}
+
+	// BB raises to 60
+	_, err := hand.ProcessAction(1, "raise", 980, 60)
+	if err != nil {
+		t.Fatalf("failed to process BB raise: %v", err)
+	}
+
+	// Verify BigBlindHasOption is now false after BB raises
+	if hand.BigBlindHasOption {
+		t.Errorf("expected BigBlindHasOption to be false after BB raises, got %v", hand.BigBlindHasOption)
+	}
+}
+
+// TestHand_BigBlindHasOption_ClearedOnAnyRaise verifies flag cleared when any player raises
+func TestHand_BigBlindHasOption_ClearedOnAnyRaise(t *testing.T) {
+	// Create a hand in preflop with SB as next actor (after blinds posted)
+	hand := &Hand{
+		DealerSeat:        0,
+		SmallBlindSeat:    0,
+		BigBlindSeat:      1,
+		Pot:               30,
+		Deck:              NewDeck(),
+		HoleCards:         make(map[int][]Card),
+		BoardCards:        []Card{},
+		Street:            "preflop",
+		CurrentBet:        20,
+		PlayerBets:        map[int]int{0: 10, 1: 20},
+		ActedPlayers:      map[int]bool{},
+		FoldedPlayers:     make(map[int]bool),
+		BigBlindHasOption: true,
+		LastRaise:         20,
+		CurrentActor:      nil,
+	}
+
+	// SB raises to 50 (any raise should clear the flag)
+	_, err := hand.ProcessAction(0, "raise", 990, 50)
+	if err != nil {
+		t.Fatalf("failed to process SB raise: %v", err)
+	}
+
+	// Verify BigBlindHasOption is now false when any player raises
+	if hand.BigBlindHasOption {
+		t.Errorf("expected BigBlindHasOption to be false after any raise, got %v", hand.BigBlindHasOption)
+	}
+}
+
+// TestHand_BigBlindHasOption_ClearedOnStreetAdvance verifies flag cleared when advancing to flop
+func TestHand_BigBlindHasOption_ClearedOnStreetAdvance(t *testing.T) {
+	// Create a hand in preflop
+	hand := &Hand{
+		DealerSeat:        0,
+		SmallBlindSeat:    1,
+		BigBlindSeat:      2,
+		Pot:               30,
+		Deck:              NewDeck(),
+		HoleCards:         make(map[int][]Card),
+		BoardCards:        []Card{},
+		Street:            "preflop",
+		CurrentBet:        0,
+		PlayerBets:        make(map[int]int),
+		ActedPlayers:      make(map[int]bool),
+		FoldedPlayers:     make(map[int]bool),
+		BigBlindHasOption: true,
+		CurrentActor:      nil,
+	}
+
+	// Shuffle deck
+	err := ShuffleDeck(hand.Deck)
+	if err != nil {
+		t.Fatalf("failed to shuffle deck: %v", err)
+	}
+
+	// Advance to flop
+	err = hand.AdvanceToNextStreet()
+	if err != nil {
+		t.Fatalf("failed to advance to flop: %v", err)
+	}
+
+	// Verify BigBlindHasOption is now false after advancing to flop
+	if hand.BigBlindHasOption {
+		t.Errorf("expected BigBlindHasOption to be false after advancing to flop, got %v", hand.BigBlindHasOption)
+	}
+
+	// Verify we're on flop
+	if hand.Street != "flop" {
+		t.Errorf("expected street to be 'flop', got '%s'", hand.Street)
+	}
+}

@@ -214,10 +214,17 @@ export function TableView({
           ))}
         </div>
 
-        {/* Pot Display in Center */}
-        {gameState && gameState.pot > 0 && (
-          <div className="pot-display">Pot: {gameState.pot}</div>
-        )}
+       {/* Game Info Section */}
+       {gameState && gameState.pot > 0 && (
+         <div className="game-info">
+           {gameState.street && (
+             <div className="street-indicator">
+               {gameState.street.charAt(0).toUpperCase() + gameState.street.slice(1)}
+             </div>
+           )}
+           <div className="pot-display">Pot: {gameState.pot}</div>
+         </div>
+       )}
 
         {/* Board Cards Display - only show when hand is active */}
         {gameState && gameState.pot > 0 && (

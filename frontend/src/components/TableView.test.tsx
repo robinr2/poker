@@ -2182,3 +2182,172 @@ describe('Phase 4: Board Card Display', () => {
     });
   });
 });
+
+describe('Phase 5: Street Indicator', () => {
+  const mockSeats: SeatInfo[] = [
+    { index: 0, playerName: 'Alice', status: 'occupied', stack: 1000 },
+    { index: 1, playerName: 'Bob', status: 'occupied', stack: 980 },
+    { index: 2, playerName: 'Charlie', status: 'occupied', stack: 1000 },
+    { index: 3, playerName: null, status: 'empty' },
+    { index: 4, playerName: null, status: 'empty' },
+    { index: 5, playerName: null, status: 'empty' },
+  ];
+
+  interface ExtendedGameState extends GameState {
+    boardCards?: string[];
+    street?: string;
+  }
+
+  describe('TestTableView_StreetIndicator', () => {
+    it('should display Preflop street indicator', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 30,
+        boardCards: [],
+        street: 'preflop',
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      expect(screen.getByText(/Preflop/i)).toBeInTheDocument();
+    });
+
+    it('should display Flop street indicator', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 60,
+        boardCards: ['As', 'Kh', 'Qd'],
+        street: 'flop',
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      expect(screen.getByText(/Flop/i)).toBeInTheDocument();
+    });
+
+    it('should display Turn street indicator', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 120,
+        boardCards: ['As', 'Kh', 'Qd', 'Jc'],
+        street: 'turn',
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      expect(screen.getByText(/Turn/i)).toBeInTheDocument();
+    });
+
+    it('should display River street indicator', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 200,
+        boardCards: ['As', 'Kh', 'Qd', 'Jc', 'Ts'],
+        street: 'river',
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      expect(screen.getByText(/River/i)).toBeInTheDocument();
+    });
+
+    it('should update street indicator when board_dealt event triggers street change', () => {
+      const mockOnLeave = vi.fn();
+      const initialGameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 30,
+        boardCards: [],
+        street: 'preflop',
+      };
+
+      const { rerender } = render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={initialGameState}
+        />
+      );
+
+      // Initially should show Preflop
+      expect(screen.getByText(/Preflop/i)).toBeInTheDocument();
+
+      // Update to Flop
+      const flopGameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 60,
+        boardCards: ['As', 'Kh', 'Qd'],
+        street: 'flop',
+      };
+
+      rerender(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={flopGameState}
+        />
+      );
+
+      // Should now show Flop
+      expect(screen.getByText(/Flop/i)).toBeInTheDocument();
+      expect(screen.queryByText(/Preflop/i)).not.toBeInTheDocument();
+    });
+  });
+});
