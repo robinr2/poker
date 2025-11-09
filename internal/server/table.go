@@ -401,7 +401,11 @@ func (t *Table) StartHand() error {
 		return fmt.Errorf("failed to get blind positions: %w", err)
 	}
 
-	// Step 3: Create new hand and deck
+	// Blind amounts
+	const smallBlind = 10
+	const bigBlind = 20
+
+	// Step 3: Create new hand and deck with action state initialized
 	hand := &Hand{
 		DealerSeat:     dealerSeat,
 		SmallBlindSeat: sbSeat,
@@ -409,6 +413,11 @@ func (t *Table) StartHand() error {
 		Pot:            0,
 		Deck:           NewDeck(),
 		HoleCards:      make(map[int][]Card),
+		Street:         "preflop",
+		CurrentBet:     bigBlind,
+		PlayerBets:     make(map[int]int),
+		FoldedPlayers:  make(map[int]bool),
+		ActedPlayers:   make(map[int]bool),
 	}
 
 	// Step 4: Shuffle the deck
@@ -419,9 +428,6 @@ func (t *Table) StartHand() error {
 	}
 
 	// Step 5: Post blinds (handle all-in if necessary)
-	const smallBlind = 10
-	const bigBlind = 20
-
 	// Post small blind
 	sbPosted := smallBlind
 	if t.Seats[sbSeat].Stack < smallBlind {
@@ -444,12 +450,20 @@ func (t *Table) StartHand() error {
 
 	hand.Pot = sbPosted + bbPosted
 
+	// Update PlayerBets to track blinds posted
+	hand.PlayerBets[sbSeat] = sbPosted
+	hand.PlayerBets[bbSeat] = bbPosted
+
 	// Step 6: Deal hole cards to all active players
 	err = hand.DealHoleCards(t.Seats)
 	if err != nil {
 		t.mu.Unlock()
 		return fmt.Errorf("failed to deal hole cards: %w", err)
 	}
+
+	// Step 6a: Set the first actor (who acts first preflop)
+	firstActor := hand.GetFirstActor(t.Seats)
+	hand.CurrentActor = &firstActor
 
 	// Step 7: Set CurrentHand
 	t.CurrentHand = hand
@@ -788,4 +802,80 @@ func (h *Hand) ProcessAction(seatIndex int, action string, playerStack int) (int
 	default:
 		return 0, fmt.Errorf("invalid action: %s", action)
 	}
+}
+
+// IsBettingRoundComplete determines if the current betting round is over
+// Returns true if:
+// - Exactly one active player remains (all others have folded), OR
+// - All active players have acted AND all active players have matched the current bet
+// Returns false otherwise
+func (h *Hand) IsBettingRoundComplete(seats [6]Seat) bool {
+	// Initialize maps if needed
+	if h.FoldedPlayers == nil {
+		h.FoldedPlayers = make(map[int]bool)
+	}
+	if h.ActedPlayers == nil {
+		h.ActedPlayers = make(map[int]bool)
+	}
+	if h.PlayerBets == nil {
+		h.PlayerBets = make(map[int]int)
+	}
+
+	// Count active players and folded players
+	activeCount := 0
+	activePlayers := []int{}
+	for i := 0; i < 6; i++ {
+		if seats[i].Status == "active" {
+			activeCount++
+			activePlayers = append(activePlayers, i)
+		}
+	}
+
+	// Count non-folded active players
+	nonFoldedCount := 0
+	for _, seatNum := range activePlayers {
+		if !h.FoldedPlayers[seatNum] {
+			nonFoldedCount++
+		}
+	}
+
+	// If only one player remains (all others folded), round is complete
+	if nonFoldedCount <= 1 {
+		return true
+	}
+
+	// Check if all active (non-folded) players have acted
+	for _, seatNum := range activePlayers {
+		if !h.FoldedPlayers[seatNum] && !h.ActedPlayers[seatNum] {
+			// This player hasn't acted yet, round not complete
+			return false
+		}
+	}
+
+	// Check if all active (non-folded) players have matched the current bet
+	for _, seatNum := range activePlayers {
+		if !h.FoldedPlayers[seatNum] {
+			playerBet := h.PlayerBets[seatNum]
+			if playerBet != h.CurrentBet {
+				// This player hasn't matched the current bet
+				return false
+			}
+		}
+	}
+
+	// All conditions met: all non-folded players have acted and matched the bet
+	return true
+}
+
+// AdvanceAction moves the current actor to the next active player
+// Returns the seat number of the next actor, or nil if no next actor exists (only one player left)
+// Returns error if CurrentActor is nil (no current actor set)
+func (h *Hand) AdvanceAction(seats [6]Seat) (*int, error) {
+	if h.CurrentActor == nil {
+		return nil, fmt.Errorf("current actor is nil")
+	}
+
+	// Get the next active seat after current actor
+	nextSeat := h.GetNextActiveSeat(*h.CurrentActor, seats)
+	return nextSeat, nil
 }

@@ -751,10 +751,10 @@ describe('TableView', () => {
          pot: 0,
        };
 
-       const seatsWithCardCount: SeatInfo[] = mockSeats.map((seat, idx) => ({
-         ...seat,
-         cardCount: seat.playerName ? 2 : undefined,
-       }));
+        const seatsWithCardCount: SeatInfo[] = mockSeats.map((seat) => ({
+          ...seat,
+          cardCount: seat.playerName ? 2 : undefined,
+        }));
 
        render(
          <TableView

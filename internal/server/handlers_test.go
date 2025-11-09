@@ -1517,3 +1517,328 @@ func TestTableStateCardCountsForSpectators(t *testing.T) {
 		}
 	}
 }
+
+// ============= Phase 4: WebSocket Protocol & Handler Tests =============
+
+// TestHandlePlayerAction_ValidCall verifies call action processes
+func TestHandlePlayerAction_ValidCall(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players with sessions
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	sm.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	sm.UpdateSession(token2, &table.ID, &[]int{1}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Verify CurrentActor is set
+	table.mu.RLock()
+	currentActor := table.CurrentHand.CurrentActor
+	table.mu.RUnlock()
+	if currentActor == nil || *currentActor != 0 {
+		t.Fatalf("expected CurrentActor to be seat 0, got %v", currentActor)
+	}
+
+	// Player at seat 0 calls
+	client := &Client{
+		hub:   hub,
+		Token: token1,
+		send:  make(chan []byte, 256),
+	}
+
+	err = server.HandlePlayerAction(sm, client, 0, "call")
+	if err != nil {
+		t.Errorf("expected no error for valid call, got %v", err)
+	}
+
+	// Verify action was processed
+	table.mu.RLock()
+	if table.CurrentHand.ActedPlayers == nil {
+		t.Fatal("ActedPlayers should be initialized")
+	}
+	if !table.CurrentHand.ActedPlayers[0] {
+		t.Errorf("expected seat 0 to be marked as acted")
+	}
+	table.mu.RUnlock()
+}
+
+// TestHandlePlayerAction_ValidCheck verifies check action processes
+func TestHandlePlayerAction_ValidCheck(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players with sessions
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	sm.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	sm.UpdateSession(token2, &table.ID, &[]int{1}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// First player calls to match BB
+	client := &Client{
+		hub:   hub,
+		Token: token1,
+		send:  make(chan []byte, 256),
+	}
+
+	err = server.HandlePlayerAction(sm, client, 0, "call")
+	if err != nil {
+		t.Errorf("unexpected error on first call: %v", err)
+	}
+
+	// Second player should be able to check (already posted BB)
+	client2 := &Client{
+		hub:   hub,
+		Token: token2,
+		send:  make(chan []byte, 256),
+	}
+
+	// Verify check is valid action for seat 1
+	table.mu.RLock()
+	validActions := table.CurrentHand.GetValidActions(1)
+	table.mu.RUnlock()
+
+	hasCheck := false
+	for _, action := range validActions {
+		if action == "check" {
+			hasCheck = true
+			break
+		}
+	}
+	if !hasCheck {
+		t.Errorf("expected check to be valid action for seat 1, got %v", validActions)
+	}
+
+	err = server.HandlePlayerAction(sm, client2, 1, "check")
+	if err != nil {
+		t.Errorf("expected no error for valid check, got %v", err)
+	}
+
+	// Verify action was processed
+	table.mu.RLock()
+	if !table.CurrentHand.ActedPlayers[1] {
+		t.Errorf("expected seat 1 to be marked as acted")
+	}
+	table.mu.RUnlock()
+}
+
+// TestHandlePlayerAction_ValidFold verifies fold action marks player folded
+func TestHandlePlayerAction_ValidFold(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players with sessions
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	sm.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	sm.UpdateSession(token2, &table.ID, &[]int{1}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Player at seat 0 folds
+	client := &Client{
+		hub:   hub,
+		Token: token1,
+		send:  make(chan []byte, 256),
+	}
+
+	err = server.HandlePlayerAction(sm, client, 0, "fold")
+	if err != nil {
+		t.Errorf("expected no error for valid fold, got %v", err)
+	}
+
+	// Verify player was marked as folded
+	table.mu.RLock()
+	if table.CurrentHand.FoldedPlayers == nil {
+		t.Fatal("FoldedPlayers should be initialized")
+	}
+	if !table.CurrentHand.FoldedPlayers[0] {
+		t.Errorf("expected seat 0 to be marked as folded")
+	}
+	table.mu.RUnlock()
+}
+
+// TestHandlePlayerAction_InvalidAction verifies error on invalid action
+func TestHandlePlayerAction_InvalidAction(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players with sessions
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	sm.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	sm.UpdateSession(token2, &table.ID, &[]int{1}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Player at seat 0 tries to check (but must call since CurrentBet=20 and they bet 10)
+	client := &Client{
+		hub:   hub,
+		Token: token1,
+		send:  make(chan []byte, 256),
+	}
+
+	err = server.HandlePlayerAction(sm, client, 0, "check")
+	if err == nil {
+		t.Errorf("expected error for invalid check, got nil")
+	}
+}
+
+// TestHandlePlayerAction_OutOfTurn verifies error when not current actor
+func TestHandlePlayerAction_OutOfTurn(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players with sessions
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	sm.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	sm.UpdateSession(token2, &table.ID, &[]int{1}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Player at seat 1 tries to act (but seat 0 is current actor)
+	client := &Client{
+		hub:   hub,
+		Token: token2,
+		send:  make(chan []byte, 256),
+	}
+
+	err = server.HandlePlayerAction(sm, client, 1, "call")
+	if err == nil {
+		t.Errorf("expected error for out of turn action, got nil")
+	}
+}

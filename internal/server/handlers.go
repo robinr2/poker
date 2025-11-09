@@ -81,6 +81,34 @@ type CardsDealtPayload struct {
 	HoleCards map[int][]Card `json:"holeCards"`
 }
 
+// ActionRequestPayload represents the payload for action_request messages
+type ActionRequestPayload struct {
+	SeatIndex    int      `json:"seatIndex"`
+	ValidActions []string `json:"validActions"`
+	CallAmount   int      `json:"callAmount"`
+	CurrentBet   int      `json:"currentBet"`
+	PlayerBet    int      `json:"playerBet"`
+	Pot          int      `json:"pot"`
+}
+
+// PlayerActionPayload represents the payload for player_action messages
+type PlayerActionPayload struct {
+	SeatIndex int    `json:"seatIndex"`
+	Action    string `json:"action"`
+}
+
+// ActionResultPayload represents the payload for action_result messages
+type ActionResultPayload struct {
+	SeatIndex   int    `json:"seatIndex"`
+	Action      string `json:"action"`
+	AmountActed int    `json:"amountActed"`
+	NewStack    int    `json:"newStack"`
+	Pot         int    `json:"pot"`
+	NextActor   *int   `json:"nextActor,omitempty"`
+	RoundOver   bool   `json:"roundOver,omitempty"`
+	RoundWinner *int   `json:"roundWinner,omitempty"`
+}
+
 // HandleSetName processes a set_name message and creates a session for the client
 func (c *Client) HandleSetName(sm *SessionManager, server *Server, logger *slog.Logger, payload []byte) error {
 	var setNamePayload SetNamePayload
@@ -1051,6 +1079,97 @@ func (c *Client) HandleStartHand(sm *SessionManager, server *Server, logger *slo
 	}
 
 	logger.Info("hand started via temporary testing button", "token", c.Token, "tableId", *session.TableID)
+
+	return nil
+}
+
+// HandlePlayerAction processes a player action (fold, check, call) during a hand
+func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, seatIndex int, action string) error {
+	// Get the session for the client
+	session, err := sm.GetSession(client.Token)
+	if err != nil {
+		return fmt.Errorf("session not found: %w", err)
+	}
+
+	// Verify player is seated at a table
+	if session.TableID == nil || session.SeatIndex == nil {
+		return fmt.Errorf("player not seated")
+	}
+
+	// Verify seat index matches the session
+	if *session.SeatIndex != seatIndex {
+		return fmt.Errorf("seat index mismatch: client at seat %d, action for seat %d", *session.SeatIndex, seatIndex)
+	}
+
+	// Get the table reference
+	server.mu.RLock()
+	var table *Table
+	for _, t := range server.tables {
+		if t != nil && t.ID == *session.TableID {
+			table = t
+			break
+		}
+	}
+	server.mu.RUnlock()
+
+	if table == nil {
+		return fmt.Errorf("table not found")
+	}
+
+	// Verify action is valid
+	table.mu.Lock()
+	defer table.mu.Unlock()
+
+	// Check that a hand is in progress
+	if table.CurrentHand == nil {
+		return fmt.Errorf("no hand in progress")
+	}
+
+	// Verify it's the player's turn
+	if table.CurrentHand.CurrentActor == nil || *table.CurrentHand.CurrentActor != seatIndex {
+		return fmt.Errorf("not current actor: current actor is %v, player at seat %d", table.CurrentHand.CurrentActor, seatIndex)
+	}
+
+	// Get valid actions for this player
+	validActions := table.CurrentHand.GetValidActions(seatIndex)
+	isValid := false
+	for _, va := range validActions {
+		if va == action {
+			isValid = true
+			break
+		}
+	}
+	if !isValid {
+		return fmt.Errorf("invalid action '%s' for seat %d: valid actions are %v", action, seatIndex, validActions)
+	}
+
+	// Process the action
+	_, err = table.CurrentHand.ProcessAction(seatIndex, action, table.Seats[seatIndex].Stack)
+	if err != nil {
+		return fmt.Errorf("failed to process action: %w", err)
+	}
+
+	// Check if betting round is complete
+	if table.CurrentHand.IsBettingRoundComplete(table.Seats) {
+		// Betting round is over - this will be handled later (e.g., street progression)
+		// For now, just mark that the round is complete
+		// TODO: Move to next street or determine winner
+		return nil
+	}
+
+	// Advance to next actor
+	nextActor, err := table.CurrentHand.AdvanceAction(table.Seats)
+	if err != nil {
+		return fmt.Errorf("failed to advance action: %w", err)
+	}
+
+	if nextActor == nil {
+		// Only one player left (others folded) - betting round complete
+		return nil
+	}
+
+	// Update CurrentActor to the next player
+	table.CurrentHand.CurrentActor = nextActor
 
 	return nil
 }

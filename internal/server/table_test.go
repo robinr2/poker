@@ -1995,10 +1995,11 @@ func TestGetCallAmount_NoCurrentBet(t *testing.T) {
 		table.CurrentHand.PlayerBets = make(map[int]int)
 	}
 
-	// CurrentBet is 0, PlayerBets for seat 0 is 0
+	// After StartHand, CurrentBet is 20 (big blind), seat 0 (dealer/small blind) has bet 10
+	// So call amount for seat 0 should be 10 (20 - 10)
 	callAmount := table.CurrentHand.GetCallAmount(0)
-	if callAmount != 0 {
-		t.Errorf("expected call amount 0 when no current bet, got %d", callAmount)
+	if callAmount != 10 {
+		t.Errorf("expected call amount 10 (to match BB), got %d", callAmount)
 	}
 }
 
@@ -2432,5 +2433,407 @@ func TestProcessAction_CallPartial(t *testing.T) {
 	// Verify PlayerBets updated to 30 (not the full current bet)
 	if table.CurrentHand.PlayerBets[0] != 30 {
 		t.Errorf("expected PlayerBets[0] to be 30, got %d", table.CurrentHand.PlayerBets[0])
+	}
+}
+
+// TestIsBettingRoundComplete_NotAllActed returns false when not all players have acted
+func TestIsBettingRoundComplete_NotAllActed(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up 3 active players
+	token1, token2, token3 := "player1", "player2", "player3"
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.Seats[2].Token = &token3
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+
+	// Initialize hand with action state
+	table.CurrentHand = &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            30,
+		CurrentBet:     20,
+		Street:         "preflop",
+		FoldedPlayers:  make(map[int]bool),
+		ActedPlayers:   make(map[int]bool),
+		PlayerBets:     make(map[int]int),
+	}
+
+	// Player 0 and 1 have acted, but player 2 has not
+	table.CurrentHand.ActedPlayers[0] = true
+	table.CurrentHand.ActedPlayers[1] = true
+	table.CurrentHand.PlayerBets[0] = 20
+	table.CurrentHand.PlayerBets[1] = 20
+
+	// Round should NOT be complete
+	if table.CurrentHand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected betting round to not be complete when not all players have acted")
+	}
+}
+
+// TestIsBettingRoundComplete_BetsNotMatched returns false when bets unmatched
+func TestIsBettingRoundComplete_BetsNotMatched(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up 3 active players
+	token1, token2, token3 := "player1", "player2", "player3"
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.Seats[2].Token = &token3
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+
+	// Initialize hand with action state
+	table.CurrentHand = &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            30,
+		CurrentBet:     50,
+		Street:         "preflop",
+		FoldedPlayers:  make(map[int]bool),
+		ActedPlayers:   make(map[int]bool),
+		PlayerBets:     make(map[int]int),
+	}
+
+	// All players have acted, but bets are not matched
+	table.CurrentHand.ActedPlayers[0] = true
+	table.CurrentHand.ActedPlayers[1] = true
+	table.CurrentHand.ActedPlayers[2] = true
+	table.CurrentHand.PlayerBets[0] = 50
+	table.CurrentHand.PlayerBets[1] = 20 // Not matched
+	table.CurrentHand.PlayerBets[2] = 20
+
+	// Round should NOT be complete
+	if table.CurrentHand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected betting round to not be complete when bets are unmatched")
+	}
+}
+
+// TestIsBettingRoundComplete_AllMatched returns true when all acted and matched
+func TestIsBettingRoundComplete_AllMatched(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up 3 active players
+	token1, token2, token3 := "player1", "player2", "player3"
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.Seats[2].Token = &token3
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+
+	// Initialize hand with action state
+	table.CurrentHand = &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            60,
+		CurrentBet:     20,
+		Street:         "preflop",
+		FoldedPlayers:  make(map[int]bool),
+		ActedPlayers:   make(map[int]bool),
+		PlayerBets:     make(map[int]int),
+	}
+
+	// All players have acted and matched the current bet
+	table.CurrentHand.ActedPlayers[0] = true
+	table.CurrentHand.ActedPlayers[1] = true
+	table.CurrentHand.ActedPlayers[2] = true
+	table.CurrentHand.PlayerBets[0] = 20
+	table.CurrentHand.PlayerBets[1] = 20
+	table.CurrentHand.PlayerBets[2] = 20
+
+	// Round should be complete
+	if !table.CurrentHand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected betting round to be complete when all players acted and matched")
+	}
+}
+
+// TestIsBettingRoundComplete_AllFoldedButOne returns true when only one player left
+func TestIsBettingRoundComplete_AllFoldedButOne(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up 3 active players
+	token1, token2, token3 := "player1", "player2", "player3"
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.Seats[2].Token = &token3
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+
+	// Initialize hand with action state
+	table.CurrentHand = &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            100,
+		CurrentBet:     50,
+		Street:         "preflop",
+		FoldedPlayers:  make(map[int]bool),
+		ActedPlayers:   make(map[int]bool),
+		PlayerBets:     make(map[int]int),
+	}
+
+	// Only players 0 and 1 have acted; player 2 has folded
+	// Player 0 is the only one not folded
+	table.CurrentHand.FoldedPlayers[1] = true
+	table.CurrentHand.FoldedPlayers[2] = true
+	table.CurrentHand.ActedPlayers[0] = true
+	table.CurrentHand.ActedPlayers[1] = true
+	table.CurrentHand.ActedPlayers[2] = true
+	table.CurrentHand.PlayerBets[0] = 50
+	table.CurrentHand.PlayerBets[1] = 50
+	table.CurrentHand.PlayerBets[2] = 50
+
+	// Round should be complete (only one player left)
+	if !table.CurrentHand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected betting round to be complete when only one player remains")
+	}
+}
+
+// TestAdvanceAction moves to next active player and handles wrap-around
+func TestAdvanceAction(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up 3 active players
+	token1, token2, token3 := "player1", "player2", "player3"
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[2].Token = &token3
+	table.Seats[2].Status = "active"
+
+	// Initialize hand with action state
+	table.CurrentHand = &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            30,
+		CurrentBet:     20,
+		Street:         "preflop",
+		FoldedPlayers:  make(map[int]bool),
+		ActedPlayers:   make(map[int]bool),
+		PlayerBets:     make(map[int]int),
+	}
+
+	// Start with player 0
+	currentActor := 0
+	table.CurrentHand.CurrentActor = &currentActor
+
+	// Advance to player 1
+	nextActor, err := table.CurrentHand.AdvanceAction(table.Seats)
+	if err != nil {
+		t.Errorf("expected no error advancing action, got %v", err)
+	}
+
+	if nextActor == nil {
+		t.Error("expected nextActor to not be nil")
+	} else if *nextActor != 1 {
+		t.Errorf("expected next actor to be 1, got %d", *nextActor)
+	}
+
+	// Update CurrentActor to the returned nextActor
+	table.CurrentHand.CurrentActor = nextActor
+
+	// Advance to player 2
+	nextActor, err = table.CurrentHand.AdvanceAction(table.Seats)
+	if err != nil {
+		t.Errorf("expected no error advancing action, got %v", err)
+	}
+
+	if nextActor == nil {
+		t.Error("expected nextActor to not be nil")
+	} else if *nextActor != 2 {
+		t.Errorf("expected next actor to be 2, got %d", *nextActor)
+	}
+
+	// Update CurrentActor to the returned nextActor
+	table.CurrentHand.CurrentActor = nextActor
+
+	// Advance to player 0 (wrap-around)
+	nextActor, err = table.CurrentHand.AdvanceAction(table.Seats)
+	if err != nil {
+		t.Errorf("expected no error advancing action, got %v", err)
+	}
+
+	if nextActor == nil {
+		t.Error("expected nextActor to not be nil")
+	} else if *nextActor != 0 {
+		t.Errorf("expected next actor to wrap to 0, got %d", *nextActor)
+	}
+}
+
+// TestAdvanceAction_WithFoldedPlayers skips folded players
+func TestAdvanceAction_WithFoldedPlayers(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up 3 active players
+	token1, token2, token3 := "player1", "player2", "player3"
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[2].Token = &token3
+	table.Seats[2].Status = "active"
+
+	// Initialize hand with action state
+	table.CurrentHand = &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            30,
+		CurrentBet:     20,
+		Street:         "preflop",
+		FoldedPlayers:  make(map[int]bool),
+		ActedPlayers:   make(map[int]bool),
+		PlayerBets:     make(map[int]int),
+	}
+
+	// Mark player 1 as folded
+	table.CurrentHand.FoldedPlayers[1] = true
+
+	// Start with player 0
+	currentActor := 0
+	table.CurrentHand.CurrentActor = &currentActor
+
+	// Advance to next active (should skip player 1 and go to player 2)
+	nextActor, err := table.CurrentHand.AdvanceAction(table.Seats)
+	if err != nil {
+		t.Errorf("expected no error advancing action, got %v", err)
+	}
+
+	if nextActor == nil {
+		t.Error("expected nextActor to not be nil")
+	} else if *nextActor != 2 {
+		t.Errorf("expected next actor to skip folded player and be 2, got %d", *nextActor)
+	}
+}
+
+// TestAdvanceAction_ReturnNilWhenOnlyOnePlayerLeft returns nil when only one player remains
+func TestAdvanceAction_ReturnNilWhenOnlyOnePlayerLeft(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up 3 active players
+	token1, token2, token3 := "player1", "player2", "player3"
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[2].Token = &token3
+	table.Seats[2].Status = "active"
+
+	// Initialize hand with action state
+	table.CurrentHand = &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            30,
+		CurrentBet:     20,
+		Street:         "preflop",
+		FoldedPlayers:  make(map[int]bool),
+		ActedPlayers:   make(map[int]bool),
+		PlayerBets:     make(map[int]int),
+	}
+
+	// Mark players 1 and 2 as folded (only player 0 remains)
+	table.CurrentHand.FoldedPlayers[1] = true
+	table.CurrentHand.FoldedPlayers[2] = true
+
+	// Start with player 0
+	currentActor := 0
+	table.CurrentHand.CurrentActor = &currentActor
+
+	// Advance should return nil (no next active player)
+	nextActor, err := table.CurrentHand.AdvanceAction(table.Seats)
+	if err != nil {
+		t.Errorf("expected no error advancing action, got %v", err)
+	}
+
+	if nextActor != nil {
+		t.Errorf("expected nextActor to be nil when only one player left, got %d", *nextActor)
+	}
+}
+
+// TestStartHand_InitializesActionState verifies action fields are initialized correctly
+func TestStartHand_InitializesActionState(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	table := NewTable("table-1", "Test Table", server)
+
+	// Set up 3 active players (waiting status)
+	token1, token2, token3 := "player1", "player2", "player3"
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "waiting"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "waiting"
+	table.Seats[1].Stack = 1000
+	table.Seats[2].Token = &token3
+	table.Seats[2].Status = "waiting"
+	table.Seats[2].Stack = 1000
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Verify action state fields are initialized
+	if table.CurrentHand.Street != "preflop" {
+		t.Errorf("expected Street to be 'preflop', got '%s'", table.CurrentHand.Street)
+	}
+
+	if table.CurrentHand.CurrentBet != 20 {
+		t.Errorf("expected CurrentBet to be 20 (BB), got %d", table.CurrentHand.CurrentBet)
+	}
+
+	if table.CurrentHand.PlayerBets == nil {
+		t.Error("expected PlayerBets to be initialized, got nil")
+	}
+
+	if table.CurrentHand.FoldedPlayers == nil {
+		t.Error("expected FoldedPlayers to be initialized, got nil")
+	}
+
+	if table.CurrentHand.ActedPlayers == nil {
+		t.Error("expected ActedPlayers to be initialized, got nil")
+	}
+
+	// Verify blinds are in PlayerBets
+	if table.CurrentHand.PlayerBets[table.CurrentHand.SmallBlindSeat] != 10 {
+		t.Errorf("expected small blind in PlayerBets, got %d", table.CurrentHand.PlayerBets[table.CurrentHand.SmallBlindSeat])
+	}
+
+	if table.CurrentHand.PlayerBets[table.CurrentHand.BigBlindSeat] != 20 {
+		t.Errorf("expected big blind in PlayerBets, got %d", table.CurrentHand.PlayerBets[table.CurrentHand.BigBlindSeat])
+	}
+
+	// Verify CurrentActor is set to first actor
+	if table.CurrentHand.CurrentActor == nil {
+		t.Error("expected CurrentActor to be set, got nil")
+	}
+
+	// In this 3-player setup: dealer=0, SB=1, BB=2, so UTG (first to act) should be 0
+	if table.CurrentHand.CurrentActor != nil && *table.CurrentHand.CurrentActor != 0 {
+		t.Errorf("expected CurrentActor to be 0 (UTG), got %d", *table.CurrentHand.CurrentActor)
 	}
 }
