@@ -92,6 +92,126 @@ func NewTable(id, name string, server *Server) *Table {
 	return table
 }
 
+// DetermineWinner evaluates all non-folded players' hands and returns the winner(s)
+// Returns: (winners []int, winningRank *HandRank)
+// - winners: slice of seat indices of the winner(s) (can have multiple in case of tie)
+// - winningRank: the HandRank of the winning hand(s)
+// Only evaluates players who:
+// - Are not in FoldedPlayers map
+// - Have an active status in their seat
+// - Have hole cards
+func (h *Hand) DetermineWinner(seats []*Seat) (winners []int, winningRank *HandRank) {
+	if h.FoldedPlayers == nil {
+		h.FoldedPlayers = make(map[int]bool)
+	}
+
+	if h.HoleCards == nil {
+		h.HoleCards = make(map[int][]Card)
+	}
+
+	var bestHand *HandRank
+	winnersList := []int{}
+
+	// Iterate through all seats
+	for i := 0; i < len(seats); i++ {
+		seat := seats[i]
+		if seat == nil {
+			continue
+		}
+
+		// Skip folded players
+		if h.FoldedPlayers[i] {
+			continue
+		}
+
+		// Skip empty seats or seats without hole cards
+		if seat.Status != "active" || len(h.HoleCards[i]) != 2 {
+			continue
+		}
+
+		// Evaluate this player's hand
+		playerHand := EvaluateHand(h.HoleCards[i], h.BoardCards)
+
+		// First non-folded player with valid hand
+		if bestHand == nil {
+			bestHand = &playerHand
+			winnersList = []int{i}
+			continue
+		}
+
+		// Compare with current best hand
+		comparison := CompareHands(playerHand, *bestHand)
+		if comparison > 0 {
+			// This player has a better hand
+			bestHand = &playerHand
+			winnersList = []int{i}
+		} else if comparison == 0 {
+			// Tie - add to winners list
+			winnersList = append(winnersList, i)
+		}
+		// If comparison < 0, this player's hand is worse, don't add to winners
+	}
+
+	return winnersList, bestHand
+}
+
+// HandleShowdown orchestrates the showdown logic
+// Determines winner(s) and prepares for pot distribution (Phase 3)
+// For now, just logs the winner(s)
+func (t *Table) HandleShowdown() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// Verify hand exists
+	if t.CurrentHand == nil {
+		return
+	}
+
+	// Get non-folded players count
+	nonFoldedCount := 0
+	for i := 0; i < 6; i++ {
+		if t.Seats[i].Status == "active" && !t.CurrentHand.FoldedPlayers[i] {
+			nonFoldedCount++
+		}
+	}
+
+	// If only one player remains, it's an early winner (all others folded)
+	if nonFoldedCount <= 1 {
+		// Find the remaining player
+		for i := 0; i < 6; i++ {
+			if t.Seats[i].Status == "active" && !t.CurrentHand.FoldedPlayers[i] {
+				if t.Server != nil {
+					t.Server.logger.Info("early winner (all folded)", "tableID", t.ID, "winner", i)
+				}
+				return
+			}
+		}
+	}
+
+	// Multiple players remain - do full hand evaluation
+	seatsSlice := make([]*Seat, 6)
+	for i := 0; i < 6; i++ {
+		seatsSlice[i] = &t.Seats[i]
+	}
+	winners, winningRank := t.CurrentHand.DetermineWinner(seatsSlice)
+
+	if len(winners) == 0 {
+		if t.Server != nil {
+			t.Server.logger.Warn("no winners found at showdown", "tableID", t.ID)
+		}
+		return
+	}
+
+	// Log winners (pot distribution will be implemented in Phase 3)
+	if t.Server != nil {
+		if len(winners) == 1 {
+			t.Server.logger.Info("showdown winner determined", "tableID", t.ID, "winner", winners[0], "rank", winningRank.Rank)
+		} else {
+			t.Server.logger.Info("showdown tie", "tableID", t.ID, "winners", winners, "rank", winningRank.Rank)
+		}
+	}
+}
+
 // GetOccupiedSeatCount returns the count of seats with non-nil Token (thread-safe)
 func (t *Table) GetOccupiedSeatCount() int {
 	t.mu.RLock()

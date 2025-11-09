@@ -1323,6 +1323,11 @@ func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, sea
 					server.logger.Warn("failed to broadcast action_request for new street", "error", err)
 				}
 			}
+		} else {
+			// We're on the river and betting is complete - trigger showdown
+			table.mu.Unlock()
+			table.HandleShowdown()
+			table.mu.Lock()
 		}
 		return nil
 	}

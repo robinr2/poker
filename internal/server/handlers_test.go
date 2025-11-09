@@ -2784,3 +2784,134 @@ func TestHandlePlayerAction_AdvancesStreetAfterRoundComplete(t *testing.T) {
 		t.Error("expected board_dealt message with 'flop' street to be broadcast")
 	}
 }
+
+// TestHandlerFlow_RiverToShowdown - Full hand flow from deal to river to showdown
+func TestHandlerFlow_RiverToShowdown(t *testing.T) {
+	// This is a simplified test that verifies showdown is triggered when river betting completes
+	// We'll create a hand that reaches river and verify HandleShowdown would be called
+
+	// Create a new server and table
+	server := &Server{
+		logger: slog.Default(),
+	}
+	table := NewTable("table-1", "Test Table", server)
+	server.tables[0] = table
+
+	// Setup: Create a hand already at river with 2 active players
+	hand := &Hand{
+		Pot:            100,
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   0, // 2-player game
+		Street:         "river",
+		HoleCards: map[int][]Card{
+			0: {Card{Rank: "A", Suit: "s"}, Card{Rank: "K", Suit: "s"}},
+			1: {Card{Rank: "Q", Suit: "h"}, Card{Rank: "J", Suit: "h"}},
+		},
+		BoardCards: []Card{
+			{Rank: "T", Suit: "d"}, {Rank: "9", Suit: "c"}, {Rank: "8", Suit: "s"},
+			{Rank: "7", Suit: "h"}, {Rank: "6", Suit: "d"},
+		},
+		FoldedPlayers: make(map[int]bool),
+		ActedPlayers:  make(map[int]bool),
+		PlayerBets: map[int]int{
+			0: 50,
+			1: 50,
+		},
+		CurrentBet:        50,
+		BigBlindHasOption: false,
+	}
+
+	table.CurrentHand = hand
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 950
+	table.Seats[0].Token = newString("token0")
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 950
+	table.Seats[1].Token = newString("token1")
+
+	// Verify IsBettingRoundComplete is true (both players have acted and matched the bet)
+	hand.ActedPlayers[0] = true
+	hand.ActedPlayers[1] = true
+
+	if !hand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected betting round to be complete on river")
+	}
+
+	// Call HandleShowdown - this should not panic or error
+	table.HandleShowdown()
+
+	// Verify the hand still exists (we're just logging winners for now)
+	if table.CurrentHand == nil {
+		t.Error("expected CurrentHand to still be set after HandleShowdown")
+	}
+}
+
+// TestHandlerFlow_AllFoldBeforeShowdown - All players fold, one wins early
+func TestHandlerFlow_AllFoldBeforeShowdown(t *testing.T) {
+	// This test verifies that when all but one player fold, the remaining player wins
+	// without needing to evaluate hands
+
+	// Create a new server and table
+	server := &Server{
+		logger: slog.Default(),
+	}
+	table := NewTable("table-1", "Test Table", server)
+	server.tables[0] = table
+
+	// Setup: Create a hand at flop where all but one player folded
+	hand := &Hand{
+		Pot:            100,
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Street:         "flop",
+		HoleCards: map[int][]Card{
+			0: {Card{Rank: "A", Suit: "s"}, Card{Rank: "K", Suit: "s"}},
+			1: {Card{Rank: "2", Suit: "h"}, Card{Rank: "3", Suit: "h"}},
+			2: {Card{Rank: "4", Suit: "d"}, Card{Rank: "5", Suit: "d"}},
+		},
+		BoardCards: []Card{
+			{Rank: "6", Suit: "c"}, {Rank: "7", Suit: "s"}, {Rank: "8", Suit: "h"},
+		},
+		FoldedPlayers: map[int]bool{
+			1: true, // Seat 1 folded
+			2: true, // Seat 2 folded
+		},
+		ActedPlayers: make(map[int]bool),
+		PlayerBets: map[int]int{
+			0: 50,
+		},
+		CurrentBet:        50,
+		BigBlindHasOption: false,
+	}
+
+	table.CurrentHand = hand
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 950
+	table.Seats[0].Token = newString("token0")
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 950
+	table.Seats[1].Token = newString("token1")
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 950
+	table.Seats[2].Token = newString("token2")
+
+	// Verify IsBettingRoundComplete returns true (only 1 player remains)
+	if !hand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected betting round to be complete when only 1 player remains")
+	}
+
+	// Call HandleShowdown - should handle early winner case
+	table.HandleShowdown()
+
+	// Verify the hand still exists
+	if table.CurrentHand == nil {
+		t.Error("expected CurrentHand to still be set after HandleShowdown")
+	}
+}
+
+// Helper function to create a pointer to a string
+func newString(s string) *string {
+	return &s
+}

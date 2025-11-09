@@ -6,6 +6,15 @@ import (
 	"testing"
 )
 
+// Helper function to convert Seat slice to []*Seat
+func seatsToPointers(seats []Seat) []*Seat {
+	result := make([]*Seat, len(seats))
+	for i := range seats {
+		result[i] = &seats[i]
+	}
+	return result
+}
+
 // TestNewTable verifies table creation with correct ID, name, and 6 empty seats
 func TestNewTable(t *testing.T) {
 	table := NewTable("table-1", "Table 1", nil)
@@ -5379,5 +5388,368 @@ func TestHandFlow_ActionOrderWithFolds(t *testing.T) {
 		t.Error("expected next active seat to be found (BB), got nil")
 	} else if *nextSeat != 2 {
 		t.Errorf("expected next active seat to be 2 (BB), got %d", *nextSeat)
+	}
+}
+
+// TestDetermineWinner_SingleWinner_HighCard - One player has highest card
+func TestDetermineWinner_SingleWinner_HighCard(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+	hand := &Hand{
+		Pot:            100,
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Street:         "river",
+		HoleCards: map[int][]Card{
+			0: {Card{Rank: "A", Suit: "s"}, Card{Rank: "K", Suit: "s"}}, // Strong hand
+			1: {Card{Rank: "2", Suit: "h"}, Card{Rank: "3", Suit: "h"}}, // Weak hand
+		},
+		BoardCards: []Card{
+			{Rank: "T", Suit: "d"}, {Rank: "J", Suit: "c"}, {Rank: "Q", Suit: "s"},
+			{Rank: "K", Suit: "h"}, {Rank: "2", Suit: "d"},
+		},
+		FoldedPlayers: make(map[int]bool),
+	}
+
+	// Setup seats
+	table.Seats[0].Status = "active"
+	table.Seats[1].Status = "active"
+
+	winners, winningRank := hand.DetermineWinner(seatsToPointers(table.Seats[:]))
+
+	if len(winners) != 1 {
+		t.Fatalf("expected 1 winner, got %d", len(winners))
+	}
+
+	if winners[0] != 0 {
+		t.Errorf("expected winner to be seat 0, got seat %d", winners[0])
+	}
+
+	if winningRank == nil {
+		t.Error("expected winningRank to be non-nil")
+	}
+}
+
+// TestDetermineWinner_SingleWinner_Flush - One player has flush
+func TestDetermineWinner_SingleWinner_Flush(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+	hand := &Hand{
+		Pot:            100,
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Street:         "river",
+		HoleCards: map[int][]Card{
+			0: {Card{Rank: "A", Suit: "s"}, Card{Rank: "K", Suit: "s"}}, // Flush
+			1: {Card{Rank: "Q", Suit: "h"}, Card{Rank: "J", Suit: "h"}}, // No flush
+		},
+		BoardCards: []Card{
+			{Rank: "T", Suit: "s"}, {Rank: "9", Suit: "s"}, {Rank: "8", Suit: "s"},
+			{Rank: "5", Suit: "c"}, {Rank: "4", Suit: "d"},
+		},
+		FoldedPlayers: make(map[int]bool),
+	}
+
+	// Setup seats
+	table.Seats[0].Status = "active"
+	table.Seats[1].Status = "active"
+
+	winners, winningRank := hand.DetermineWinner(seatsToPointers(table.Seats[:]))
+
+	if len(winners) != 1 {
+		t.Fatalf("expected 1 winner, got %d", len(winners))
+	}
+
+	if winners[0] != 0 {
+		t.Errorf("expected winner to be seat 0 with flush, got seat %d", winners[0])
+	}
+
+	if winningRank == nil {
+		t.Error("expected winningRank to be non-nil")
+	}
+}
+
+// TestDetermineWinner_Tie_TwoPlayers - Two players with identical hands
+func TestDetermineWinner_Tie_TwoPlayers(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+	hand := &Hand{
+		Pot:            100,
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Street:         "river",
+		HoleCards: map[int][]Card{
+			0: {Card{Rank: "A", Suit: "s"}, Card{Rank: "K", Suit: "h"}}, // Identical best 5
+			1: {Card{Rank: "2", Suit: "d"}, Card{Rank: "3", Suit: "c"}}, // Identical best 5
+		},
+		BoardCards: []Card{
+			{Rank: "A", Suit: "d"}, {Rank: "K", Suit: "c"}, {Rank: "Q", Suit: "s"},
+			{Rank: "J", Suit: "h"}, {Rank: "T", Suit: "d"},
+		},
+		FoldedPlayers: make(map[int]bool),
+	}
+
+	// Setup seats
+	table.Seats[0].Status = "active"
+	table.Seats[1].Status = "active"
+
+	winners, winningRank := hand.DetermineWinner(seatsToPointers(table.Seats[:]))
+
+	if len(winners) != 2 {
+		t.Fatalf("expected 2 winners (tie), got %d", len(winners))
+	}
+
+	// Should contain both seat 0 and 1
+	foundSeat0 := false
+	foundSeat1 := false
+	for _, w := range winners {
+		if w == 0 {
+			foundSeat0 = true
+		}
+		if w == 1 {
+			foundSeat1 = true
+		}
+	}
+
+	if !foundSeat0 || !foundSeat1 {
+		t.Error("expected both seat 0 and seat 1 in winners list for tie")
+	}
+
+	if winningRank == nil {
+		t.Error("expected winningRank to be non-nil")
+	}
+}
+
+// TestDetermineWinner_Tie_ThreePlayers - Three players with identical hands
+func TestDetermineWinner_Tie_ThreePlayers(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+	hand := &Hand{
+		Pot:            300,
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Street:         "river",
+		HoleCards: map[int][]Card{
+			0: {Card{Rank: "2", Suit: "s"}, Card{Rank: "3", Suit: "s"}},
+			1: {Card{Rank: "4", Suit: "h"}, Card{Rank: "5", Suit: "h"}},
+			2: {Card{Rank: "6", Suit: "d"}, Card{Rank: "7", Suit: "d"}},
+		},
+		BoardCards: []Card{
+			{Rank: "A", Suit: "c"}, {Rank: "K", Suit: "s"}, {Rank: "Q", Suit: "h"},
+			{Rank: "J", Suit: "d"}, {Rank: "T", Suit: "c"},
+		},
+		FoldedPlayers: make(map[int]bool),
+	}
+
+	// Setup seats
+	table.Seats[0].Status = "active"
+	table.Seats[1].Status = "active"
+	table.Seats[2].Status = "active"
+
+	winners, winningRank := hand.DetermineWinner(seatsToPointers(table.Seats[:]))
+
+	if len(winners) != 3 {
+		t.Fatalf("expected 3 winners (three-way tie), got %d", len(winners))
+	}
+
+	if winningRank == nil {
+		t.Error("expected winningRank to be non-nil")
+	}
+}
+
+// TestDetermineWinner_HeadsUp - Two player showdown
+func TestDetermineWinner_HeadsUp(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+	hand := &Hand{
+		Pot:            100,
+		DealerSeat:     0,
+		SmallBlindSeat: 0,
+		BigBlindSeat:   1,
+		Street:         "river",
+		HoleCards: map[int][]Card{
+			0: {Card{Rank: "A", Suit: "s"}, Card{Rank: "A", Suit: "h"}}, // Pair of aces
+			1: {Card{Rank: "K", Suit: "d"}, Card{Rank: "K", Suit: "c"}}, // Pair of kings
+		},
+		BoardCards: []Card{
+			{Rank: "2", Suit: "s"}, {Rank: "3", Suit: "h"}, {Rank: "4", Suit: "d"},
+			{Rank: "5", Suit: "c"}, {Rank: "7", Suit: "s"},
+		},
+		FoldedPlayers: make(map[int]bool),
+	}
+
+	// Setup seats
+	table.Seats[0].Status = "active"
+	table.Seats[1].Status = "active"
+
+	winners, winningRank := hand.DetermineWinner(seatsToPointers(table.Seats[:]))
+
+	if len(winners) != 1 {
+		t.Fatalf("expected 1 winner in heads-up, got %d", len(winners))
+	}
+
+	if winners[0] != 0 {
+		t.Errorf("expected winner to be seat 0 with pair of aces, got seat %d", winners[0])
+	}
+
+	if winningRank == nil {
+		t.Error("expected winningRank to be non-nil")
+	}
+}
+
+// TestDetermineWinner_MultiWay_FourPlayers - Four players at showdown
+func TestDetermineWinner_MultiWay_FourPlayers(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+	hand := &Hand{
+		Pot:            400,
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Street:         "river",
+		HoleCards: map[int][]Card{
+			0: {Card{Rank: "A", Suit: "s"}, Card{Rank: "A", Suit: "h"}}, // Pair of aces (best)
+			1: {Card{Rank: "K", Suit: "d"}, Card{Rank: "K", Suit: "c"}}, // Pair of kings
+			2: {Card{Rank: "Q", Suit: "s"}, Card{Rank: "J", Suit: "h"}}, // High card QJ
+			3: {Card{Rank: "T", Suit: "d"}, Card{Rank: "9", Suit: "c"}}, // High card T9
+		},
+		BoardCards: []Card{
+			{Rank: "2", Suit: "s"}, {Rank: "3", Suit: "h"}, {Rank: "4", Suit: "d"},
+			{Rank: "6", Suit: "c"}, {Rank: "8", Suit: "s"},
+		},
+		FoldedPlayers: make(map[int]bool),
+	}
+
+	// Setup seats
+	table.Seats[0].Status = "active"
+	table.Seats[1].Status = "active"
+	table.Seats[2].Status = "active"
+	table.Seats[3].Status = "active"
+
+	winners, winningRank := hand.DetermineWinner(seatsToPointers(table.Seats[:]))
+
+	if len(winners) != 1 {
+		t.Fatalf("expected 1 winner in 4-way showdown, got %d", len(winners))
+	}
+
+	if winners[0] != 0 {
+		t.Errorf("expected winner to be seat 0, got seat %d", winners[0])
+	}
+
+	if winningRank == nil {
+		t.Error("expected winningRank to be non-nil")
+	}
+}
+
+// TestDetermineWinner_SkipsFoldedPlayers - Only evaluates non-folded players
+func TestDetermineWinner_SkipsFoldedPlayers(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+	hand := &Hand{
+		Pot:            100,
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Street:         "river",
+		HoleCards: map[int][]Card{
+			0: {Card{Rank: "2", Suit: "h"}, Card{Rank: "3", Suit: "h"}}, // Weak but not folded
+			1: {Card{Rank: "A", Suit: "s"}, Card{Rank: "K", Suit: "s"}}, // Strong but folded
+			2: {Card{Rank: "Q", Suit: "d"}, Card{Rank: "J", Suit: "d"}}, // Medium but folded
+		},
+		BoardCards: []Card{
+			{Rank: "4", Suit: "s"}, {Rank: "5", Suit: "h"}, {Rank: "6", Suit: "d"},
+			{Rank: "7", Suit: "c"}, {Rank: "8", Suit: "s"},
+		},
+		FoldedPlayers: map[int]bool{
+			1: true, // Folded
+			2: true, // Folded
+		},
+	}
+
+	// Setup seats
+	table.Seats[0].Status = "active"
+	table.Seats[1].Status = "active"
+	table.Seats[2].Status = "active"
+
+	winners, winningRank := hand.DetermineWinner(seatsToPointers(table.Seats[:]))
+
+	// Should only evaluate seat 0 since 1 and 2 folded
+	if len(winners) != 1 {
+		t.Fatalf("expected 1 winner, got %d", len(winners))
+	}
+
+	if winners[0] != 0 {
+		t.Errorf("expected winner to be seat 0 (only non-folded), got seat %d", winners[0])
+	}
+
+	if winningRank == nil {
+		t.Error("expected winningRank to be non-nil")
+	}
+}
+
+// TestHandleShowdown_TriggersOnRiverComplete - Verify HandleShowdown is called
+func TestHandleShowdown_TriggersOnRiverComplete(t *testing.T) {
+	server := &Server{logger: slog.Default()}
+	table := NewTable("table-1", "Test Table", server)
+	hand := &Hand{
+		Pot:            100,
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Street:         "river",
+		HoleCards: map[int][]Card{
+			0: {Card{Rank: "A", Suit: "s"}, Card{Rank: "K", Suit: "s"}},
+			1: {Card{Rank: "2", Suit: "h"}, Card{Rank: "3", Suit: "h"}},
+		},
+		BoardCards: []Card{
+			{Rank: "5", Suit: "d"}, {Rank: "6", Suit: "c"}, {Rank: "7", Suit: "s"},
+			{Rank: "8", Suit: "h"}, {Rank: "9", Suit: "d"},
+		},
+		FoldedPlayers: make(map[int]bool),
+	}
+
+	table.CurrentHand = hand
+	table.Seats[0].Status = "active"
+	table.Seats[1].Status = "active"
+
+	// HandleShowdown should not panic and should return without error
+	// This is a skeleton test - we're just verifying the method exists and doesn't crash
+	table.HandleShowdown()
+
+	// Verify hand is still set (not cleared by HandleShowdown yet)
+	if table.CurrentHand == nil {
+		t.Error("expected CurrentHand to still be set after HandleShowdown")
+	}
+}
+
+// TestHandleShowdown_EarlyWinner_AllFold - Single remaining player wins without evaluation
+func TestHandleShowdown_EarlyWinner_AllFold(t *testing.T) {
+	server := &Server{logger: slog.Default()}
+	table := NewTable("table-1", "Test Table", server)
+	hand := &Hand{
+		Pot:            100,
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Street:         "flop",
+		HoleCards: map[int][]Card{
+			0: {Card{Rank: "A", Suit: "s"}, Card{Rank: "K", Suit: "s"}},
+			1: {Card{Rank: "2", Suit: "h"}, Card{Rank: "3", Suit: "h"}},
+		},
+		BoardCards: []Card{
+			{Rank: "5", Suit: "d"}, {Rank: "6", Suit: "c"}, {Rank: "7", Suit: "s"},
+		},
+		FoldedPlayers: map[int]bool{
+			1: true, // All but seat 0 folded
+		},
+	}
+
+	table.CurrentHand = hand
+	table.Seats[0].Status = "active"
+	table.Seats[1].Status = "active"
+
+	// Call HandleShowdown - should handle early winner case
+	table.HandleShowdown()
+
+	// Verify hand is still set (we're just logging for now)
+	if table.CurrentHand == nil {
+		t.Error("expected CurrentHand to still be set")
 	}
 }
