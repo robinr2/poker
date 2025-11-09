@@ -720,37 +720,82 @@ func (h *Hand) GetFirstActor(seats [6]Seat) int {
 		}
 	}
 
-	// Heads-up: dealer (small blind) acts first
-	if activeCount == 2 {
-		// Verify dealer is actually in the active seats list
-		for _, seat := range activeSeats {
-			if seat == h.DealerSeat {
-				return h.DealerSeat
+	// Branch based on street (preflop vs postflop)
+	if h.Street == "preflop" {
+		// Preflop logic: keep existing behavior
+		// Heads-up: dealer (small blind) acts first
+		if activeCount == 2 {
+			// Verify dealer is actually in the active seats list
+			for _, seat := range activeSeats {
+				if seat == h.DealerSeat {
+					return h.DealerSeat
+				}
+			}
+			// Fallback if dealer somehow not active
+			return activeSeats[0]
+		}
+
+		// Multi-player: find first active player after BB
+		// Find index of BB in activeSeats
+		bbIndex := -1
+		for i, seat := range activeSeats {
+			if seat == h.BigBlindSeat {
+				bbIndex = i
+				break
 			}
 		}
-		// Fallback if dealer somehow not active
-		return activeSeats[0]
-	}
 
-	// Multi-player: find first active player after BB
-	// Find index of BB in activeSeats
-	bbIndex := -1
-	for i, seat := range activeSeats {
-		if seat == h.BigBlindSeat {
-			bbIndex = i
-			break
+		// Defensive check: if BB not found in activeSeats, fallback to first active player
+		if bbIndex == -1 {
+			// This should never happen if hand setup is correct, but defend against it
+			return activeSeats[0]
 		}
-	}
 
-	// Defensive check: if BB not found in activeSeats, fallback to first active player
-	if bbIndex == -1 {
-		// This should never happen if hand setup is correct, but defend against it
-		return activeSeats[0]
-	}
+		// First to act is next active player after BB
+		firstActorIndex := (bbIndex + 1) % len(activeSeats)
+		return activeSeats[firstActorIndex]
+	} else {
+		// Postflop logic (flop, turn, river)
+		// Heads-up: BB (non-dealer) acts first
+		if activeCount == 2 {
+			// Find the non-dealer seat among the two active players
+			for _, seat := range activeSeats {
+				if seat != h.DealerSeat {
+					return seat
+				}
+			}
+			// Fallback (shouldn't happen)
+			return activeSeats[0]
+		}
 
-	// First to act is next active player after BB
-	firstActorIndex := (bbIndex + 1) % len(activeSeats)
-	return activeSeats[firstActorIndex]
+		// Multi-player: SB acts first (or next active player if SB folded)
+		// Find index of SB in activeSeats
+		sbIndex := -1
+		for i, seat := range activeSeats {
+			if seat == h.SmallBlindSeat {
+				sbIndex = i
+				break
+			}
+		}
+
+		// Defensive check: if SB not found in activeSeats, fallback to first active player
+		if sbIndex == -1 {
+			return activeSeats[0]
+		}
+
+		// Loop through active seats starting from SB position
+		// Return first non-folded player
+		for i := 0; i < len(activeSeats); i++ {
+			seatIndex := (sbIndex + i) % len(activeSeats)
+			seat := activeSeats[seatIndex]
+			if !h.FoldedPlayers[seat] {
+				return seat
+			}
+		}
+
+		// Fallback if all players folded (shouldn't happen)
+		return activeSeats[sbIndex]
+	}
 }
 
 // GetNextActiveSeat returns the next active (non-folded) player after fromSeat

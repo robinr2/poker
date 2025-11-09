@@ -1889,6 +1889,108 @@ func TestGetFirstActor_BBNotFound(t *testing.T) {
 	}
 }
 
+// TestGetFirstActor_Postflop_MultiPlayer verifies SB acts first on postflop streets in multi-player games
+func TestGetFirstActor_Postflop_MultiPlayer(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 4 active players (seats 0, 1, 2, 3)
+	for i := 0; i < 4; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand to set dealer and blinds
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Setup positions: dealer at 0, SB at 1, BB at 2, UTG at 3
+	// Manually set street to flop to simulate postflop action
+	table.CurrentHand.Street = "flop"
+
+	// On postflop streets, SB should act first in multi-player
+	firstActor := table.CurrentHand.GetFirstActor(table.Seats)
+	sbSeat := table.CurrentHand.SmallBlindSeat
+
+	if firstActor != sbSeat {
+		t.Errorf("expected first actor to be SB (seat %d) on postflop, got seat %d", sbSeat, firstActor)
+	}
+}
+
+// TestGetFirstActor_Postflop_HeadsUp verifies BB acts first on postflop streets in heads-up
+func TestGetFirstActor_Postflop_HeadsUp(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players (seats 0 and 2)
+	token0 := "player-0"
+	token2 := "player-2"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+
+	// Start hand to set dealer and blinds
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Setup positions: dealer/SB at 0, BB at 2
+	// Manually set street to flop to simulate postflop action
+	table.CurrentHand.Street = "flop"
+
+	// On postflop streets in heads-up, BB (non-dealer) should act first
+	firstActor := table.CurrentHand.GetFirstActor(table.Seats)
+	bbSeat := table.CurrentHand.BigBlindSeat
+
+	if firstActor != bbSeat {
+		t.Errorf("expected first actor to be BB (seat %d) on postflop heads-up, got seat %d", bbSeat, firstActor)
+	}
+}
+
+// TestGetFirstActor_Postflop_WithFoldedSB verifies BB acts first on postflop when SB is folded
+func TestGetFirstActor_Postflop_WithFoldedSB(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 4 active players (seats 0, 1, 2, 3)
+	for i := 0; i < 4; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand to set dealer and blinds
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Get positions: dealer at 0, SB at 1, BB at 2
+	sbSeat := table.CurrentHand.SmallBlindSeat
+	bbSeat := table.CurrentHand.BigBlindSeat
+
+	// Mark SB as folded
+	table.CurrentHand.FoldedPlayers[sbSeat] = true
+
+	// Manually set street to flop
+	table.CurrentHand.Street = "flop"
+
+	// On postflop with folded SB, BB should act first
+	firstActor := table.CurrentHand.GetFirstActor(table.Seats)
+
+	if firstActor != bbSeat {
+		t.Errorf("expected first actor to be BB (seat %d) when SB is folded on postflop, got seat %d", bbSeat, firstActor)
+	}
+}
+
 // ============ PHASE 1: BOARD CARD STORAGE & DEALING TESTS ============
 
 // TestHand_BoardCards_InitiallyEmpty verifies BoardCards field is initialized as empty slice
@@ -4976,5 +5078,306 @@ func TestHandFlow_PostflopCheckRaise(t *testing.T) {
 	}
 	if len(hand.BoardCards) != 4 {
 		t.Errorf("expected 4 board cards on turn, got %d", len(hand.BoardCards))
+	}
+}
+
+// TestHandFlow_ActionOrderChangesPostflop verifies action order changes correctly from preflop to postflop
+// Preflop: UTG (seat 3) acts first with 4 players
+// Postflop: SB (seat 1) acts first
+func TestHandFlow_ActionOrderChangesPostflop(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up 4 active players: seats 0, 1, 2, 3
+	// Dealer=0, SB=1, BB=2, UTG=3
+	token0, token1, token2, token3 := "dealer", "sb", "bb", "utg"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+	table.Seats[3].Token = &token3
+	table.Seats[3].Status = "active"
+	table.Seats[3].Stack = 1000
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	hand := table.CurrentHand
+	if hand == nil {
+		t.Fatal("CurrentHand is nil after StartHand")
+	}
+
+	// Verify initial state: preflop
+	if hand.Street != "preflop" {
+		t.Errorf("expected preflop, got %s", hand.Street)
+	}
+
+	// Verify CurrentActor is seat 3 (UTG acts first preflop)
+	if hand.CurrentActor == nil {
+		t.Error("expected CurrentActor to be set (UTG), got nil")
+	} else if *hand.CurrentActor != 3 {
+		t.Errorf("expected CurrentActor to be seat 3 (UTG) preflop, got seat %d", *hand.CurrentActor)
+	}
+
+	// All players call to complete preflop betting
+	// UTG (seat 3) calls
+	_, err = hand.ProcessAction(3, "call", 980)
+	if err != nil {
+		t.Fatalf("UTG call failed: %v", err)
+	}
+
+	// Dealer (seat 0) calls
+	_, err = hand.ProcessAction(0, "call", 990)
+	if err != nil {
+		t.Fatalf("Dealer call failed: %v", err)
+	}
+
+	// SB (seat 1) calls
+	_, err = hand.ProcessAction(1, "call", 995)
+	if err != nil {
+		t.Fatalf("SB call failed: %v", err)
+	}
+
+	// BB (seat 2) checks (completes preflop)
+	_, err = hand.ProcessAction(2, "check", 980)
+	if err != nil {
+		t.Fatalf("BB check failed: %v", err)
+	}
+
+	// Verify betting round is complete
+	if !hand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected preflop betting round to be complete")
+	}
+
+	// Advance to flop
+	err = hand.AdvanceToNextStreet()
+	if err != nil {
+		t.Fatalf("failed to advance to flop: %v", err)
+	}
+
+	// Verify Street is "flop"
+	if hand.Street != "flop" {
+		t.Errorf("expected street to be 'flop' after advance, got '%s'", hand.Street)
+	}
+
+	// Set CurrentActor to the first actor on the new street (this is done in handlers.go in real flow)
+	firstActor := hand.GetFirstActor(table.Seats)
+	hand.CurrentActor = &firstActor
+
+	// Verify CurrentActor is now seat 1 (SB acts first postflop)
+	if hand.CurrentActor == nil {
+		t.Error("expected CurrentActor to be set (SB), got nil after advance to flop")
+	} else if *hand.CurrentActor != 1 {
+		t.Errorf("expected CurrentActor to be seat 1 (SB) on flop, got seat %d", *hand.CurrentActor)
+	}
+}
+
+// TestHandFlow_ActionOrderHeadsUpPostflop verifies action order changes correctly in heads-up
+// Preflop: Dealer (seat 0) acts first (heads-up)
+// Postflop: BB (seat 2) acts first
+func TestHandFlow_ActionOrderHeadsUpPostflop(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up 2 active players: seats 0 and 2
+	// Dealer/SB=0, BB=2
+	token0, token2 := "dealer", "bb"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	hand := table.CurrentHand
+	if hand == nil {
+		t.Fatal("CurrentHand is nil after StartHand")
+	}
+
+	// Verify initial state: preflop
+	if hand.Street != "preflop" {
+		t.Errorf("expected preflop, got %s", hand.Street)
+	}
+
+	// Verify CurrentActor is seat 0 (Dealer acts first heads-up preflop)
+	if hand.CurrentActor == nil {
+		t.Error("expected CurrentActor to be set (Dealer), got nil")
+	} else if *hand.CurrentActor != 0 {
+		t.Errorf("expected CurrentActor to be seat 0 (Dealer) heads-up preflop, got seat %d", *hand.CurrentActor)
+	}
+
+	// Dealer calls (completes preflop in heads-up)
+	_, err = hand.ProcessAction(0, "call", 990)
+	if err != nil {
+		t.Fatalf("Dealer call failed: %v", err)
+	}
+
+	// BB checks
+	_, err = hand.ProcessAction(2, "check", 990)
+	if err != nil {
+		t.Fatalf("BB check failed: %v", err)
+	}
+
+	// Verify betting round is complete
+	if !hand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected preflop betting round to be complete")
+	}
+
+	// Advance to flop
+	err = hand.AdvanceToNextStreet()
+	if err != nil {
+		t.Fatalf("failed to advance to flop: %v", err)
+	}
+
+	// Verify Street is "flop"
+	if hand.Street != "flop" {
+		t.Errorf("expected street to be 'flop' after advance, got '%s'", hand.Street)
+	}
+
+	// Set CurrentActor to the first actor on the new street (this is done in handlers.go in real flow)
+	firstActor := hand.GetFirstActor(table.Seats)
+	hand.CurrentActor = &firstActor
+
+	// Verify CurrentActor is now seat 2 (BB acts first postflop heads-up)
+	if hand.CurrentActor == nil {
+		t.Error("expected CurrentActor to be set (BB), got nil after advance to flop")
+	} else if *hand.CurrentActor != 2 {
+		t.Errorf("expected CurrentActor to be seat 2 (BB) on flop heads-up, got seat %d", *hand.CurrentActor)
+	}
+}
+
+// TestHandFlow_ActionOrderWithFolds verifies action order skips folded players and adjusts correctly
+// when advancing from preflop to postflop
+// UTG (seat 3) folds preflop
+// Postflop: SB (seat 1) acts first (UTG already folded, so no need to skip)
+// SB folds on flop
+// Next actor should be BB (seat 2)
+func TestHandFlow_ActionOrderWithFolds(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up 4 active players: seats 0, 1, 2, 3
+	// Dealer=0, SB=1, BB=2, UTG=3
+	token0, token1, token2, token3 := "dealer", "sb", "bb", "utg"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+	table.Seats[3].Token = &token3
+	table.Seats[3].Status = "active"
+	table.Seats[3].Stack = 1000
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	hand := table.CurrentHand
+	if hand == nil {
+		t.Fatal("CurrentHand is nil after StartHand")
+	}
+
+	// Verify initial state: preflop
+	if hand.Street != "preflop" {
+		t.Errorf("expected preflop, got %s", hand.Street)
+	}
+
+	// Verify CurrentActor is seat 3 (UTG acts first preflop)
+	if hand.CurrentActor == nil {
+		t.Error("expected CurrentActor to be set (UTG), got nil")
+	} else if *hand.CurrentActor != 3 {
+		t.Errorf("expected CurrentActor to be seat 3 (UTG) preflop, got seat %d", *hand.CurrentActor)
+	}
+
+	// UTG (seat 3) folds preflop
+	_, err = hand.ProcessAction(3, "fold", 1000)
+	if err != nil {
+		t.Fatalf("UTG fold failed: %v", err)
+	}
+
+	// Verify UTG is marked as folded
+	if !hand.FoldedPlayers[3] {
+		t.Error("expected seat 3 (UTG) to be marked as folded")
+	}
+
+	// Dealer (seat 0) calls
+	_, err = hand.ProcessAction(0, "call", 990)
+	if err != nil {
+		t.Fatalf("Dealer call failed: %v", err)
+	}
+
+	// SB (seat 1) calls
+	_, err = hand.ProcessAction(1, "call", 995)
+	if err != nil {
+		t.Fatalf("SB call failed: %v", err)
+	}
+
+	// BB (seat 2) checks (completes preflop)
+	_, err = hand.ProcessAction(2, "check", 980)
+	if err != nil {
+		t.Fatalf("BB check failed: %v", err)
+	}
+
+	// Verify betting round is complete
+	if !hand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected preflop betting round to be complete")
+	}
+
+	// Advance to flop
+	err = hand.AdvanceToNextStreet()
+	if err != nil {
+		t.Fatalf("failed to advance to flop: %v", err)
+	}
+
+	// Verify Street is "flop"
+	if hand.Street != "flop" {
+		t.Errorf("expected street to be 'flop' after advance, got '%s'", hand.Street)
+	}
+
+	// Set CurrentActor to the first actor on the new street (this is done in handlers.go in real flow)
+	firstActor := hand.GetFirstActor(table.Seats)
+	hand.CurrentActor = &firstActor
+
+	// Verify CurrentActor is seat 1 (SB acts first postflop, UTG is folded so skipped)
+	if hand.CurrentActor == nil {
+		t.Error("expected CurrentActor to be set (SB), got nil after advance to flop")
+	} else if *hand.CurrentActor != 1 {
+		t.Errorf("expected CurrentActor to be seat 1 (SB) on flop, got seat %d", *hand.CurrentActor)
+	}
+
+	// SB (seat 1) folds on flop
+	_, err = hand.ProcessAction(1, "fold", 1000)
+	if err != nil {
+		t.Fatalf("SB fold on flop failed: %v", err)
+	}
+
+	// Verify SB is marked as folded
+	if !hand.FoldedPlayers[1] {
+		t.Error("expected seat 1 (SB) to be marked as folded")
+	}
+
+	// Verify next actor is BB (seat 2) - GetNextActiveSeat should skip SB
+	nextSeat := hand.GetNextActiveSeat(1, table.Seats)
+	if nextSeat == nil {
+		t.Error("expected next active seat to be found (BB), got nil")
+	} else if *nextSeat != 2 {
+		t.Errorf("expected next active seat to be 2 (BB), got %d", *nextSeat)
 	}
 }
