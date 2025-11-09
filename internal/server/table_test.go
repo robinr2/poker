@@ -1889,6 +1889,296 @@ func TestGetFirstActor_BBNotFound(t *testing.T) {
 	}
 }
 
+// ============ PHASE 1: BOARD CARD STORAGE & DEALING TESTS ============
+
+// TestHand_BoardCards_InitiallyEmpty verifies BoardCards field is initialized as empty slice
+func TestHand_BoardCards_InitiallyEmpty(t *testing.T) {
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            0,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+	}
+
+	// Verify BoardCards is empty (should be nil or len 0)
+	if hand.BoardCards != nil && len(hand.BoardCards) != 0 {
+		t.Errorf("expected BoardCards to be empty, got %d cards", len(hand.BoardCards))
+	}
+}
+
+// TestHand_DealFlop_DealsThreeCards verifies flop deals exactly 3 cards to board
+func TestHand_DealFlop_DealsThreeCards(t *testing.T) {
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            30,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+		BoardCards:     []Card{},
+		Street:         "preflop",
+	}
+
+	err := ShuffleDeck(hand.Deck)
+	if err != nil {
+		t.Fatalf("failed to shuffle deck: %v", err)
+	}
+
+	initialDeckSize := len(hand.Deck)
+
+	// Deal flop
+	err = hand.DealFlop()
+	if err != nil {
+		t.Fatalf("expected no error dealing flop, got %v", err)
+	}
+
+	// Verify exactly 3 cards on board
+	if len(hand.BoardCards) != 3 {
+		t.Errorf("expected 3 board cards after flop, got %d", len(hand.BoardCards))
+	}
+
+	// Verify deck reduced by 4 cards (1 burn + 3 dealt)
+	if len(hand.Deck) != initialDeckSize-4 {
+		t.Errorf("expected deck to reduce by 4 cards (1 burn + 3 flop), got reduction of %d", initialDeckSize-len(hand.Deck))
+	}
+}
+
+// TestHand_DealFlop_BurnsCardBeforeDealing verifies burn card is discarded (not stored)
+func TestHand_DealFlop_BurnsCardBeforeDealing(t *testing.T) {
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            30,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+		BoardCards:     []Card{},
+		Street:         "preflop",
+	}
+
+	err := ShuffleDeck(hand.Deck)
+	if err != nil {
+		t.Fatalf("failed to shuffle deck: %v", err)
+	}
+
+	// Store cards from original deck before dealing
+	burnCard := hand.Deck[0]
+	flopCard1 := hand.Deck[1]
+	flopCard2 := hand.Deck[2]
+	flopCard3 := hand.Deck[3]
+
+	// Deal flop
+	err = hand.DealFlop()
+	if err != nil {
+		t.Fatalf("expected no error dealing flop, got %v", err)
+	}
+
+	// Verify burn card is not in board cards
+	for _, boardCard := range hand.BoardCards {
+		if boardCard == burnCard {
+			t.Errorf("expected burn card to not be in board, but found %s", burnCard.String())
+		}
+	}
+
+	// Verify board cards are exactly cards 1, 2, 3 from original deck
+	if hand.BoardCards[0] != flopCard1 || hand.BoardCards[1] != flopCard2 || hand.BoardCards[2] != flopCard3 {
+		t.Errorf("expected board cards to be original deck cards 1-3, got different cards")
+	}
+}
+
+// TestHand_DealFlop_ErrorsIfDeckExhausted verifies error when deck has <4 cards for flop
+func TestHand_DealFlop_ErrorsIfDeckExhausted(t *testing.T) {
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            30,
+		Deck: []Card{
+			{Rank: "A", Suit: "s"},
+			{Rank: "K", Suit: "h"},
+			{Rank: "Q", Suit: "d"},
+		},
+		HoleCards:  make(map[int][]Card),
+		BoardCards: []Card{},
+		Street:     "preflop",
+	}
+
+	// Try to deal flop with only 3 cards (need 4: 1 burn + 3 flop)
+	err := hand.DealFlop()
+	if err == nil {
+		t.Fatal("expected error when deck has insufficient cards for flop, got nil")
+	}
+
+	if err.Error() != "insufficient cards in deck: have 3, need 4" {
+		t.Errorf("expected error 'insufficient cards in deck: have 3, need 4', got '%s'", err.Error())
+	}
+
+	// Verify no cards were dealt
+	if len(hand.BoardCards) != 0 {
+		t.Errorf("expected board to remain empty on error, got %d cards", len(hand.BoardCards))
+	}
+}
+
+// TestHand_DealTurn_DealsOneCard verifies turn deals exactly 1 card to board
+func TestHand_DealTurn_DealsOneCard(t *testing.T) {
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            30,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+		BoardCards:     []Card{{Rank: "A", Suit: "s"}, {Rank: "K", Suit: "h"}, {Rank: "Q", Suit: "d"}},
+		Street:         "flop",
+	}
+
+	err := ShuffleDeck(hand.Deck)
+	if err != nil {
+		t.Fatalf("failed to shuffle deck: %v", err)
+	}
+
+	initialDeckSize := len(hand.Deck)
+	initialBoardSize := len(hand.BoardCards)
+
+	// Deal turn
+	err = hand.DealTurn()
+	if err != nil {
+		t.Fatalf("expected no error dealing turn, got %v", err)
+	}
+
+	// Verify exactly 4 cards on board (3 flop + 1 turn)
+	if len(hand.BoardCards) != 4 {
+		t.Errorf("expected 4 board cards after turn, got %d", len(hand.BoardCards))
+	}
+
+	// Verify deck reduced by 2 cards (1 burn + 1 turn)
+	if len(hand.Deck) != initialDeckSize-2 {
+		t.Errorf("expected deck to reduce by 2 cards (1 burn + 1 turn), got reduction of %d", initialDeckSize-len(hand.Deck))
+	}
+
+	// Verify only 1 new card was added
+	if len(hand.BoardCards) != initialBoardSize+1 {
+		t.Errorf("expected board to grow by 1 card, got growth of %d", len(hand.BoardCards)-initialBoardSize)
+	}
+}
+
+// TestHand_DealTurn_BurnsCardBeforeDealing verifies turn burn card is discarded (not stored)
+func TestHand_DealTurn_BurnsCardBeforeDealing(t *testing.T) {
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            30,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+		BoardCards:     []Card{{Rank: "A", Suit: "s"}, {Rank: "K", Suit: "h"}, {Rank: "Q", Suit: "d"}},
+		Street:         "flop",
+	}
+
+	err := ShuffleDeck(hand.Deck)
+	if err != nil {
+		t.Fatalf("failed to shuffle deck: %v", err)
+	}
+
+	initialBoardCard4 := hand.Deck[1]
+
+	// Deal turn
+	err = hand.DealTurn()
+	if err != nil {
+		t.Fatalf("expected no error dealing turn, got %v", err)
+	}
+
+	// Verify the 4th board card is not the first card from deck (which was burned)
+	// The turn card should be the 2nd card from the pre-deal deck
+	if hand.BoardCards[3] != initialBoardCard4 {
+		t.Errorf("expected turn card to be the second card from pre-turn deck (burned first)")
+	}
+}
+
+// TestHand_DealRiver_DealsOneCard verifies river deals exactly 1 card to board
+func TestHand_DealRiver_DealsOneCard(t *testing.T) {
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            30,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+		BoardCards: []Card{
+			{Rank: "A", Suit: "s"}, {Rank: "K", Suit: "h"}, {Rank: "Q", Suit: "d"},
+			{Rank: "J", Suit: "c"},
+		},
+		Street: "turn",
+	}
+
+	err := ShuffleDeck(hand.Deck)
+	if err != nil {
+		t.Fatalf("failed to shuffle deck: %v", err)
+	}
+
+	initialDeckSize := len(hand.Deck)
+	initialBoardSize := len(hand.BoardCards)
+
+	// Deal river
+	err = hand.DealRiver()
+	if err != nil {
+		t.Fatalf("expected no error dealing river, got %v", err)
+	}
+
+	// Verify exactly 5 cards on board (4 from turn + 1 river)
+	if len(hand.BoardCards) != 5 {
+		t.Errorf("expected 5 board cards after river, got %d", len(hand.BoardCards))
+	}
+
+	// Verify deck reduced by 2 cards (1 burn + 1 river)
+	if len(hand.Deck) != initialDeckSize-2 {
+		t.Errorf("expected deck to reduce by 2 cards (1 burn + 1 river), got reduction of %d", initialDeckSize-len(hand.Deck))
+	}
+
+	// Verify only 1 new card was added
+	if len(hand.BoardCards) != initialBoardSize+1 {
+		t.Errorf("expected board to grow by 1 card, got growth of %d", len(hand.BoardCards)-initialBoardSize)
+	}
+}
+
+// TestHand_DealRiver_BurnsCardBeforeDealing verifies river burn card is discarded (not stored)
+func TestHand_DealRiver_BurnsCardBeforeDealing(t *testing.T) {
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            30,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+		BoardCards: []Card{
+			{Rank: "A", Suit: "s"}, {Rank: "K", Suit: "h"}, {Rank: "Q", Suit: "d"},
+			{Rank: "J", Suit: "c"},
+		},
+		Street: "turn",
+	}
+
+	err := ShuffleDeck(hand.Deck)
+	if err != nil {
+		t.Fatalf("failed to shuffle deck: %v", err)
+	}
+
+	initialBoardCard5 := hand.Deck[1]
+
+	// Deal river
+	err = hand.DealRiver()
+	if err != nil {
+		t.Fatalf("expected no error dealing river, got %v", err)
+	}
+
+	// Verify the 5th board card is not the first card from deck (which was burned)
+	// The river card should be the 2nd card from the pre-deal deck
+	if hand.BoardCards[4] != initialBoardCard5 {
+		t.Errorf("expected river card to be the second card from pre-river deck (burned first)")
+	}
+}
+
 // TestGetNextActiveSeat verifies wrap-around and folded player skipping
 func TestGetNextActiveSeat(t *testing.T) {
 	table := NewTable("table-1", "Table 1", nil)

@@ -40,6 +40,7 @@ type Hand struct {
 	Pot            int            // Current pot amount
 	Deck           []Card         // Cards remaining in the deck
 	HoleCards      map[int][]Card // Hole cards for each seat (key = seat number, value = 2 cards)
+	BoardCards     []Card         // Community cards on the board (flop=3, turn=4, river=5)
 	CurrentActor   *int           // Seat number of the player whose turn it is (nil if no active action)
 	CurrentBet     int            // Current bet amount in this round (what players must match)
 	PlayerBets     map[int]int    // Amount each player has bet in current round (key = seat number)
@@ -324,6 +325,63 @@ func (h *Hand) DealHoleCards(seats [6]Seat) error {
 	return nil
 }
 
+// DealFlop deals the flop (3 community cards) after burning 1 card
+// Burn card is discarded (not stored)
+// Returns error if deck has insufficient cards (need at least 4: 1 burn + 3 flop)
+func (h *Hand) DealFlop() error {
+	// Check if we have enough cards in deck (1 burn + 3 flop = 4 total)
+	if len(h.Deck) < 4 {
+		return fmt.Errorf("insufficient cards in deck: have %d, need 4", len(h.Deck))
+	}
+
+	// Burn 1 card (discard, don't store)
+	// Deal 3 cards to board
+	h.BoardCards = append(h.BoardCards, h.Deck[1], h.Deck[2], h.Deck[3])
+
+	// Remove burnt card and dealt cards from deck
+	h.Deck = h.Deck[4:]
+
+	return nil
+}
+
+// DealTurn deals the turn (1 community card) after burning 1 card
+// Burn card is discarded (not stored)
+// Returns error if deck has insufficient cards (need at least 2: 1 burn + 1 turn)
+func (h *Hand) DealTurn() error {
+	// Check if we have enough cards in deck (1 burn + 1 turn = 2 total)
+	if len(h.Deck) < 2 {
+		return fmt.Errorf("insufficient cards in deck: have %d, need 2", len(h.Deck))
+	}
+
+	// Burn 1 card (discard, don't store)
+	// Deal 1 card to board
+	h.BoardCards = append(h.BoardCards, h.Deck[1])
+
+	// Remove burnt card and dealt card from deck
+	h.Deck = h.Deck[2:]
+
+	return nil
+}
+
+// DealRiver deals the river (1 community card) after burning 1 card
+// Burn card is discarded (not stored)
+// Returns error if deck has insufficient cards (need at least 2: 1 burn + 1 river)
+func (h *Hand) DealRiver() error {
+	// Check if we have enough cards in deck (1 burn + 1 river = 2 total)
+	if len(h.Deck) < 2 {
+		return fmt.Errorf("insufficient cards in deck: have %d, need 2", len(h.Deck))
+	}
+
+	// Burn 1 card (discard, don't store)
+	// Deal 1 card to board
+	h.BoardCards = append(h.BoardCards, h.Deck[1])
+
+	// Remove burnt card and dealt card from deck
+	h.Deck = h.Deck[2:]
+
+	return nil
+}
+
 // CanStartHand checks if a new hand can be started
 // Returns true if:
 // - At least 2 players exist (waiting or active status)
@@ -414,6 +472,7 @@ func (t *Table) StartHand() error {
 		Pot:            0,
 		Deck:           NewDeck(),
 		HoleCards:      make(map[int][]Card),
+		BoardCards:     []Card{},
 		Street:         "preflop",
 		CurrentBet:     bigBlind,
 		PlayerBets:     make(map[int]int),
