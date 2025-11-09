@@ -123,7 +123,7 @@
 /* Small Blind Badge */
 .sb-badge {
   position: absolute;
-  top: -12px;
+  bottom: -12px;
   left: -12px;
   display: flex;
   align-items: center;
@@ -143,7 +143,7 @@
 /* Big Blind Badge */
 .bb-badge {
   position: absolute;
-  top: 12px;
+  bottom: -12px;
   right: -12px;
   display: flex;
   align-items: center;
