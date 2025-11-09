@@ -150,7 +150,7 @@ export function useWebSocket(
   });
   const serviceRef = useRef<WebSocketService | null>(null);
   const onMessageRef = useRef(options?.onMessage);
-  const handCompleteTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const handCompleteTimeoutRef = useRef<number | null>(null);
 
   // Update the ref when the callback changes
   useEffect(() => {
