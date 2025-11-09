@@ -184,9 +184,16 @@
 .card.face-up {
   background-color: #fff;
   border: 2px solid #1f2937;
+  color: #1f2937;
 }
 
-.card.face-up {
+/* Red suits (hearts and diamonds) */
+.card.red-suit {
+  color: #dc2626;
+}
+
+/* Black suits (spades and clubs) */
+.card.black-suit {
   color: #1f2937;
 }
 

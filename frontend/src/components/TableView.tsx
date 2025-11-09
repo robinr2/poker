@@ -45,6 +45,13 @@ function formatCardDisplay(card: string): string {
   return rank + (suitSymbols[suit] || suit);
 }
 
+// Helper function to check if a card is a red suit (hearts or diamonds)
+function isRedSuit(card: string): boolean {
+  if (card.length !== 2) return false;
+  const suit = card[1];
+  return suit === 'h' || suit === 'd';
+}
+
 export function TableView({
   tableId,
   seats,
@@ -120,7 +127,10 @@ export function TableView({
               {seat.index === currentSeatIndex && gameState?.holeCards && (
                 <div className="hole-cards">
                   {gameState.holeCards.map((card, idx) => (
-                    <span key={idx} className="card face-up">
+                    <span 
+                      key={idx} 
+                      className={`card face-up ${isRedSuit(card) ? 'red-suit' : 'black-suit'}`}
+                    >
                       {formatCardDisplay(card)}
                     </span>
                   ))}
