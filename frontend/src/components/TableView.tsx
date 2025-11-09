@@ -24,6 +24,15 @@ interface GameState {
   playerBets?: Record<number, number>;
   boardCards?: string[];
   street?: string;
+  showdown?: {
+    winnerSeats: number[];
+    winningHand: string;
+    potAmount: number;
+    amountsWon: Record<number, number>;
+  };
+  handComplete?: {
+    message: string;
+  };
 }
 
 interface TableViewProps {
@@ -57,6 +66,16 @@ function isRedSuit(card: string): boolean {
   if (card.length !== 2) return false;
   const suit = card[1];
   return suit === 'h' || suit === 'd';
+}
+
+// Helper function to get player names from seat indices
+function getPlayerNamesFromSeats(
+  seatIndices: number[],
+  seats: SeatInfo[]
+): string[] {
+  return seatIndices
+    .map((index) => seats[index]?.playerName || `Seat ${index}`)
+    .filter((name) => name !== null && name !== undefined);
 }
 
 export function TableView({
@@ -144,12 +163,12 @@ export function TableView({
     <div className="table-view">
       <h1>Table: {tableId}</h1>
       <div className="table-container">
-        <div className="seats-grid">
-          {seats.map((seat) => (
-            <div
-              key={seat.index}
-              className={`seat ${seat.index === currentSeatIndex ? 'own-seat' : ''} ${gameState?.currentActor === seat.index ? 'turn-active' : ''}`}
-            >
+         <div className="seats-grid">
+           {seats.map((seat) => (
+             <div
+               key={seat.index}
+               className={`seat ${seat.index === currentSeatIndex ? 'own-seat' : ''} ${gameState?.currentActor === seat.index ? 'turn-active' : ''} ${gameState?.showdown?.winnerSeats.includes(seat.index) ? 'winner-seat' : ''}`}
+             >
               {/* Dealer Button */}
               {gameState?.dealerSeat === seat.index && (
                 <span className="dealer-badge">D</span>
@@ -241,10 +260,28 @@ export function TableView({
               );
             })}
           </div>
-        )}
-      </div>
+         )}
+       </div>
 
-      {/* Action Bar */}
+       {/* Showdown Overlay */}
+       {gameState?.showdown && (
+         <div className="showdown-overlay">
+           <div className="showdown-content">
+             <div className="winning-hand">{gameState.showdown.winningHand}</div>
+             <div className="winners">
+               Winners: {getPlayerNamesFromSeats(gameState.showdown.winnerSeats, seats).join(', ')}
+             </div>
+             <div className="pot-amount">Pot: {gameState.showdown.potAmount}</div>
+             {gameState.handComplete && (
+               <div className="hand-complete-message">
+                 {gameState.handComplete.message}
+               </div>
+             )}
+           </div>
+         </div>
+       )}
+
+       {/* Action Bar */}
       {gameState?.currentActor === currentSeatIndex && (
         <div className="action-bar">
           <button onClick={() => handleAction('fold')}>Fold</button>

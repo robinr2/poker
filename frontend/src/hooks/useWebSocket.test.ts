@@ -1297,6 +1297,181 @@ describe('Phase 5: Raise Protocol - Frontend Protocol and State', () => {
   });
 });
 
+describe('Phase 6: Showdown & Settlement - WebSocket Event Handling', () => {
+  describe('TestUseWebSocket_ShowdownResultEvent', () => {
+    it('should handle showdown_result event with single winner', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      const showdownMessage = JSON.stringify({
+        type: 'showdown_result',
+        payload: {
+          winnerSeats: [1],
+          winningHand: 'Pair of Aces',
+          potAmount: 300,
+          amountsWon: {
+            '1': 300,
+          },
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(showdownMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.showdown).toBeDefined();
+        expect(result.current.gameState.showdown?.winnerSeats).toEqual([1]);
+        expect(result.current.gameState.showdown?.winningHand).toBe('Pair of Aces');
+        expect(result.current.gameState.showdown?.potAmount).toBe(300);
+        expect(result.current.gameState.showdown?.amountsWon).toEqual({ 1: 300 });
+      });
+    });
+
+    it('should handle showdown_result event with multiple winners (split pot)', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      const showdownMessage = JSON.stringify({
+        type: 'showdown_result',
+        payload: {
+          winnerSeats: [0, 2],
+          winningHand: 'Pair of Kings',
+          potAmount: 400,
+          amountsWon: {
+            '0': 200,
+            '2': 200,
+          },
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(showdownMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.showdown?.winnerSeats).toEqual([0, 2]);
+        expect(result.current.gameState.showdown?.amountsWon).toEqual({
+          0: 200,
+          2: 200,
+        });
+      });
+    });
+
+    it('should convert amountsWon string keys to numbers', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      const showdownMessage = JSON.stringify({
+        type: 'showdown_result',
+        payload: {
+          winnerSeats: [3],
+          winningHand: 'Flush',
+          potAmount: 500,
+          amountsWon: {
+            '3': 500,
+          },
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(showdownMessage));
+      });
+
+      await waitFor(() => {
+        const amountsWon = result.current.gameState.showdown?.amountsWon;
+        expect(amountsWon).toBeDefined();
+        // Verify keys are numbers, not strings
+        const keys = Object.keys(amountsWon || {});
+        expect(keys.length).toBeGreaterThan(0);
+        expect(amountsWon?.[3]).toBe(500);
+      });
+    });
+  });
+
+  describe('TestUseWebSocket_HandCompleteEvent', () => {
+    it('should handle hand_complete event', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      const handCompleteMessage = JSON.stringify({
+        type: 'hand_complete',
+        payload: {
+          message: 'Hand complete! Winner(s) collected the pot.',
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(handCompleteMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.handComplete).toBeDefined();
+        expect(result.current.gameState.handComplete?.message).toBe(
+          'Hand complete! Winner(s) collected the pot.'
+        );
+      });
+    });
+
+    it('should handle hand_complete event after showdown', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      // First send showdown
+      const showdownMessage = JSON.stringify({
+        type: 'showdown_result',
+        payload: {
+          winnerSeats: [1],
+          winningHand: 'Pair of Aces',
+          potAmount: 300,
+          amountsWon: { '1': 300 },
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(showdownMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.showdown).toBeDefined();
+      });
+
+      // Then send hand_complete
+      const handCompleteMessage = JSON.stringify({
+        type: 'hand_complete',
+        payload: {
+          message: 'Hand complete!',
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(handCompleteMessage));
+      });
+
+      // Should have both showdown and handComplete set
+      await waitFor(() => {
+        expect(result.current.gameState.handComplete).toBeDefined();
+        expect(result.current.gameState.showdown).toBeDefined();
+      });
+    });
+  });
+});
+
 describe('Action Request and Result Handlers', () => {
   describe('TestUseWebSocket_ActionRequest', () => {
     it('should update game state when action_request message is received', async () => {

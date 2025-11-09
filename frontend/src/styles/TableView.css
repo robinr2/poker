@@ -582,3 +582,147 @@
     min-width: 70px !important;
   }
 }
+
+/* Phase 6: Showdown & Settlement */
+
+/* Winner Seat Styling - Gold border with glow animation */
+.seat.winner-seat {
+  border-color: #fbbf24;
+  background-color: #fffbeb;
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.4);
+  animation: winner-glow 2s ease-in-out infinite;
+}
+
+@keyframes winner-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.4);
+    border-color: #fbbf24;
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(251, 191, 36, 0.6);
+    border-color: #f59e0b;
+  }
+}
+
+/* Showdown Overlay */
+.showdown-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  animation: fade-in 0.3s ease-in;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.showdown-content {
+  background-color: white;
+  border-radius: 12px;
+  padding: 40px;
+  max-width: 600px;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  animation: scale-in 0.3s ease-out;
+}
+
+@keyframes scale-in {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.winning-hand {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 16px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.winners {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #059669;
+  margin-bottom: 16px;
+  padding: 12px;
+  background-color: #dcfce7;
+  border-radius: 8px;
+  border-left: 4px solid #16a34a;
+}
+
+.pot-amount {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fbbf24;
+  margin-bottom: 16px;
+  padding: 12px;
+  background-color: #1f2937;
+  border-radius: 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.hand-complete-message {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1f2937;
+  padding: 16px;
+  background-color: #f0f9ff;
+  border-radius: 8px;
+  border: 2px solid #3b82f6;
+  margin-top: 16px;
+  animation: bounce 1s ease-in-out;
+}
+
+@keyframes bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@media (max-width: 768px) {
+  .showdown-content {
+    padding: 24px;
+    margin: 20px;
+  }
+
+  .winning-hand {
+    font-size: 1.5rem;
+  }
+
+  .winners {
+    font-size: 1rem;
+  }
+
+  .pot-amount {
+    font-size: 1.25rem;
+  }
+
+  .hand-complete-message {
+    font-size: 0.95rem;
+  }
+}

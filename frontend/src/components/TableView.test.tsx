@@ -2193,10 +2193,19 @@ describe('Phase 5: Street Indicator', () => {
     { index: 5, playerName: null, status: 'empty' },
   ];
 
-  interface ExtendedGameState extends GameState {
-    boardCards?: string[];
-    street?: string;
-  }
+   interface ExtendedGameState extends GameState {
+     boardCards?: string[];
+     street?: string;
+     showdown?: {
+       winnerSeats: number[];
+       winningHand: string;
+       potAmount: number;
+       amountsWon: Record<number, number>;
+     };
+     handComplete?: {
+       message: string;
+     };
+   }
 
   describe('TestTableView_StreetIndicator', () => {
     it('should display Preflop street indicator', () => {
@@ -2348,6 +2357,182 @@ describe('Phase 5: Street Indicator', () => {
       // Should now show Flop
       expect(screen.getByText(/Flop/i)).toBeInTheDocument();
       expect(screen.queryByText(/Preflop/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Phase 6: Showdown & Settlement - TableView Display', () => {
+    describe('TestTableView_ShowdownDisplay', () => {
+       it('should display showdown overlay with single winner', () => {
+         const mockOnLeave = vi.fn();
+         const gameState: ExtendedGameState = {
+           dealerSeat: 0,
+           smallBlindSeat: 1,
+           bigBlindSeat: 2,
+           holeCards: null,
+           pot: 300,
+           boardCards: ['As', 'Kh', 'Qd', 'Jc', 'Ts'],
+           street: 'river',
+           showdown: {
+             winnerSeats: [1],
+             winningHand: 'Pair of Aces',
+             potAmount: 300,
+             amountsWon: { 1: 300 },
+           },
+         };
+
+         render(
+           <TableView
+             tableId="table-1"
+             seats={mockSeats}
+             currentSeatIndex={0}
+             onLeave={mockOnLeave}
+             gameState={gameState}
+           />
+         );
+
+         // Should display showdown overlay
+         expect(screen.getByText(/Pair of Aces/i)).toBeInTheDocument();
+         // Check for the showdown overlay by looking for the winners text
+         expect(screen.getByText(/Winners:/i)).toBeInTheDocument();
+       });
+
+      it('should display showdown overlay with multiple winners (split pot)', () => {
+        const mockOnLeave = vi.fn();
+        const gameState: ExtendedGameState = {
+          dealerSeat: 0,
+          smallBlindSeat: 1,
+          bigBlindSeat: 2,
+          holeCards: null,
+          pot: 400,
+          boardCards: ['As', 'Kh', 'Qd', 'Jc', 'Ts'],
+          street: 'river',
+          showdown: {
+            winnerSeats: [0, 2],
+            winningHand: 'Pair of Kings',
+            potAmount: 400,
+            amountsWon: { 0: 200, 2: 200 },
+          },
+        };
+
+        render(
+          <TableView
+            tableId="table-1"
+            seats={mockSeats}
+            currentSeatIndex={0}
+            onLeave={mockOnLeave}
+            gameState={gameState}
+          />
+        );
+
+        // Should display showdown overlay
+        expect(screen.getByText(/Pair of Kings/i)).toBeInTheDocument();
+      });
+
+       it('should highlight winner seats with gold border', () => {
+         const mockOnLeave = vi.fn();
+         const gameState: ExtendedGameState = {
+           dealerSeat: 0,
+           smallBlindSeat: 1,
+           bigBlindSeat: 2,
+           holeCards: null,
+           pot: 300,
+           boardCards: ['As', 'Kh', 'Qd', 'Jc', 'Ts'],
+           street: 'river',
+           showdown: {
+             winnerSeats: [1],
+             winningHand: 'Pair of Aces',
+             potAmount: 300,
+             amountsWon: { 1: 300 },
+           },
+         };
+
+         const { container } = render(
+           <TableView
+             tableId="table-1"
+             seats={mockSeats}
+             currentSeatIndex={0}
+             onLeave={mockOnLeave}
+             gameState={gameState}
+           />
+         );
+
+         // Find winner seat element (seat 1 - Bob)
+         const seatElements = container.querySelectorAll('.seat');
+         const winnerSeat = Array.from(seatElements).find((seat) =>
+           seat.textContent?.includes('Bob')
+         );
+
+         expect(winnerSeat).toHaveClass('winner-seat');
+      });
+
+      it('should display hand complete message', () => {
+        const mockOnLeave = vi.fn();
+        const gameState: ExtendedGameState = {
+          dealerSeat: 0,
+          smallBlindSeat: 1,
+          bigBlindSeat: 2,
+          holeCards: null,
+          pot: 300,
+          boardCards: ['As', 'Kh', 'Qd', 'Jc', 'Ts'],
+          street: 'river',
+          showdown: {
+            winnerSeats: [1],
+            winningHand: 'Pair of Aces',
+            potAmount: 300,
+            amountsWon: { 1: 300 },
+          },
+          handComplete: {
+            message: 'Hand complete! Winner collected the pot.',
+          },
+        };
+
+        render(
+          <TableView
+            tableId="table-1"
+            seats={mockSeats}
+            currentSeatIndex={0}
+            onLeave={mockOnLeave}
+            gameState={gameState}
+          />
+        );
+
+        // Should display hand complete message
+        expect(
+          screen.getByText(/Hand complete! Winner collected the pot./i)
+        ).toBeInTheDocument();
+      });
+
+      it('should display winner names in showdown overlay', () => {
+        const mockOnLeave = vi.fn();
+        const gameState: ExtendedGameState = {
+          dealerSeat: 0,
+          smallBlindSeat: 1,
+          bigBlindSeat: 2,
+          holeCards: null,
+          pot: 300,
+          boardCards: ['As', 'Kh', 'Qd', 'Jc', 'Ts'],
+          street: 'river',
+          showdown: {
+            winnerSeats: [1],
+            winningHand: 'Pair of Aces',
+            potAmount: 300,
+            amountsWon: { 1: 300 },
+          },
+        };
+
+        render(
+          <TableView
+            tableId="table-1"
+            seats={mockSeats}
+            currentSeatIndex={0}
+            onLeave={mockOnLeave}
+            gameState={gameState}
+          />
+        );
+
+        // Should display winner name (Alice is in seat 1)
+        expect(screen.getByText(/Alice/i)).toBeInTheDocument();
+      });
     });
   });
 });

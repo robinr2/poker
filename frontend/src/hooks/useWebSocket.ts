@@ -30,6 +30,17 @@ interface TableState {
   seats: TableSeat[];
 }
 
+interface ShowdownState {
+  winnerSeats: number[];
+  winningHand: string;
+  potAmount: number;
+  amountsWon: Record<number, number>;
+}
+
+interface HandCompleteState {
+  message: string;
+}
+
 interface GameState {
   dealerSeat: number | null;
   smallBlindSeat: number | null;
@@ -47,6 +58,8 @@ interface GameState {
   playerBets: Record<number, number>; // Track each player's bet amount in current round
   boardCards?: string[];
   street?: string;
+  showdown?: ShowdownState;
+  handComplete?: HandCompleteState;
 }
 
 interface HandStartedPayload {
@@ -137,6 +150,7 @@ export function useWebSocket(
   });
   const serviceRef = useRef<WebSocketService | null>(null);
   const onMessageRef = useRef(options?.onMessage);
+  const handCompleteTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Update the ref when the callback changes
   useEffect(() => {
@@ -461,37 +475,103 @@ export function useWebSocket(
             return updated;
           });
         } else if (message.type === 'board_dealt' && message.payload) {
-          // Handle board_dealt message
-          console.log(
-            '[useWebSocket] board_dealt received, payload:',
-            message.payload
-          );
-          const payload =
-            typeof message.payload === 'string'
-              ? (JSON.parse(message.payload) as BoardDealtPayload)
-              : (message.payload as BoardDealtPayload);
-          console.log('[useWebSocket] board_dealt payload:', payload);
+           // Handle board_dealt message
+           console.log(
+             '[useWebSocket] board_dealt received, payload:',
+             message.payload
+           );
+           const payload =
+             typeof message.payload === 'string'
+               ? (JSON.parse(message.payload) as BoardDealtPayload)
+               : (message.payload as BoardDealtPayload);
+           console.log('[useWebSocket] board_dealt payload:', payload);
 
-          // Convert Card objects {Rank, Suit} to string format "As", "Kh", etc.
-          const boardCardStrings = payload.boardCards.map(
-            (card) => card.Rank + card.Suit
-          );
+           // Convert Card objects {Rank, Suit} to string format "As", "Kh", etc.
+           const boardCardStrings = payload.boardCards.map(
+             (card) => card.Rank + card.Suit
+           );
 
-          setGameState((prev) => ({
-            ...prev,
-            boardCards: boardCardStrings,
-            street: payload.street,
-          }));
-          console.log(
-            '[useWebSocket] gameState updated with boardCards:',
-            boardCardStrings,
-            'street:',
-            payload.street
-          );
-        }
-      } catch {
-        // Silently ignore parsing errors for non-JSON messages
-      }
+           setGameState((prev) => ({
+             ...prev,
+             boardCards: boardCardStrings,
+             street: payload.street,
+           }));
+           console.log(
+             '[useWebSocket] gameState updated with boardCards:',
+             boardCardStrings,
+             'street:',
+             payload.street
+           );
+         } else if (message.type === 'showdown_result' && message.payload) {
+           // Handle showdown_result message
+           console.log(
+             '[useWebSocket] showdown_result received, payload:',
+             message.payload
+           );
+           const payload =
+             typeof message.payload === 'string'
+               ? (JSON.parse(message.payload) as Record<string, unknown>)
+               : (message.payload as Record<string, unknown>);
+           console.log('[useWebSocket] showdown_result payload:', payload);
+
+           // Convert amountsWon string keys to numbers
+           const amountsWonRaw = payload.amountsWon as Record<string, number>;
+           const amountsWon: Record<number, number> = {};
+           if (amountsWonRaw) {
+             Object.entries(amountsWonRaw).forEach(([key, value]) => {
+               amountsWon[parseInt(key, 10)] = value;
+             });
+           }
+
+           setGameState((prev) => ({
+             ...prev,
+             showdown: {
+               winnerSeats: (payload.winnerSeats as number[]) || [],
+               winningHand: (payload.winningHand as string) || '',
+               potAmount: (payload.potAmount as number) || 0,
+               amountsWon,
+             },
+           }));
+           console.log('[useWebSocket] gameState updated with showdown');
+         } else if (message.type === 'hand_complete' && message.payload) {
+           // Handle hand_complete message
+           console.log(
+             '[useWebSocket] hand_complete received, payload:',
+             message.payload
+           );
+           const payload =
+             typeof message.payload === 'string'
+               ? (JSON.parse(message.payload) as Record<string, unknown>)
+               : (message.payload as Record<string, unknown>);
+           console.log('[useWebSocket] hand_complete payload:', payload);
+
+           setGameState((prev) => ({
+             ...prev,
+             handComplete: {
+               message: (payload.message as string) || '',
+             },
+           }));
+           console.log('[useWebSocket] gameState updated with handComplete');
+
+           // Clear any existing timeout
+           if (handCompleteTimeoutRef.current) {
+             clearTimeout(handCompleteTimeoutRef.current);
+           }
+
+           // Schedule clearing of showdown state after 5 seconds
+           handCompleteTimeoutRef.current = setTimeout(() => {
+             setGameState((prev) => {
+               const updated = { ...prev };
+               delete updated.showdown;
+               delete updated.handComplete;
+               return updated;
+             });
+             handCompleteTimeoutRef.current = null;
+           }, 5000);
+         }
+       } catch {
+         // Silently ignore parsing errors for non-JSON messages
+       }
     });
 
     // Connect
@@ -501,6 +581,11 @@ export function useWebSocket(
 
     // Cleanup on unmount or dependency change
     return () => {
+      // Clear any pending hand complete timeout
+      if (handCompleteTimeoutRef.current) {
+        clearTimeout(handCompleteTimeoutRef.current);
+        handCompleteTimeoutRef.current = null;
+      }
       unsubscribeStatus();
       unsubscribeMessage();
       service.disconnect();
