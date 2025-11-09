@@ -1131,7 +1131,7 @@ func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, sea
 	}
 
 	// Get valid actions for this player
-	validActions := table.CurrentHand.GetValidActions(seatIndex)
+	validActions := table.CurrentHand.GetValidActions(seatIndex, table.Seats[seatIndex].Stack, table.Seats)
 	isValid := false
 	for _, va := range validActions {
 		if va == action {
@@ -1195,7 +1195,7 @@ func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, sea
 	table.CurrentHand.CurrentActor = nextActor
 
 	// Get valid actions and call amount for the next actor
-	nextValidActions := table.CurrentHand.GetValidActions(*nextActor)
+	nextValidActions := table.CurrentHand.GetValidActions(*nextActor, table.Seats[*nextActor].Stack, table.Seats)
 	nextCallAmount := table.CurrentHand.GetCallAmount(*nextActor)
 
 	// Broadcast the action result with the next actor

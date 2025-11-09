@@ -2096,7 +2096,7 @@ func TestGetValidActions_CanCheck(t *testing.T) {
 	table.CurrentHand.PlayerBets[0] = 50
 	table.CurrentHand.CurrentBet = 50
 
-	validActions := table.CurrentHand.GetValidActions(0)
+	validActions := table.CurrentHand.GetValidActions(0, table.Seats[0].Stack, table.Seats)
 
 	// Should allow check and fold
 	hasCheck := false
@@ -2144,21 +2144,26 @@ func TestGetValidActions_MustCall(t *testing.T) {
 		table.CurrentHand.PlayerBets = make(map[int]int)
 	}
 
-	// Player has bet 10, current bet is 50
+	// Player has bet 10, current bet is 50, last raise was 50
 	table.CurrentHand.PlayerBets[0] = 10
 	table.CurrentHand.CurrentBet = 50
+	table.CurrentHand.LastRaise = 50 // min-raise = 100
 
-	validActions := table.CurrentHand.GetValidActions(0)
+	validActions := table.CurrentHand.GetValidActions(0, table.Seats[0].Stack, table.Seats)
 
-	// Should allow call and fold only
+	// Should allow call, fold, and raise (player has 1000 chips, can raise minimum of 100)
 	hasCall := false
 	hasFold := false
+	hasRaise := false
 	for _, action := range validActions {
 		if action == "call" {
 			hasCall = true
 		}
 		if action == "fold" {
 			hasFold = true
+		}
+		if action == "raise" {
+			hasRaise = true
 		}
 	}
 
@@ -2168,8 +2173,11 @@ func TestGetValidActions_MustCall(t *testing.T) {
 	if !hasFold {
 		t.Errorf("expected 'fold' in valid actions, got %v", validActions)
 	}
-	if len(validActions) != 2 {
-		t.Errorf("expected exactly 2 valid actions (call, fold), got %d: %v", len(validActions), validActions)
+	if !hasRaise {
+		t.Errorf("expected 'raise' in valid actions, got %v", validActions)
+	}
+	if len(validActions) != 3 {
+		t.Errorf("expected exactly 3 valid actions (fold, call, raise), got %d: %v", len(validActions), validActions)
 	}
 }
 
@@ -3047,5 +3055,750 @@ func TestAdvanceStreet_ResetsLastRaise(t *testing.T) {
 
 	if hand.CurrentBet != 0 {
 		t.Errorf("CurrentBet = %d, want 0 after street advance", hand.CurrentBet)
+	}
+}
+
+// ============ PHASE 2: MAX-RAISE AND SIDE POT PREVENTION TESTS ============
+
+// TestGetMaxRaise_LimitedByPlayerStack verifies max raise equals minimum of player and smallest opponent stack
+func TestGetMaxRaise_LimitedByPlayerStack(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 3 active players: seat 0 (1000), seat 1 (1000), seat 2 (1000)
+	// All equal stacks - max raise should be limited by player's own stack
+	for i := 0; i < 3; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// GetMaxRaise for seat 0: min(1000 player, 1000 smallest opponent) = 1000
+	maxRaise := table.GetMaxRaise(0, table.Seats)
+	if maxRaise != 1000 {
+		t.Errorf("GetMaxRaise(seat 0) = %d, want 1000 (when all equal)", maxRaise)
+	}
+
+	// Now set seat 2 to 500 (smaller than seat 0)
+	table.Seats[2].Stack = 500
+
+	// GetMaxRaise for seat 0: min(1000 player, 500 smallest opponent) = 500
+	maxRaise = table.GetMaxRaise(0, table.Seats)
+	if maxRaise != 500 {
+		t.Errorf("GetMaxRaise(seat 0) = %d, want 500 (limited by opponent)", maxRaise)
+	}
+
+	// GetMaxRaise for seat 1: min(1000 player, 500 smallest opponent) = 500
+	maxRaise = table.GetMaxRaise(1, table.Seats)
+	if maxRaise != 500 {
+		t.Errorf("GetMaxRaise(seat 1) = %d, want 500 (limited by opponent)", maxRaise)
+	}
+}
+
+// TestGetMaxRaise_LimitedByOpponentStack verifies max raise limited to smallest opponent stack
+func TestGetMaxRaise_LimitedByOpponentStack(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 3 active players: seat 0 (1000), seat 1 (500), seat 2 (300)
+	stacks := []int{1000, 500, 300}
+	for i := 0; i < 3; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = stacks[i]
+	}
+
+	// Seat 0 player has 1000, but smallest opponent has 300
+	// Max raise should be limited to 300 to prevent side pots
+	maxRaise := table.GetMaxRaise(0, table.Seats)
+	if maxRaise != 300 {
+		t.Errorf("GetMaxRaise(seat 0) = %d, want 300 (smallest opponent stack)", maxRaise)
+	}
+
+	// Seat 1 player has 500, but smallest opponent (seat 2) has 300
+	// Max raise should be limited to 300
+	maxRaise = table.GetMaxRaise(1, table.Seats)
+	if maxRaise != 300 {
+		t.Errorf("GetMaxRaise(seat 1) = %d, want 300 (smallest opponent stack)", maxRaise)
+	}
+
+	// Seat 2 player has 300 (smallest), opponents have 1000 and 500
+	// Max raise should be seat 2's own stack (300), which is smaller than opponent stacks
+	maxRaise = table.GetMaxRaise(2, table.Seats)
+	if maxRaise != 300 {
+		t.Errorf("GetMaxRaise(seat 2) = %d, want 300 (player's own stack, smallest)", maxRaise)
+	}
+}
+
+// TestGetMaxRaise_HeadsUp verifies heads-up allows full player stack
+func TestGetMaxRaise_HeadsUp(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up heads-up: seat 0 (1000), seat 3 (800)
+	token0 := "player-0"
+	token3 := "player-3"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[3].Token = &token3
+	table.Seats[3].Status = "active"
+	table.Seats[3].Stack = 800
+
+	// In heads-up, seat 0 can raise up to 1000 (limited by opponent's 800 to prevent side pot)
+	// Wait, that's not right. In heads-up with unequal stacks:
+	// Seat 0 (1000) vs Seat 3 (800): to avoid side pots, seat 0 can only raise 800
+	// This is the same rule as multi-player: limited to smallest opponent stack
+	maxRaise := table.GetMaxRaise(0, table.Seats)
+	if maxRaise != 800 {
+		t.Errorf("GetMaxRaise(seat 0 heads-up) = %d, want 800 (opponent's stack)", maxRaise)
+	}
+
+	// Seat 3 (800 stack) can raise up to 800 (their full stack or opponent's smaller)
+	maxRaise = table.GetMaxRaise(3, table.Seats)
+	if maxRaise != 800 {
+		t.Errorf("GetMaxRaise(seat 3 heads-up) = %d, want 800 (their own or opponent's)", maxRaise)
+	}
+}
+
+// TestGetMaxRaise_MultiPlayer verifies multi-player correctly limits to smallest stack
+func TestGetMaxRaise_MultiPlayer(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 4 active players with varying stacks
+	stacks := []int{1000, 600, 300, 800}
+	for i := 0; i < 4; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = stacks[i]
+	}
+
+	// Seat 0 (1000): should be limited to smallest opponent (300)
+	maxRaise := table.GetMaxRaise(0, table.Seats)
+	if maxRaise != 300 {
+		t.Errorf("GetMaxRaise(seat 0, 4-player) = %d, want 300", maxRaise)
+	}
+
+	// Seat 1 (600): should be limited to smallest opponent (300)
+	maxRaise = table.GetMaxRaise(1, table.Seats)
+	if maxRaise != 300 {
+		t.Errorf("GetMaxRaise(seat 1, 4-player) = %d, want 300", maxRaise)
+	}
+
+	// Seat 2 (300): should be limited by its own stack (300)
+	maxRaise = table.GetMaxRaise(2, table.Seats)
+	if maxRaise != 300 {
+		t.Errorf("GetMaxRaise(seat 2, 4-player) = %d, want 300", maxRaise)
+	}
+
+	// Seat 3 (800): should be limited to smallest opponent (300)
+	maxRaise = table.GetMaxRaise(3, table.Seats)
+	if maxRaise != 300 {
+		t.Errorf("GetMaxRaise(seat 3, 4-player) = %d, want 300", maxRaise)
+	}
+}
+
+// TestValidateRaise_BelowMinimum verifies error when raise amount is below minimum
+func TestValidateRaise_BelowMinimum(t *testing.T) {
+	hand := &Hand{
+		CurrentBet: 20,
+		LastRaise:  20, // Min raise = 20 + 20 = 40
+	}
+
+	// Raise of 30 is below minimum of 40 (and not all-in)
+	err := hand.ValidateRaise(0, 30, 1000, [6]Seat{})
+	if err == nil {
+		t.Fatal("expected error for raise below minimum, got nil")
+	}
+
+	expectedMsg := "raise amount below minimum"
+	if err.Error() != expectedMsg {
+		t.Errorf("expected error '%s', got '%s'", expectedMsg, err.Error())
+	}
+}
+
+// TestValidateRaise_AboveMaximum verifies error with message "raise would create side pot"
+func TestValidateRaise_AboveMaximum(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 3 active players: seat 0 (1000), seat 1 (1000), seat 2 (300)
+	stacks := []int{1000, 1000, 300}
+	for i := 0; i < 3; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = stacks[i]
+	}
+
+	hand := &Hand{
+		CurrentBet: 20,
+		LastRaise:  20, // Min raise = 40
+	}
+
+	// Seat 0 tries to raise 500, but max allowed is 300 (smallest opponent)
+	// This should error with side pot message
+	err := hand.ValidateRaise(0, 500, 1000, table.Seats)
+	if err == nil {
+		t.Fatal("expected error for raise above maximum, got nil")
+	}
+
+	expectedMsg := "raise would create side pot"
+	if err.Error() != expectedMsg {
+		t.Errorf("expected error '%s', got '%s'", expectedMsg, err.Error())
+	}
+}
+
+// TestValidateRaise_ValidAmount verifies nil error for valid raise amount
+func TestValidateRaise_ValidAmount(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 3 active players: seat 0 (1000), seat 1 (1000), seat 2 (300)
+	stacks := []int{1000, 1000, 300}
+	for i := 0; i < 3; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = stacks[i]
+	}
+
+	hand := &Hand{
+		CurrentBet: 20,
+		LastRaise:  20, // Min raise = 40
+	}
+
+	// Raise of 40 is exactly minimum and within max (300)
+	err := hand.ValidateRaise(0, 40, 1000, table.Seats)
+	if err != nil {
+		t.Errorf("expected no error for valid raise 40, got %v", err)
+	}
+
+	// Raise of 300 is at max allowed (smallest opponent)
+	err = hand.ValidateRaise(0, 300, 1000, table.Seats)
+	if err != nil {
+		t.Errorf("expected no error for valid raise 300, got %v", err)
+	}
+
+	// Raise of 100 is between min and max
+	err = hand.ValidateRaise(0, 100, 1000, table.Seats)
+	if err != nil {
+		t.Errorf("expected no error for valid raise 100, got %v", err)
+	}
+}
+
+// TestValidateRaise_AllInBelowMin verifies all-in is allowed even if below minimum raise
+func TestValidateRaise_AllInBelowMin(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 3 active players
+	for i := 0; i < 3; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	hand := &Hand{
+		CurrentBet: 20,
+		LastRaise:  20, // Min raise = 40
+	}
+
+	// Player at seat 0 has only 25 chips left (all-in)
+	// 25 < minimum raise of 40, but should be allowed as all-in
+	err := hand.ValidateRaise(0, 25, 25, table.Seats) // amount=25, playerStack=25 (all-in)
+	if err != nil {
+		t.Errorf("expected no error for all-in below minimum, got %v", err)
+	}
+
+	// All-in with less than all chips should fail (not actually all-in)
+	// Player has 100 chips, tries to raise 25 (all-in would be 100)
+	err = hand.ValidateRaise(0, 25, 100, table.Seats) // amount < playerStack, not all-in
+	if err == nil {
+		t.Fatal("expected error for raise below minimum when not all-in, got nil")
+	}
+}
+
+// TestValidateRaise_HeadsUp verifies validation works correctly in heads-up
+func TestValidateRaise_HeadsUp(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up heads-up: seat 0 (1000), seat 3 (800)
+	token0 := "player-0"
+	token3 := "player-3"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[3].Token = &token3
+	table.Seats[3].Status = "active"
+	table.Seats[3].Stack = 800
+
+	hand := &Hand{
+		CurrentBet: 20,
+		LastRaise:  20, // Min raise = 40
+	}
+
+	// In heads-up, seat 0 (1000) can raise up to 800 (opponent's stack)
+	// Raise of 40 (minimum) should be valid
+	err := hand.ValidateRaise(0, 40, 1000, table.Seats)
+	if err != nil {
+		t.Errorf("expected no error for valid raise in heads-up, got %v", err)
+	}
+
+	// Raise of 800 (at max) should be valid
+	err = hand.ValidateRaise(0, 800, 1000, table.Seats)
+	if err != nil {
+		t.Errorf("expected no error for max raise in heads-up, got %v", err)
+	}
+
+	// Raise of 900 (exceeds max of 800) should error
+	err = hand.ValidateRaise(0, 900, 1000, table.Seats)
+	if err == nil {
+		t.Fatal("expected error for raise exceeding max in heads-up, got nil")
+	}
+
+	if err.Error() != "raise would create side pot" {
+		t.Errorf("expected error 'raise would create side pot', got '%s'", err.Error())
+	}
+}
+
+// ============================================================================
+// PHASE 3: Raise Action Processing Tests
+// ============================================================================
+
+// TestGetValidActions_IncludesRaise verifies raise appears in valid actions when player has enough chips
+func TestGetValidActions_IncludesRaise(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 3 active players with stacks of 1000 each
+	for i := 0; i < 3; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize action state
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+
+	// Player 0 is facing a 50 bet (must raise to at least 100)
+	// Player has 1000, so raise is valid option
+	table.CurrentHand.CurrentBet = 50
+	table.CurrentHand.PlayerBets[0] = 0 // Player hasn't acted yet
+	table.CurrentHand.LastRaise = 50    // Last raise was 50 (so min-raise = 100)
+
+	validActions := table.CurrentHand.GetValidActions(0, table.Seats[0].Stack, table.Seats)
+
+	// Should include raise, call, and fold
+	hasRaise := false
+	hasCall := false
+	hasFold := false
+	for _, action := range validActions {
+		if action == "raise" {
+			hasRaise = true
+		}
+		if action == "call" {
+			hasCall = true
+		}
+		if action == "fold" {
+			hasFold = true
+		}
+	}
+
+	if !hasRaise {
+		t.Errorf("expected 'raise' in valid actions when player has chips to raise, got %v", validActions)
+	}
+	if !hasCall {
+		t.Errorf("expected 'call' in valid actions, got %v", validActions)
+	}
+	if !hasFold {
+		t.Errorf("expected 'fold' in valid actions, got %v", validActions)
+	}
+	if len(validActions) != 3 {
+		t.Errorf("expected exactly 3 valid actions (fold, call, raise), got %d: %v", len(validActions), validActions)
+	}
+}
+
+// TestGetValidActions_NoRaiseWhenInsufficient verifies raise is excluded when player can't raise minimum
+func TestGetValidActions_NoRaiseWhenInsufficient(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players
+	token0 := "player-0"
+	token1 := "player-1"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 30 // Very small stack
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize action state
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+
+	// Player 0 is facing a 20 bet
+	// To raise, they'd need to call (20) + min raise (20) = 40, but only have 30
+	table.CurrentHand.CurrentBet = 20
+	table.CurrentHand.PlayerBets[0] = 0
+	table.CurrentHand.LastRaise = 20
+
+	validActions := table.CurrentHand.GetValidActions(0, table.Seats[0].Stack, table.Seats)
+
+	// Should include call and fold, but NOT raise
+	hasRaise := false
+	hasCall := false
+	hasFold := false
+	for _, action := range validActions {
+		if action == "raise" {
+			hasRaise = true
+		}
+		if action == "call" {
+			hasCall = true
+		}
+		if action == "fold" {
+			hasFold = true
+		}
+	}
+
+	if hasRaise {
+		t.Errorf("expected no 'raise' in valid actions when insufficient chips, got %v", validActions)
+	}
+	if !hasCall {
+		t.Errorf("expected 'call' in valid actions, got %v", validActions)
+	}
+	if !hasFold {
+		t.Errorf("expected 'fold' in valid actions, got %v", validActions)
+	}
+	if len(validActions) != 2 {
+		t.Errorf("expected exactly 2 valid actions (fold, call), got %d: %v", len(validActions), validActions)
+	}
+}
+
+// TestGetValidActions_HeadsUp verifies valid actions are correct in heads-up scenario
+func TestGetValidActions_HeadsUp(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up heads-up: seat 0 (dealer) and seat 3 (BB)
+	token0 := "player-0"
+	token3 := "player-3"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[3].Token = &token3
+	table.Seats[3].Status = "active"
+	table.Seats[3].Stack = 1000
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize action state for heads-up
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+
+	// In heads-up, dealer acts first on preflop
+	// Player 0 (dealer/SB) is facing BB of 50
+	table.CurrentHand.CurrentBet = 50    // BB was posted
+	table.CurrentHand.LastRaise = 50     // min-raise = 100
+	table.CurrentHand.PlayerBets[0] = 25 // Player 0 posted SB of 25
+
+	validActions := table.CurrentHand.GetValidActions(0, table.Seats[0].Stack, table.Seats)
+
+	// Should include fold, call, and raise
+	hasRaise := false
+	hasCall := false
+	hasFold := false
+	for _, action := range validActions {
+		if action == "raise" {
+			hasRaise = true
+		}
+		if action == "call" {
+			hasCall = true
+		}
+		if action == "fold" {
+			hasFold = true
+		}
+	}
+
+	if !hasRaise {
+		t.Errorf("expected 'raise' in valid actions for heads-up, got %v", validActions)
+	}
+	if !hasCall {
+		t.Errorf("expected 'call' in valid actions, got %v", validActions)
+	}
+	if !hasFold {
+		t.Errorf("expected 'fold' in valid actions, got %v", validActions)
+	}
+	if len(validActions) != 3 {
+		t.Errorf("expected exactly 3 valid actions (fold, call, raise), got %d: %v", len(validActions), validActions)
+	}
+}
+
+// TestProcessAction_RaiseUpdatesBets verifies raise correctly updates CurrentBet, LastRaise, PlayerBets, and Pot
+func TestProcessAction_RaiseUpdatesBets(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players
+	for i := 0; i < 2; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Set up betting state: CurrentBet=50, Player 0 hasn't acted
+	table.CurrentHand.CurrentBet = 50
+	table.CurrentHand.LastRaise = 50
+	table.CurrentHand.Pot = 100
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+	table.CurrentHand.PlayerBets[0] = 0
+
+	// Player 0 raises to 150 (initial bet of 50, raise increment of 100)
+	chipsMoved, err := table.CurrentHand.ProcessAction(0, "raise", 1000, 150)
+	if err != nil {
+		t.Errorf("expected no error processing raise, got %v", err)
+	}
+
+	// Should move 150 chips (call 50 + raise 100)
+	if chipsMoved != 150 {
+		t.Errorf("expected 150 chips moved, got %d", chipsMoved)
+	}
+
+	// CurrentBet should be updated to 150
+	if table.CurrentHand.CurrentBet != 150 {
+		t.Errorf("expected CurrentBet=150, got %d", table.CurrentHand.CurrentBet)
+	}
+
+	// LastRaise should be updated to 100 (150 - 50 = 100)
+	if table.CurrentHand.LastRaise != 100 {
+		t.Errorf("expected LastRaise=100, got %d", table.CurrentHand.LastRaise)
+	}
+
+	// PlayerBets[0] should be updated to 150
+	if table.CurrentHand.PlayerBets[0] != 150 {
+		t.Errorf("expected PlayerBets[0]=150, got %d", table.CurrentHand.PlayerBets[0])
+	}
+
+	// Pot should be updated (100 + 150 = 250)
+	if table.CurrentHand.Pot != 250 {
+		t.Errorf("expected Pot=250, got %d", table.CurrentHand.Pot)
+	}
+
+	// ActedPlayers[0] should be marked true
+	if !table.CurrentHand.ActedPlayers[0] {
+		t.Errorf("expected ActedPlayers[0]=true")
+	}
+}
+
+// TestProcessAction_RaiseInvalidAmount verifies error when raise amount is invalid
+func TestProcessAction_RaiseInvalidAmount(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players
+	for i := 0; i < 2; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Set up betting state: CurrentBet=50
+	table.CurrentHand.CurrentBet = 50
+	table.CurrentHand.LastRaise = 50
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+	table.CurrentHand.PlayerBets[0] = 0
+
+	// Try to raise to 75 (below minimum of 100)
+	_, err = table.CurrentHand.ProcessAction(0, "raise", 1000, 75)
+	if err == nil {
+		t.Fatal("expected error for raise below minimum, got nil")
+	}
+	if err.Error() != "raise amount below minimum" {
+		t.Errorf("expected error 'raise amount below minimum', got '%s'", err.Error())
+	}
+}
+
+// TestProcessAction_RaiseAllIn verifies all-in raise is handled correctly even below minimum
+func TestProcessAction_RaiseAllIn(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players
+	for i := 0; i < 2; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Set up betting state: CurrentBet=50
+	table.CurrentHand.CurrentBet = 50
+	table.CurrentHand.LastRaise = 50
+	table.CurrentHand.Pot = 100
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+	table.CurrentHand.PlayerBets[0] = 0
+
+	// Player with 75 chips goes all-in (below minimum of 100, but should be allowed)
+	chipsMoved, err := table.CurrentHand.ProcessAction(0, "raise", 75, 75)
+	if err != nil {
+		t.Errorf("expected no error for all-in raise below minimum, got %v", err)
+	}
+
+	// Should move all 75 chips
+	if chipsMoved != 75 {
+		t.Errorf("expected 75 chips moved, got %d", chipsMoved)
+	}
+
+	// CurrentBet should be updated to 75
+	if table.CurrentHand.CurrentBet != 75 {
+		t.Errorf("expected CurrentBet=75, got %d", table.CurrentHand.CurrentBet)
+	}
+
+	// PlayerBets[0] should be 75
+	if table.CurrentHand.PlayerBets[0] != 75 {
+		t.Errorf("expected PlayerBets[0]=75, got %d", table.CurrentHand.PlayerBets[0])
+	}
+}
+
+// TestProcessAction_MultipleRaises verifies LastRaise is correctly updated through a chain of raises
+func TestProcessAction_MultipleRaises(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 3 active players
+	for i := 0; i < 3; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize betting state: BB=50
+	table.CurrentHand.CurrentBet = 50
+	table.CurrentHand.LastRaise = 50
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+
+	// Player 0 raises to 150 (bet 50, raise 100)
+	table.CurrentHand.ProcessAction(0, "raise", 1000, 150)
+	if table.CurrentHand.LastRaise != 100 {
+		t.Errorf("after first raise, expected LastRaise=100, got %d", table.CurrentHand.LastRaise)
+	}
+
+	// Player 1 re-raises to 300 (call 150, raise 150)
+	table.CurrentHand.PlayerBets[1] = 0
+	table.CurrentHand.ProcessAction(1, "raise", 1000, 300)
+	if table.CurrentHand.LastRaise != 150 {
+		t.Errorf("after second raise, expected LastRaise=150, got %d", table.CurrentHand.LastRaise)
+	}
+
+	// Player 2 re-raises to 600 (call 300, raise 300)
+	table.CurrentHand.PlayerBets[2] = 0
+	table.CurrentHand.ProcessAction(2, "raise", 1000, 600)
+	if table.CurrentHand.LastRaise != 300 {
+		t.Errorf("after third raise, expected LastRaise=300, got %d", table.CurrentHand.LastRaise)
+	}
+
+	if table.CurrentHand.CurrentBet != 600 {
+		t.Errorf("expected final CurrentBet=600, got %d", table.CurrentHand.CurrentBet)
+	}
+}
+
+// TestProcessAction_RaiseHeadsUp verifies raise works correctly in heads-up scenario
+func TestProcessAction_RaiseHeadsUp(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up heads-up: seat 0 and seat 3
+	token0 := "player-0"
+	token3 := "player-3"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[3].Token = &token3
+	table.Seats[3].Status = "active"
+	table.Seats[3].Stack = 1000
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Set up betting state: Button is dealer (seat 0), BB is seat 3 (25 chips)
+	table.CurrentHand.CurrentBet = 25
+	table.CurrentHand.LastRaise = 25
+	table.CurrentHand.Pot = 50
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+	table.CurrentHand.PlayerBets[0] = 0
+
+	// Seat 0 raises to 75
+	chipsMoved, err := table.CurrentHand.ProcessAction(0, "raise", 1000, 75)
+	if err != nil {
+		t.Errorf("expected no error processing raise in heads-up, got %v", err)
+	}
+
+	if chipsMoved != 75 {
+		t.Errorf("expected 75 chips moved, got %d", chipsMoved)
+	}
+
+	if table.CurrentHand.CurrentBet != 75 {
+		t.Errorf("expected CurrentBet=75, got %d", table.CurrentHand.CurrentBet)
+	}
+
+	if table.CurrentHand.LastRaise != 50 {
+		t.Errorf("expected LastRaise=50 (75-25), got %d", table.CurrentHand.LastRaise)
 	}
 }

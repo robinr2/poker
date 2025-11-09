@@ -1656,7 +1656,7 @@ func TestHandlePlayerAction_ValidCheck(t *testing.T) {
 
 	// Verify check is valid action for seat 1
 	table.mu.RLock()
-	validActions := table.CurrentHand.GetValidActions(1)
+	validActions := table.CurrentHand.GetValidActions(1, table.Seats[1].Stack, table.Seats)
 	table.mu.RUnlock()
 
 	hasCheck := false

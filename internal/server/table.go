@@ -527,7 +527,8 @@ func (t *Table) StartHand() error {
 		var callAmount, currentBet, pot int
 		if hasCurrentActor {
 			seatIndex = *t.CurrentHand.CurrentActor
-			validActions = t.CurrentHand.GetValidActions(seatIndex)
+			playerStack := t.Seats[seatIndex].Stack
+			validActions = t.CurrentHand.GetValidActions(seatIndex, playerStack, t.Seats)
 			callAmount = t.CurrentHand.GetCallAmount(seatIndex)
 			currentBet = t.CurrentHand.CurrentBet
 			pot = t.CurrentHand.Pot
@@ -759,13 +760,32 @@ func (h *Hand) GetCallAmount(seatIndex int) int {
 }
 
 // GetValidActions returns the list of valid actions for a player
-// - If player must match a current bet: ["call", "fold"]
+// - If player must match a current bet: ["call", "fold", "raise"] (if enough chips to raise min)
 // - If player has matched the current bet: ["check", "fold"]
-func (h *Hand) GetValidActions(seatIndex int) []string {
+// Raise is included when:
+// - Player is behind (callAmount > 0) AND
+// - Player has enough chips to call + raise minimum amount
+func (h *Hand) GetValidActions(seatIndex int, playerStack int, seats [6]Seat) []string {
 	callAmount := h.GetCallAmount(seatIndex)
 
 	if callAmount > 0 {
 		// Player is behind, must call to continue
+		// Check if they can also raise
+		minRaise := h.GetMinRaise()
+		// Player needs: callAmount (to match current bet) + minRaise (for the raise)
+		// But actually, to raise minimum, they need to put out callAmount + minRaise total
+		// Wait, that's not right. MinRaise is the increment AFTER calling.
+		// Actually, minRaise is already CurrentBet + LastRaise
+		// So to raise minimum, player needs to put out minRaise total
+		// But they're currently only bet PlayerBets[seatIndex]
+		// So they need minRaise - PlayerBets[seatIndex] more chips
+
+		chipsNeeded := minRaise - h.PlayerBets[seatIndex]
+		if chipsNeeded <= playerStack {
+			// Player can raise
+			return []string{"fold", "call", "raise"}
+		}
+		// Player cannot raise
 		return []string{"call", "fold"}
 	}
 
@@ -781,13 +801,101 @@ func (h *Hand) GetMinRaise() int {
 	return h.CurrentBet + h.LastRaise
 }
 
-// ProcessAction processes a player action (fold, check, or call)
+// GetMaxRaise returns the maximum valid raise amount to prevent side pots
+// Returns the minimum of:
+// - Player's remaining stack
+// - Smallest opponent's stack (to prevent side pots)
+// This prevents creating side pots by ensuring the largest raise doesn't exceed
+// what all other players can match
+func (t *Table) GetMaxRaise(seatIndex int, seats [6]Seat) int {
+	playerStack := seats[seatIndex].Stack
+
+	// Find smallest opponent stack among active players
+	smallestOpponentStack := -1
+	for i := 0; i < 6; i++ {
+		if i != seatIndex && seats[i].Status == "active" {
+			if smallestOpponentStack == -1 || seats[i].Stack < smallestOpponentStack {
+				smallestOpponentStack = seats[i].Stack
+			}
+		}
+	}
+
+	// If no opponents found (shouldn't happen in valid game), return player's stack
+	if smallestOpponentStack == -1 {
+		return playerStack
+	}
+
+	// Return minimum of player's stack and smallest opponent's stack
+	if playerStack < smallestOpponentStack {
+		return playerStack
+	}
+	return smallestOpponentStack
+}
+
+// ValidateRaise checks if a raise amount is valid
+// Returns nil if the raise is valid, error otherwise
+// Rules:
+// - If raiseAmount equals playerStack (all-in): always valid, return nil
+// - If raiseAmount < GetMinRaise(): return error "raise amount below minimum"
+// - If raiseAmount > GetMaxRaise(): return error "raise would create side pot"
+// - Otherwise: return nil
+func (h *Hand) ValidateRaise(seatIndex, raiseAmount, playerStack int, seats [6]Seat) error {
+	// Check if this is all-in (raiseAmount equals playerStack)
+	if raiseAmount == playerStack {
+		// All-in is always valid, even below minimum
+		return nil
+	}
+
+	// Check minimum raise
+	minRaise := h.GetMinRaise()
+	if raiseAmount < minRaise {
+		return fmt.Errorf("raise amount below minimum")
+	}
+
+	// Check maximum raise (prevent side pots)
+	// We need to get a Table reference to call GetMaxRaise, but we only have Hand
+	// We'll need to refactor this - let me check the calling pattern
+	// Actually, ValidateRaise should work with the hand's context
+	// We need the table to call GetMaxRaise, so let's make this work differently
+
+	// For now, let's compute max raise inline here
+	// Find smallest opponent stack among active players
+	smallestOpponentStack := -1
+	for i := 0; i < 6; i++ {
+		if i != seatIndex && seats[i].Status == "active" {
+			if smallestOpponentStack == -1 || seats[i].Stack < smallestOpponentStack {
+				smallestOpponentStack = seats[i].Stack
+			}
+		}
+	}
+
+	// If no opponents, no side pot check needed
+	if smallestOpponentStack == -1 {
+		return nil
+	}
+
+	// Maximum allowed raise is the minimum of player's stack and smallest opponent's stack
+	maxRaise := playerStack
+	if smallestOpponentStack < playerStack {
+		maxRaise = smallestOpponentStack
+	}
+
+	if raiseAmount > maxRaise {
+		return fmt.Errorf("raise would create side pot")
+	}
+
+	return nil
+}
+
+// ProcessAction processes a player action (fold, check, call, or raise)
 // - "fold": marks player as folded (no pot/stack changes)
 // - "check": valid only when bet is matched; marks player as acted (no pot/stack changes)
 // - "call": moves chips from stack to pot to match current bet; handles all-in
+// - "raise": validates and processes raise, updating CurrentBet, LastRaise, PlayerBets, and Pot
+// The amount parameter is required for "raise" action and ignored for other actions.
 // The caller is responsible for updating the player's stack in the table's seats after calling this.
 // Returns the number of chips moved (for updating player stack), or error if action is invalid
-func (h *Hand) ProcessAction(seatIndex int, action string, playerStack int) (int, error) {
+func (h *Hand) ProcessAction(seatIndex int, action string, playerStack int, amount ...int) (int, error) {
 	// Initialize maps if needed
 	if h.FoldedPlayers == nil {
 		h.FoldedPlayers = make(map[int]bool)
@@ -836,6 +944,52 @@ func (h *Hand) ProcessAction(seatIndex int, action string, playerStack int) (int
 
 		// Mark player as acted
 		h.ActedPlayers[seatIndex] = true
+		return chipsToBet, nil
+
+	case "raise":
+		// Extract raise amount from variadic parameter
+		if len(amount) == 0 {
+			return 0, fmt.Errorf("raise action requires amount parameter")
+		}
+		raiseAmount := amount[0]
+
+		// Validate raise amount (this will be called with current table seats)
+		// For now, we'll do inline validation
+		// Check if this is all-in (raiseAmount equals playerStack)
+		if raiseAmount != playerStack {
+			// Not all-in, so validate min/max bounds
+			minRaise := h.GetMinRaise()
+			if raiseAmount < minRaise {
+				return 0, fmt.Errorf("raise amount below minimum")
+			}
+			// Note: Max raise validation would need table context, handled by caller
+		}
+
+		// Calculate chips to move (raise amount minus what was already bet)
+		currentPlayerBet := h.PlayerBets[seatIndex]
+		chipsToBet := raiseAmount - currentPlayerBet
+
+		// Sanity check: don't exceed player's stack
+		if chipsToBet > playerStack {
+			return 0, fmt.Errorf("raise exceeds player stack")
+		}
+
+		// Update CurrentBet to this raise amount
+		previousBet := h.CurrentBet
+		h.CurrentBet = raiseAmount
+
+		// Update LastRaise (increment from previous bet)
+		h.LastRaise = raiseAmount - previousBet
+
+		// Update pot with chips moved
+		h.Pot += chipsToBet
+
+		// Update player's total bet for this round
+		h.PlayerBets[seatIndex] = raiseAmount
+
+		// Mark player as acted
+		h.ActedPlayers[seatIndex] = true
+
 		return chipsToBet, nil
 
 	default:
