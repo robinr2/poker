@@ -2787,3 +2787,355 @@ func TestWebSocketFlow_RiverBroadcast_AfterTurnComplete(t *testing.T) {
 		t.Errorf("expected 5 river cards, got %d", len(boardCards))
 	}
 }
+
+// TestWebSocketFlow_BBGetsActionAfterSBCalls verifies BB receives action after SB calls unopened pot
+// This test validates the BB option fix works end-to-end:
+// 1. Three players are seated
+// 2. Hand starts with proper blind positions
+// 3. Dealer acts and calls
+// 4. SB acts and calls (unopened pot)
+// 5. BB still has the option and can act
+// 6. After BB checks, betting round completes and can advance to flop
+func TestWebSocketFlow_BBGetsActionAfterSBCalls(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 3 players with sessions
+	session1, _ := server.sessionManager.CreateSession("Dealer")
+	session2, _ := server.sessionManager.CreateSession("SB")
+	session3, _ := server.sessionManager.CreateSession("BB")
+	token1 := session1.Token
+	token2 := session2.Token
+	token3 := session3.Token
+
+	// Update sessions with table and seat info
+	server.sessionManager.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	server.sessionManager.UpdateSession(token2, &table.ID, &[]int{1}[0])
+	server.sessionManager.UpdateSession(token3, &table.ID, &[]int{2}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.Seats[2].Token = &token3
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+	table.mu.Unlock()
+
+	// Start a hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	table.mu.Lock()
+	if table.CurrentHand == nil {
+		table.mu.Unlock()
+		t.Fatal("CurrentHand is nil after StartHand")
+	}
+
+	hand := table.CurrentHand
+
+	// Verify initial state
+	if hand.Street != "preflop" {
+		table.mu.Unlock()
+		t.Errorf("expected preflop, got %s", hand.Street)
+	}
+
+	// Verify BigBlindHasOption is true at start
+	if !hand.BigBlindHasOption {
+		table.mu.Unlock()
+		t.Error("expected BigBlindHasOption to be true initially")
+	}
+
+	// Dealer (seat 0) calls
+	_, err = hand.ProcessAction(0, "call", 980)
+	if err != nil {
+		table.mu.Unlock()
+		t.Fatalf("dealer call failed: %v", err)
+	}
+
+	// SB (seat 1) calls
+	_, err = hand.ProcessAction(1, "call", 990)
+	if err != nil {
+		table.mu.Unlock()
+		t.Fatalf("SB call failed: %v", err)
+	}
+
+	// Verify BigBlindHasOption is still true (no raise yet)
+	if !hand.BigBlindHasOption {
+		table.mu.Unlock()
+		t.Error("expected BigBlindHasOption to still be true after SB calls unopened pot")
+	}
+
+	// BB (seat 2) checks
+	_, err = hand.ProcessAction(2, "check", 980)
+	if err != nil {
+		table.mu.Unlock()
+		t.Fatalf("BB check failed: %v", err)
+	}
+
+	// Verify BigBlindHasOption is now false
+	if hand.BigBlindHasOption {
+		table.mu.Unlock()
+		t.Error("expected BigBlindHasOption to be false after BB exercises option")
+	}
+
+	// Verify betting round is complete
+	if !hand.IsBettingRoundComplete(table.Seats) {
+		table.mu.Unlock()
+		t.Error("expected betting round to be complete after BB checks")
+	}
+
+	// Advance to flop
+	err = hand.AdvanceToNextStreet()
+	if err != nil {
+		table.mu.Unlock()
+		t.Fatalf("failed to advance to flop: %v", err)
+	}
+
+	// Verify we're on flop with 3 cards
+	if hand.Street != "flop" {
+		table.mu.Unlock()
+		t.Errorf("expected street to be 'flop', got '%s'", hand.Street)
+	}
+
+	if len(hand.BoardCards) != 3 {
+		table.mu.Unlock()
+		t.Errorf("expected 3 flop cards, got %d", len(hand.BoardCards))
+	}
+
+	table.mu.Unlock()
+
+	// Broadcast hand started to verify no errors
+	err = server.broadcastHandStarted(table)
+	if err != nil {
+		t.Fatalf("failed to broadcast hand started: %v", err)
+	}
+}
+
+// TestWebSocketFlow_CheckRaiseOnFlop verifies WebSocket properly handles check-raise scenario on flop
+// This tests that UI receives correct valid actions when a player can check-raise on flop
+func TestWebSocketFlow_CheckRaiseOnFlop(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 3 players with sessions
+	session1, _ := server.sessionManager.CreateSession("Player1")
+	session2, _ := server.sessionManager.CreateSession("Player2")
+	session3, _ := server.sessionManager.CreateSession("Player3")
+	token1 := session1.Token
+	token2 := session2.Token
+	token3 := session3.Token
+
+	// Update sessions with table and seat info
+	server.sessionManager.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	server.sessionManager.UpdateSession(token2, &table.ID, &[]int{1}[0])
+	server.sessionManager.UpdateSession(token3, &table.ID, &[]int{2}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.Seats[2].Token = &token3
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+	table.mu.Unlock()
+
+	// Start a hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	table.mu.Lock()
+	if table.CurrentHand == nil {
+		table.mu.Unlock()
+		t.Fatal("CurrentHand is nil after StartHand")
+	}
+
+	hand := table.CurrentHand
+
+	// Preflop: all players call to get to flop
+	_, err = hand.ProcessAction(0, "call", 980)
+	if err != nil {
+		table.mu.Unlock()
+		t.Fatalf("player 0 call failed: %v", err)
+	}
+	_, err = hand.ProcessAction(1, "call", 990)
+	if err != nil {
+		table.mu.Unlock()
+		t.Fatalf("player 1 call failed: %v", err)
+	}
+	_, err = hand.ProcessAction(2, "check", 980)
+	if err != nil {
+		table.mu.Unlock()
+		t.Fatalf("player 2 (BB) check failed: %v", err)
+	}
+
+	// Verify preflop betting round is complete
+	if !hand.IsBettingRoundComplete(table.Seats) {
+		table.mu.Unlock()
+		t.Error("expected preflop betting round to be complete")
+	}
+
+	// Advance to flop
+	err = hand.AdvanceToNextStreet()
+	if err != nil {
+		table.mu.Unlock()
+		t.Fatalf("failed to advance to flop: %v", err)
+	}
+
+	// Verify we're on flop
+	if hand.Street != "flop" {
+		table.mu.Unlock()
+		t.Errorf("expected street to be 'flop', got '%s'", hand.Street)
+	}
+
+	// Player 2 (BB) checks on flop
+	_, err = hand.ProcessAction(2, "check", 980)
+	if err != nil {
+		table.mu.Unlock()
+		t.Fatalf("player 2 check on flop failed: %v", err)
+	}
+
+	// Player 0 checks on flop
+	_, err = hand.ProcessAction(0, "check", 980)
+	if err != nil {
+		table.mu.Unlock()
+		t.Fatalf("player 0 check on flop failed: %v", err)
+	}
+
+	// Verify player 1 has raise option (check-raise opportunity)
+	validActions := hand.GetValidActions(1, table.Seats[1].Stack, table.Seats)
+	hasRaise := false
+	hasCheck := false
+	for _, action := range validActions {
+		if action == "raise" {
+			hasRaise = true
+		}
+		if action == "check" {
+			hasCheck = true
+		}
+	}
+
+	if !hasRaise {
+		table.mu.Unlock()
+		t.Fatalf("expected player 1 to have raise option for check-raise on flop, got: %v", validActions)
+	}
+	if !hasCheck {
+		table.mu.Unlock()
+		t.Fatalf("expected player 1 to have check option on flop, got: %v", validActions)
+	}
+
+	// Player 1 raises to 40 on flop (check-raise)
+	_, err = hand.ProcessAction(1, "raise", 960, 40)
+	if err != nil {
+		table.mu.Unlock()
+		t.Fatalf("player 1 check-raise on flop failed: %v", err)
+	}
+
+	// Verify current bet is updated
+	if hand.CurrentBet != 40 {
+		table.mu.Unlock()
+		t.Errorf("expected CurrentBet to be 40 after check-raise, got %d", hand.CurrentBet)
+	}
+
+	// Player 2 now faces the raise
+	validActions = hand.GetValidActions(2, table.Seats[2].Stack, table.Seats)
+	hasCall := false
+	hasFold := false
+	hasRaise = false
+	for _, action := range validActions {
+		if action == "call" {
+			hasCall = true
+		}
+		if action == "fold" {
+			hasFold = true
+		}
+		if action == "raise" {
+			hasRaise = true
+		}
+	}
+
+	if !hasCall {
+		table.mu.Unlock()
+		t.Errorf("expected player 2 to have call option after check-raise, got: %v", validActions)
+	}
+	if !hasFold {
+		table.mu.Unlock()
+		t.Errorf("expected player 2 to have fold option after check-raise, got: %v", validActions)
+	}
+	if !hasRaise {
+		table.mu.Unlock()
+		t.Errorf("expected player 2 to have raise option (for 3-bet), got: %v", validActions)
+	}
+
+	// Player 2 calls the raise
+	_, err = hand.ProcessAction(2, "call", 960)
+	if err != nil {
+		table.mu.Unlock()
+		t.Fatalf("player 2 call of raise failed: %v", err)
+	}
+
+	// Player 0 calls the raise
+	_, err = hand.ProcessAction(0, "call", 960)
+	if err != nil {
+		table.mu.Unlock()
+		t.Fatalf("player 0 call of raise failed: %v", err)
+	}
+
+	// Verify flop betting round is complete
+	if !hand.IsBettingRoundComplete(table.Seats) {
+		table.mu.Unlock()
+		t.Error("expected flop betting round to be complete after check-raise action")
+	}
+
+	// Advance to turn to verify the flow continues correctly
+	err = hand.AdvanceToNextStreet()
+	if err != nil {
+		table.mu.Unlock()
+		t.Fatalf("failed to advance to turn: %v", err)
+	}
+
+	// Verify we're on turn with 4 cards
+	if hand.Street != "turn" {
+		table.mu.Unlock()
+		t.Errorf("expected street to be 'turn', got '%s'", hand.Street)
+	}
+
+	if len(hand.BoardCards) != 4 {
+		table.mu.Unlock()
+		t.Errorf("expected 4 board cards on turn, got %d", len(hand.BoardCards))
+	}
+
+	table.mu.Unlock()
+
+	// Broadcast hand state to verify no errors with the check-raise scenario
+	err = server.broadcastTableState(table.ID, nil)
+	if err != nil {
+		t.Fatalf("failed to broadcast table state: %v", err)
+	}
+}

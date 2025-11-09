@@ -2388,15 +2388,19 @@ func TestGetValidActions_CanCheck(t *testing.T) {
 
 	validActions := table.CurrentHand.GetValidActions(0, table.Seats[0].Stack, table.Seats)
 
-	// Should allow check and fold
+	// Should allow check, fold, and raise (since player has enough chips)
 	hasCheck := false
 	hasFold := false
+	hasRaise := false
 	for _, action := range validActions {
 		if action == "check" {
 			hasCheck = true
 		}
 		if action == "fold" {
 			hasFold = true
+		}
+		if action == "raise" {
+			hasRaise = true
 		}
 	}
 
@@ -2406,8 +2410,11 @@ func TestGetValidActions_CanCheck(t *testing.T) {
 	if !hasFold {
 		t.Errorf("expected 'fold' in valid actions, got %v", validActions)
 	}
-	if len(validActions) != 2 {
-		t.Errorf("expected exactly 2 valid actions (check, fold), got %d: %v", len(validActions), validActions)
+	if !hasRaise {
+		t.Errorf("expected 'raise' in valid actions (player has enough chips), got %v", validActions)
+	}
+	if len(validActions) != 3 {
+		t.Errorf("expected exactly 3 valid actions (check, fold, raise), got %d: %v", len(validActions), validActions)
 	}
 }
 
@@ -4650,5 +4657,324 @@ func TestHand_BigBlindHasOption_ClearedOnStreetAdvance(t *testing.T) {
 	// Verify we're on flop
 	if hand.Street != "flop" {
 		t.Errorf("expected street to be 'flop', got '%s'", hand.Street)
+	}
+}
+
+// TestHandFlow_BBCanRaiseUnopenedPot verifies BB can raise an unopened pot when facing calls
+// This tests the complete hand flow with BB choosing to raise instead of check/fold
+func TestHandFlow_BBCanRaiseUnopenedPot(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up 3 players: UTG (seat 0), Dealer (seat 1), BB (seat 2)
+	// Dealer posts SB, BB posts BB
+	token0, token1, token2 := "utg", "dealer", "bb"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	hand := table.CurrentHand
+	if hand == nil {
+		t.Fatal("CurrentHand is nil after StartHand")
+	}
+
+	// Verify initial state
+	if hand.Street != "preflop" {
+		t.Errorf("expected preflop, got %s", hand.Street)
+	}
+	if !hand.BigBlindHasOption {
+		t.Error("expected BigBlindHasOption to be true initially")
+	}
+
+	// Verify BB initially has raise option when pot is unopened
+	bbValidActions := hand.GetValidActions(2, table.Seats[2].Stack, table.Seats)
+	hasRaise := false
+	for _, action := range bbValidActions {
+		if action == "raise" {
+			hasRaise = true
+			break
+		}
+	}
+	if !hasRaise {
+		t.Fatalf("expected BB to have raise option preflop with unopened pot, got actions: %v", bbValidActions)
+	}
+
+	// UTG (seat 0) calls the BB
+	_, err = hand.ProcessAction(0, "call", 980)
+	if err != nil {
+		t.Fatalf("UTG call failed: %v", err)
+	}
+
+	// Dealer (seat 1) calls the BB
+	_, err = hand.ProcessAction(1, "call", 990)
+	if err != nil {
+		t.Fatalf("Dealer call failed: %v", err)
+	}
+
+	// Verify BigBlindHasOption is still true (no raise yet, unopened pot)
+	if !hand.BigBlindHasOption {
+		t.Error("expected BigBlindHasOption to still be true after UTG/Dealer calls unopened pot")
+	}
+
+	// Verify BB still has raise option
+	bbValidActions = hand.GetValidActions(2, table.Seats[2].Stack, table.Seats)
+	hasRaise = false
+	for _, action := range bbValidActions {
+		if action == "raise" {
+			hasRaise = true
+			break
+		}
+	}
+	if !hasRaise {
+		t.Fatalf("expected BB to have raise option after UTG/Dealer call unopened pot, got actions: %v", bbValidActions)
+	}
+
+	// BB raises to 40 (minimum raise from 20 is 40)
+	_, err = hand.ProcessAction(2, "raise", 960, 40)
+	if err != nil {
+		t.Fatalf("BB raise failed: %v", err)
+	}
+
+	// Verify BigBlindHasOption is now false (BB exercised option by raising)
+	if hand.BigBlindHasOption {
+		t.Error("expected BigBlindHasOption to be false after BB raises")
+	}
+
+	// Verify CurrentBet is now 40 (the raise amount)
+	if hand.CurrentBet != 40 {
+		t.Errorf("expected CurrentBet to be 40 after BB raise, got %d", hand.CurrentBet)
+	}
+
+	// UTG now faces a raise and can call/fold/reraise
+	// Action should return to UTG (first to act in preflop)
+	// Verify UTG has the option to call the raise or fold
+	utgValidActions := hand.GetValidActions(0, table.Seats[0].Stack-20, table.Seats)
+	hasCall := false
+	hasFold := false
+	for _, action := range utgValidActions {
+		if action == "call" {
+			hasCall = true
+		}
+		if action == "fold" {
+			hasFold = true
+		}
+	}
+	if !hasCall || !hasFold {
+		t.Errorf("expected UTG to have call/fold options after BB raise, got: %v", utgValidActions)
+	}
+
+	// UTG calls the raise
+	_, err = hand.ProcessAction(0, "call", 960)
+	if err != nil {
+		t.Fatalf("UTG call of raise failed: %v", err)
+	}
+
+	// Dealer calls the raise
+	_, err = hand.ProcessAction(1, "call", 960)
+	if err != nil {
+		t.Fatalf("Dealer call of raise failed: %v", err)
+	}
+
+	// Verify betting round is complete
+	if !hand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected betting round to be complete after all players act")
+	}
+
+	// Advance to flop
+	err = hand.AdvanceToNextStreet()
+	if err != nil {
+		t.Fatalf("failed to advance to flop: %v", err)
+	}
+
+	// Verify we're on flop with 3 cards
+	if hand.Street != "flop" {
+		t.Errorf("expected street to be 'flop', got '%s'", hand.Street)
+	}
+	if len(hand.BoardCards) != 3 {
+		t.Errorf("expected 3 board cards on flop, got %d", len(hand.BoardCards))
+	}
+}
+
+// TestHandFlow_PostflopCheckRaise verifies players can check-raise on postflop streets
+// This tests that players who have matched the bet on flop have raise option
+func TestHandFlow_PostflopCheckRaise(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up 3 players for a complete preflop action leading to flop
+	token0, token1, token2 := "player0", "player1", "player2"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	hand := table.CurrentHand
+	if hand == nil {
+		t.Fatal("CurrentHand is nil after StartHand")
+	}
+
+	// Preflop: seat 0 calls, seat 1 calls, seat 2 (BB) checks
+	_, err = hand.ProcessAction(0, "call", 980)
+	if err != nil {
+		t.Fatalf("seat 0 call failed: %v", err)
+	}
+	_, err = hand.ProcessAction(1, "call", 990)
+	if err != nil {
+		t.Fatalf("seat 1 call failed: %v", err)
+	}
+	_, err = hand.ProcessAction(2, "check", 980)
+	if err != nil {
+		t.Fatalf("seat 2 (BB) check failed: %v", err)
+	}
+
+	// Verify betting round is complete
+	if !hand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected preflop betting round to be complete")
+	}
+
+	// Advance to flop
+	err = hand.AdvanceToNextStreet()
+	if err != nil {
+		t.Fatalf("failed to advance to flop: %v", err)
+	}
+
+	// Verify we're on flop
+	if hand.Street != "flop" {
+		t.Errorf("expected street to be 'flop', got '%s'", hand.Street)
+	}
+
+	// On flop, all players have matched the current bet (all at 0 after street change)
+	// Verify seat 2 has raise option when checking
+	seat2ValidActions := hand.GetValidActions(2, table.Seats[2].Stack, table.Seats)
+	hasRaise := false
+	for _, action := range seat2ValidActions {
+		if action == "raise" {
+			hasRaise = true
+			break
+		}
+	}
+	if !hasRaise {
+		t.Fatalf("expected seat 2 to have raise option on flop with unopened action, got actions: %v", seat2ValidActions)
+	}
+
+	// Seat 2 checks on flop
+	_, err = hand.ProcessAction(2, "check", 980)
+	if err != nil {
+		t.Fatalf("seat 2 check on flop failed: %v", err)
+	}
+
+	// Seat 0 checks on flop
+	_, err = hand.ProcessAction(0, "check", 980)
+	if err != nil {
+		t.Fatalf("seat 0 check on flop failed: %v", err)
+	}
+
+	// Seat 1 now faces an unopened pot and can raise or check
+	// Verify seat 1 has raise option
+	seat1ValidActions := hand.GetValidActions(1, table.Seats[1].Stack, table.Seats)
+	hasRaise = false
+	hasCheck := false
+	for _, action := range seat1ValidActions {
+		if action == "raise" {
+			hasRaise = true
+		}
+		if action == "check" {
+			hasCheck = true
+		}
+	}
+	if !hasRaise {
+		t.Fatalf("expected seat 1 to have raise option on flop unopened, got actions: %v", seat1ValidActions)
+	}
+	if !hasCheck {
+		t.Fatalf("expected seat 1 to have check option on flop, got actions: %v", seat1ValidActions)
+	}
+
+	// Seat 1 raises to 40 on flop
+	_, err = hand.ProcessAction(1, "raise", 960, 40)
+	if err != nil {
+		t.Fatalf("seat 1 raise on flop failed: %v", err)
+	}
+
+	// Verify current bet is 40
+	if hand.CurrentBet != 40 {
+		t.Errorf("expected CurrentBet to be 40 after raise, got %d", hand.CurrentBet)
+	}
+
+	// Seat 2 now faces the raise and can call/fold/reraise
+	seat2ValidActions = hand.GetValidActions(2, table.Seats[2].Stack, table.Seats)
+	hasCall := false
+	hasFold := false
+	hasRaise = false
+	for _, action := range seat2ValidActions {
+		if action == "call" {
+			hasCall = true
+		}
+		if action == "fold" {
+			hasFold = true
+		}
+		if action == "raise" {
+			hasRaise = true
+		}
+	}
+	if !hasCall {
+		t.Errorf("expected seat 2 to have call option after raise, got: %v", seat2ValidActions)
+	}
+	if !hasFold {
+		t.Errorf("expected seat 2 to have fold option after raise, got: %v", seat2ValidActions)
+	}
+	if !hasRaise {
+		t.Errorf("expected seat 2 to have raise option after raise (for 3-bet), got: %v", seat2ValidActions)
+	}
+
+	// Seat 2 calls the raise
+	_, err = hand.ProcessAction(2, "call", 960)
+	if err != nil {
+		t.Fatalf("seat 2 call of raise failed: %v", err)
+	}
+
+	// Seat 0 calls the raise
+	_, err = hand.ProcessAction(0, "call", 960)
+	if err != nil {
+		t.Fatalf("seat 0 call of raise failed: %v", err)
+	}
+
+	// Verify flop betting round is complete
+	if !hand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected flop betting round to be complete")
+	}
+
+	// Advance to turn
+	err = hand.AdvanceToNextStreet()
+	if err != nil {
+		t.Fatalf("failed to advance to turn: %v", err)
+	}
+
+	// Verify we're on turn
+	if hand.Street != "turn" {
+		t.Errorf("expected street to be 'turn', got '%s'", hand.Street)
+	}
+	if len(hand.BoardCards) != 4 {
+		t.Errorf("expected 4 board cards on turn, got %d", len(hand.BoardCards))
 	}
 }

@@ -851,6 +851,14 @@ func (h *Hand) GetValidActions(seatIndex int, playerStack int, seats [6]Seat) []
 	}
 
 	// Player has matched current bet, can check or fold
+	// Also check if they can raise even when callAmount == 0
+	minRaise := h.GetMinRaise()
+	chipsNeeded := minRaise - h.PlayerBets[seatIndex]
+	if chipsNeeded <= playerStack {
+		// Player can raise
+		return []string{"check", "fold", "raise"}
+	}
+	// Player cannot raise
 	return []string{"check", "fold"}
 }
 
@@ -1133,6 +1141,12 @@ func (h *Hand) IsBettingRoundComplete(seats [6]Seat) bool {
 				return false
 			}
 		}
+	}
+
+	// Check if BB has the option (preflop, unopened pot)
+	// If BigBlindHasOption is true, the round is not complete until BB has acted
+	if h.BigBlindHasOption {
+		return false
 	}
 
 	// All conditions met: all non-folded players have acted and matched the bet
