@@ -2823,6 +2823,8 @@ func TestHandlerFlow_RiverToShowdown(t *testing.T) {
 	}
 
 	table.CurrentHand = hand
+	dealerSeat := 0
+	table.DealerSeat = &dealerSeat // Set the table's dealer to match the hand
 	table.Seats[0].Status = "active"
 	table.Seats[0].Stack = 950
 	table.Seats[0].Token = newString("token0")
@@ -2841,9 +2843,14 @@ func TestHandlerFlow_RiverToShowdown(t *testing.T) {
 	// Call HandleShowdown - this should not panic or error
 	table.HandleShowdown()
 
-	// Verify the hand still exists (we're just logging winners for now)
-	if table.CurrentHand == nil {
-		t.Error("expected CurrentHand to still be set after HandleShowdown")
+	// Verify the hand is cleared (HandCleanup happens during HandleShowdown)
+	if table.CurrentHand != nil {
+		t.Error("expected CurrentHand to be nil after HandleShowdown")
+	}
+
+	// Verify dealer was rotated
+	if table.DealerSeat == nil || *table.DealerSeat != 1 {
+		t.Errorf("expected dealer to rotate to seat 1, got %v", table.DealerSeat)
 	}
 }
 
@@ -2887,6 +2894,8 @@ func TestHandlerFlow_AllFoldBeforeShowdown(t *testing.T) {
 	}
 
 	table.CurrentHand = hand
+	dealerSeat := 0
+	table.DealerSeat = &dealerSeat // Set the table's dealer to match the hand
 	table.Seats[0].Status = "active"
 	table.Seats[0].Stack = 950
 	table.Seats[0].Token = newString("token0")
@@ -2905,9 +2914,290 @@ func TestHandlerFlow_AllFoldBeforeShowdown(t *testing.T) {
 	// Call HandleShowdown - should handle early winner case
 	table.HandleShowdown()
 
-	// Verify the hand still exists
+	// Verify the hand is cleared (HandCleanup happens during HandleShowdown)
+	if table.CurrentHand != nil {
+		t.Error("expected CurrentHand to be nil after HandleShowdown")
+	}
+
+	// Verify dealer was rotated
+	if table.DealerSeat == nil || *table.DealerSeat != 1 {
+		t.Errorf("expected dealer to rotate to seat 1, got %v", table.DealerSeat)
+	}
+}
+
+// ============ PHASE 4: HANDLER FLOW TESTS FOR HAND CLEANUP & NEXT HAND ============
+
+// TestHandlerFlow_FullHandCycle_ManualNextHand verifies complete hand flow with manual "Start Hand" button
+func TestHandlerFlow_FullHandCycle_ManualNextHand(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	table := server.tables[0]
+
+	// Set up 2 active players
+	token0 := "player-0"
+	token1 := "player-1"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	// Start first hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Verify hand is active
 	if table.CurrentHand == nil {
-		t.Error("expected CurrentHand to still be set after HandleShowdown")
+		t.Fatal("expected CurrentHand to be set after StartHand")
+	}
+
+	// Simulate early winner (seat 1 folds)
+	table.CurrentHand.FoldedPlayers[1] = true
+
+	// Call HandleShowdown
+	table.HandleShowdown()
+
+	// After showdown, CurrentHand should be cleared
+	if table.CurrentHand != nil {
+		t.Errorf("expected CurrentHand to be nil after HandleShowdown, got %v", table.CurrentHand)
+	}
+
+	// Dealer should have rotated
+	if table.DealerSeat == nil || *table.DealerSeat != 1 {
+		t.Errorf("expected dealer to rotate to seat 1, got %v", table.DealerSeat)
+	}
+
+	// Both players should still be "active" (no auto promotion of waiting players)
+	if table.Seats[0].Status != "active" || table.Seats[1].Status != "active" {
+		t.Errorf("expected both seats to remain active, got seat 0: %s, seat 1: %s",
+			table.Seats[0].Status, table.Seats[1].Status)
+	}
+
+	// Now manually start next hand via StartHand
+	err = table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting second hand, got %v", err)
+	}
+
+	// Verify new hand is created
+	if table.CurrentHand == nil {
+		t.Fatal("expected new CurrentHand to be set after second StartHand")
+	}
+
+	// Dealer should remain at seat 1 (was rotated to seat 1 after first hand ended, stays there for second hand)
+	// Dealer rotates at the END of a hand (in HandleShowdown), not during StartHand
+	if table.CurrentHand.DealerSeat != 1 {
+		t.Errorf("expected second hand dealer at seat 1 (rotated after first hand), got %d", table.CurrentHand.DealerSeat)
+	}
+}
+
+// TestHandlerFlow_HandEndsWithBustOut verifies bust-out handling at showdown
+func TestHandlerFlow_HandEndsWithBustOut(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	table := server.tables[0]
+
+	// Set up 2 players: seat 0 wins 100, seat 1 has exactly 100 (will bust)
+	token0 := "player-0"
+	token1 := "player-1"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 100 // Small stack - will go all-in for BB (20) and lose
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Mark seat 1 as folded (loses the hand)
+	table.CurrentHand.FoldedPlayers[1] = true
+
+	// Call HandleShowdown
+	table.HandleShowdown()
+
+	// After showdown, hand should be cleared
+	if table.CurrentHand != nil {
+		t.Errorf("expected CurrentHand to be nil after HandleShowdown, got %v", table.CurrentHand)
+	}
+
+	// If seat 1 stack became 0, it should be busted out (Token=nil, Status="empty")
+	if table.Seats[1].Stack == 0 {
+		if table.Seats[1].Status != "empty" {
+			t.Errorf("expected busted-out seat 1 status to be 'empty', got '%s'", table.Seats[1].Status)
+		}
+		if table.Seats[1].Token != nil {
+			t.Errorf("expected busted-out seat 1 Token to be nil, got %v", table.Seats[1].Token)
+		}
+	} else {
+		// Seat 1 still has chips, so should remain "active"
+		if table.Seats[1].Status != "active" {
+			t.Errorf("expected seat 1 status to remain 'active' with remaining stack, got '%s'", table.Seats[1].Status)
+		}
+	}
+
+	// Dealer should have rotated
+	if table.DealerSeat == nil {
+		t.Error("expected DealerSeat to be set after HandleShowdown")
+	}
+}
+
+// TestHandlerFlow_DealerRotatesAfterShowdown verifies dealer position rotates correctly after showdown
+func TestHandlerFlow_DealerRotatesAfterShowdown(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	table := server.tables[0]
+
+	// Set up 3 active players at seats 1, 3, 5
+	token1 := "player-1"
+	token3 := "player-3"
+	token5 := "player-5"
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	table.Seats[3].Token = &token3
+	table.Seats[3].Status = "active"
+	table.Seats[3].Stack = 1000
+
+	table.Seats[5].Token = &token5
+	table.Seats[5].Status = "active"
+	table.Seats[5].Stack = 1000
+
+	// Start first hand (dealer should be seat 1)
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting first hand, got %v", err)
+	}
+
+	if table.DealerSeat == nil || *table.DealerSeat != 1 {
+		t.Fatalf("expected dealer to be seat 1 initially, got %v", table.DealerSeat)
+	}
+
+	// Mark seat 3 as folded (seat 1 wins)
+	table.CurrentHand.FoldedPlayers[3] = true
+	table.CurrentHand.FoldedPlayers[5] = true
+
+	// Call HandleShowdown
+	table.HandleShowdown()
+
+	// After first showdown, dealer should have rotated to seat 3
+	if table.DealerSeat == nil || *table.DealerSeat != 3 {
+		t.Errorf("expected dealer to rotate to seat 3 after first showdown, got %v", table.DealerSeat)
+	}
+
+	// Start second hand
+	err = table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting second hand, got %v", err)
+	}
+
+	// Verify dealer is 3
+	if table.CurrentHand.DealerSeat != 3 {
+		t.Errorf("expected dealer in second hand to be seat 3, got %d", table.CurrentHand.DealerSeat)
+	}
+
+	// Mark seat 5 as folded (seat 3 wins)
+	table.CurrentHand.FoldedPlayers[5] = true
+	table.CurrentHand.FoldedPlayers[1] = true
+
+	// Call HandleShowdown for second hand
+	table.HandleShowdown()
+
+	// After second showdown, dealer should have rotated from seat 3 to seat 5
+	if table.DealerSeat == nil || *table.DealerSeat != 5 {
+		t.Errorf("expected dealer to rotate to seat 5 after second showdown, got %v", table.DealerSeat)
+	}
+
+	// Start third hand
+	err = table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting third hand, got %v", err)
+	}
+
+	// Verify dealer remains at seat 5 (was rotated to seat 5 after second hand ended, stays there for third hand)
+	// Dealer rotates at the END of a hand (in HandleShowdown), not during StartHand
+	if table.CurrentHand.DealerSeat != 5 {
+		t.Errorf("expected dealer to remain at seat 5 in third hand (rotated after second hand), got %d", table.CurrentHand.DealerSeat)
+	}
+}
+
+// TestHandlerFlow_StartHandButtonWorksAfterShowdown verifies "Start Hand" works after showdown cleanup
+func TestHandlerFlow_StartHandButtonWorksAfterShowdown(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	table := server.tables[0]
+
+	// Set up 2 active players
+	token0 := "player-0"
+	token1 := "player-1"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	// Start first hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting first hand, got %v", err)
+	}
+
+	// Verify 2 active players dealt in
+	if len(table.CurrentHand.HoleCards) != 2 {
+		t.Errorf("expected 2 active players in first hand, got %d", len(table.CurrentHand.HoleCards))
+	}
+
+	// Mark seat 1 as folded
+	table.CurrentHand.FoldedPlayers[1] = true
+
+	// Call HandleShowdown
+	table.HandleShowdown()
+
+	// Verify hand is cleared
+	if table.CurrentHand != nil {
+		t.Error("expected CurrentHand to be nil after showdown")
+	}
+
+	// Verify dealer rotated
+	if table.DealerSeat == nil || *table.DealerSeat != 1 {
+		t.Errorf("expected dealer to rotate to seat 1, got %v", table.DealerSeat)
+	}
+
+	// Now click "Start Hand" button - should start a fresh hand
+	err = table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting second hand, got %v", err)
+	}
+
+	// Verify new hand is created
+	if table.CurrentHand == nil {
+		t.Fatal("expected CurrentHand to be set after second StartHand")
+	}
+
+	// Verify both players are still in the new hand
+	if len(table.CurrentHand.HoleCards) != 2 {
+		t.Errorf("expected 2 active players in second hand, got %d", len(table.CurrentHand.HoleCards))
+	}
+
+	// Verify dealer remains at seat 1 (was rotated to seat 1 after first hand ended, stays there for second hand)
+	// Dealer rotates at the END of a hand (in HandleShowdown), not during StartHand
+	if table.CurrentHand.DealerSeat != 1 {
+		t.Errorf("expected dealer to remain at seat 1 in second hand (rotated after first hand), got %d", table.CurrentHand.DealerSeat)
 	}
 }
 

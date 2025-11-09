@@ -6053,16 +6053,22 @@ func TestHandleShowdown_TriggersOnRiverComplete(t *testing.T) {
 	}
 
 	table.CurrentHand = hand
+	dealerSeat := 0
+	table.DealerSeat = &dealerSeat // Set the table's dealer to match the hand
 	table.Seats[0].Status = "active"
 	table.Seats[1].Status = "active"
 
 	// HandleShowdown should not panic and should return without error
-	// This is a skeleton test - we're just verifying the method exists and doesn't crash
 	table.HandleShowdown()
 
-	// Verify hand is still set (not cleared by HandleShowdown yet)
-	if table.CurrentHand == nil {
-		t.Error("expected CurrentHand to still be set after HandleShowdown")
+	// Verify hand is cleared after HandleShowdown
+	if table.CurrentHand != nil {
+		t.Error("expected CurrentHand to be nil after HandleShowdown")
+	}
+
+	// Verify dealer was rotated
+	if table.DealerSeat == nil || *table.DealerSeat != 1 {
+		t.Errorf("expected dealer to rotate to seat 1, got %v", table.DealerSeat)
 	}
 }
 

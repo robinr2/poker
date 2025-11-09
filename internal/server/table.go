@@ -61,14 +61,15 @@ type Seat struct {
 
 // Table represents a poker table
 type Table struct {
-	ID          string
-	Name        string
-	MaxSeats    int     // Always 6
-	Seats       [6]Seat // Fixed array of 6 seats
-	DealerSeat  *int    // Seat number of the current dealer (nil = no dealer assigned yet)
-	CurrentHand *Hand   // Currently active hand (nil = no hand running)
-	Server      *Server // Reference to the server for broadcasting events
-	mu          sync.RWMutex
+	ID                     string
+	Name                   string
+	MaxSeats               int     // Always 6
+	Seats                  [6]Seat // Fixed array of 6 seats
+	DealerSeat             *int    // Seat number of the current dealer (nil = no dealer assigned yet)
+	CurrentHand            *Hand   // Currently active hand (nil = no hand running)
+	DealerRotatedThisRound bool    // True if dealer has been rotated after this hand (prevents double-rotation in StartHand)
+	Server                 *Server // Reference to the server for broadcasting events
+	mu                     sync.RWMutex
 }
 
 // NewTable creates and returns a new Table instance with 6 empty seats
@@ -193,6 +194,10 @@ func (t *Table) HandleShowdown() {
 				// Handle bust-outs (clear seats with stack == 0)
 				t.handleBustOutsLocked()
 
+				// Rotate dealer for next hand and clear hand
+				t.assignDealerLocked()
+				t.DealerRotatedThisRound = true
+				t.CurrentHand = nil
 				return
 			}
 		}
@@ -209,6 +214,10 @@ func (t *Table) HandleShowdown() {
 		if t.Server != nil {
 			t.Server.logger.Warn("no winners found at showdown", "tableID", t.ID)
 		}
+		// Still need to clean up even if no winners found
+		t.assignDealerLocked()
+		t.DealerRotatedThisRound = true
+		t.CurrentHand = nil
 		return
 	}
 
@@ -229,6 +238,11 @@ func (t *Table) HandleShowdown() {
 
 	// Handle bust-outs (clear seats with stack == 0) - use locked version since we already hold lock
 	t.handleBustOutsLocked()
+
+	// Rotate dealer for next hand and clear hand
+	t.assignDealerLocked()
+	t.DealerRotatedThisRound = true
+	t.CurrentHand = nil
 }
 
 // DistributePot divides the pot among winners, with remainder going to the first winner
@@ -634,8 +648,24 @@ func (t *Table) StartHand() error {
 		return fmt.Errorf("hand already running")
 	}
 
-	// Step 1: Assign dealer via NextDealer
-	dealerSeat := t.assignDealerLocked()
+	// Step 1: Assign dealer
+	// If dealer was just rotated (after previous hand ended), reuse the rotated position
+	// Otherwise, rotate to next active seat
+	var dealerSeat int
+	if t.DealerRotatedThisRound {
+		// Dealer was already rotated after previous hand ended
+		// Use the current dealer position (don't rotate again)
+		if t.DealerSeat == nil {
+			// This shouldn't happen, but fall back to assigning
+			dealerSeat = t.assignDealerLocked()
+		} else {
+			dealerSeat = *t.DealerSeat
+		}
+		t.DealerRotatedThisRound = false
+	} else {
+		// No rotation yet, assign dealer (either first hand or re-use)
+		dealerSeat = t.assignDealerLocked()
+	}
 
 	// Step 2: Get blind positions
 	sbSeat, bbSeat, err := t.getBlindPositionsLocked(dealerSeat)
