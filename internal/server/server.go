@@ -280,7 +280,33 @@ func (s *Server) GetClientsAtTable(tableID string) []*Client {
 
 // BroadcastActionRequest sends an action_request message to all clients at a specific table
 // It notifies them that a player needs to act
+// It includes calculated minRaise and maxRaise values for raise actions
 func (s *Server) BroadcastActionRequest(tableID string, seatIndex int, validActions []string, callAmount, currentBet, pot int) error {
+	// Get the table to access hand information
+	var table *Table
+	s.mu.RLock()
+	for _, t := range s.tables {
+		if t != nil && t.ID == tableID {
+			table = t
+			break
+		}
+	}
+	s.mu.RUnlock()
+
+	if table == nil {
+		return fmt.Errorf("table not found: %s", tableID)
+	}
+
+	// Calculate minRaise and maxRaise
+	minRaise := 0
+	maxRaise := 0
+	table.mu.RLock()
+	if table.CurrentHand != nil {
+		minRaise = table.CurrentHand.GetMinRaise()
+		maxRaise = table.GetMaxRaise(seatIndex, table.Seats)
+	}
+	table.mu.RUnlock()
+
 	// Create the action request payload
 	payload := ActionRequestPayload{
 		SeatIndex:    seatIndex,
@@ -289,6 +315,8 @@ func (s *Server) BroadcastActionRequest(tableID string, seatIndex int, validActi
 		CurrentBet:   currentBet,
 		PlayerBet:    currentBet,
 		Pot:          pot,
+		MinRaise:     minRaise,
+		MaxRaise:     maxRaise,
 	}
 
 	// Marshal the payload to JSON

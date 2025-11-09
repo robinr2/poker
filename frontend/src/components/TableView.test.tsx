@@ -1143,4 +1143,363 @@ describe('Action Bar Tests - Phase 5', () => {
       expect(message.payload.seatIndex).toBe(1);
     });
   });
+
+  describe('TestTableView_RaiseButton', () => {
+    it('should show Raise button when raise is valid action', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 1,
+        validActions: ['fold', 'call', 'raise'],
+        callAmount: 20,
+        minRaise: 40,
+        maxRaise: 980,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      expect(screen.getByRole('button', { name: /Raise/i })).toBeInTheDocument();
+    });
+
+    it('should hide Raise button when raise not available', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 1,
+        validActions: ['fold', 'call'],
+        callAmount: 20,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      expect(screen.queryByRole('button', { name: /Raise/i })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('TestTableView_RaisePresets', () => {
+    it('should show Min preset button and set raise amount to minRaise', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 1,
+        validActions: ['fold', 'call', 'raise'],
+        callAmount: 20,
+        minRaise: 40,
+        maxRaise: 980,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      const minButton = screen.getByRole('button', { name: /Min/i });
+      expect(minButton).toBeInTheDocument();
+
+      fireEvent.click(minButton);
+
+      const raiseInput = screen.getByDisplayValue('40') as HTMLInputElement;
+      expect(raiseInput).toBeInTheDocument();
+      expect(raiseInput.value).toBe('40');
+    });
+
+    it('should show Pot preset button and calculate pot-sized raise', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 100,
+        currentActor: 1,
+        validActions: ['fold', 'call', 'raise'],
+        callAmount: 20,
+        minRaise: 40,
+        maxRaise: 980,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      const potButton = screen.getByRole('button', { name: /Pot/i });
+      expect(potButton).toBeInTheDocument();
+
+      fireEvent.click(potButton);
+
+      // Pot-sized raise = callAmount + pot = 20 + 100 = 120
+      const raiseInput = screen.getByDisplayValue('120') as HTMLInputElement;
+      expect(raiseInput).toBeInTheDocument();
+      expect(raiseInput.value).toBe('120');
+    });
+
+    it('should show All-in preset button and set raise to player stack', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 1,
+        validActions: ['fold', 'call', 'raise'],
+        callAmount: 20,
+        minRaise: 40,
+        maxRaise: 980,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      const allInButton = screen.getByRole('button', { name: /All-in/i });
+      expect(allInButton).toBeInTheDocument();
+
+      fireEvent.click(allInButton);
+
+      // All-in = player stack = 980 (Bob's stack from mockSeats)
+      const raiseInput = screen.getByDisplayValue('980') as HTMLInputElement;
+      expect(raiseInput).toBeInTheDocument();
+      expect(raiseInput.value).toBe('980');
+    });
+  });
+
+  describe('TestTableView_RaiseInput', () => {
+    it('should show raise amount input field when raise action available', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 1,
+        validActions: ['fold', 'call', 'raise'],
+        callAmount: 20,
+        minRaise: 40,
+        maxRaise: 980,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      const raiseInput = screen.getByRole('textbox', { name: /Raise Amount/i });
+      expect(raiseInput).toBeInTheDocument();
+    });
+  });
+
+  describe('TestTableView_RaiseAction', () => {
+    it('should send raise action with amount when Raise button clicked', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 1,
+        validActions: ['fold', 'call', 'raise'],
+        callAmount: 20,
+        minRaise: 40,
+        maxRaise: 980,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      // Set raise amount
+      const raiseInput = screen.getByRole('textbox', { name: /Raise Amount/i }) as HTMLInputElement;
+      fireEvent.change(raiseInput, { target: { value: '100' } });
+
+      // Click Raise button
+      const raiseButton = screen.getByRole('button', { name: /^Raise$/ });
+      fireEvent.click(raiseButton);
+
+      expect(mockSendMessage).toHaveBeenCalledOnce();
+      const sentMessage = mockSendMessage.mock.calls[0][0];
+      const message = JSON.parse(sentMessage);
+      expect(message.type).toBe('player_action');
+      expect(message.payload.action).toBe('raise');
+      expect(message.payload.seatIndex).toBe(1);
+      expect(message.payload.amount).toBe(100);
+    });
+
+    it('should disable Raise button when amount is below minimum', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 1,
+        validActions: ['fold', 'call', 'raise'],
+        callAmount: 20,
+        minRaise: 40,
+        maxRaise: 980,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      // Set raise amount below minimum
+      const raiseInput = screen.getByRole('textbox', { name: /Raise Amount/i }) as HTMLInputElement;
+      fireEvent.change(raiseInput, { target: { value: '30' } });
+
+      const raiseButton = screen.getByRole('button', { name: /^Raise$/ });
+      expect(raiseButton).toBeDisabled();
+    });
+
+    it('should disable Raise button when amount is above maximum', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 1,
+        validActions: ['fold', 'call', 'raise'],
+        callAmount: 20,
+        minRaise: 40,
+        maxRaise: 980,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      // Set raise amount above maximum
+      const raiseInput = screen.getByRole('textbox', { name: /Raise Amount/i }) as HTMLInputElement;
+      fireEvent.change(raiseInput, { target: { value: '1000' } });
+
+      const raiseButton = screen.getByRole('button', { name: /^Raise$/ });
+      expect(raiseButton).toBeDisabled();
+    });
+
+    it('should enable Raise button when amount is valid', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 1,
+        validActions: ['fold', 'call', 'raise'],
+        callAmount: 20,
+        minRaise: 40,
+        maxRaise: 980,
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      // Set valid raise amount
+      const raiseInput = screen.getByRole('textbox', { name: /Raise Amount/i }) as HTMLInputElement;
+      fireEvent.change(raiseInput, { target: { value: '100' } });
+
+      const raiseButton = screen.getByRole('button', { name: /^Raise$/ });
+      expect(raiseButton).not.toBeDisabled();
+    });
+  });
 });

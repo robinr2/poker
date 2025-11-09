@@ -42,6 +42,8 @@ interface GameState {
   foldedPlayers: number[];
   roundOver: boolean | null;
   handInProgress?: boolean;
+  minRaise?: number;
+  maxRaise?: number;
 }
 
 interface HandStartedPayload {
@@ -69,6 +71,8 @@ interface ActionRequestPayload {
   seatIndex: number;
   validActions: string[];
   callAmount: number;
+  minRaise?: number;
+  maxRaise?: number;
 }
 
 interface ActionResultPayload {
@@ -85,6 +89,7 @@ interface ActionResultPayload {
 interface UseWebSocketReturn {
   status: ConnectionStatus;
   sendMessage: (message: string) => void;
+  sendAction?: (action: string, amount?: number) => void;
   lastMessage: string | null;
   lobbyState: TableInfo[];
   lastSeatMessage: SeatMessage | null;
@@ -108,6 +113,7 @@ export function useWebSocket(
     null
   );
   const [tableState, setTableState] = useState<TableState | null>(null);
+  const [playerSeatIndex, setPlayerSeatIndex] = useState<number | null>(null);
   const [gameState, setGameState] = useState<GameState>({
     dealerSeat: null,
     smallBlindSeat: null,
@@ -167,16 +173,25 @@ export function useWebSocket(
             maxSeats: t.max_seats,
           }));
           setLobbyState(convertedTables);
-        } else if (
-          message.type === 'seat_assigned' ||
-          message.type === 'seat_cleared'
-        ) {
-          // Store the seat message for the app to handle
-          setLastSeatMessage({
-            type: message.type,
-            payload: message.payload,
-          });
-        } else if (message.type === 'table_state' && message.payload) {
+         } else if (
+           message.type === 'seat_assigned' ||
+           message.type === 'seat_cleared'
+         ) {
+           // Store the seat message for the app to handle
+           setLastSeatMessage({
+             type: message.type,
+             payload: message.payload,
+           });
+           
+           // If seat_assigned, store the player's seat index
+           if (message.type === 'seat_assigned' && message.payload) {
+             const payload = message.payload as SeatAssignedPayload;
+             setPlayerSeatIndex(payload.seatIndex);
+           } else if (message.type === 'seat_cleared') {
+             // Clear seat index when seat is cleared
+             setPlayerSeatIndex(null);
+           }
+         } else if (message.type === 'table_state' && message.payload) {
           // Handle table_state message with seat information
           const payload = message.payload as {
             tableId: string;
@@ -311,20 +326,30 @@ export function useWebSocket(
               console.log('[useWebSocket] gameState updated with hole cards:', cardStrings);
             }
           }
-        } else if (message.type === 'action_request' && message.payload) {
-          // Handle action_request message
-          console.log('[useWebSocket] action_request received, payload:', message.payload);
-          const payload = typeof message.payload === 'string'
-            ? JSON.parse(message.payload) as ActionRequestPayload
-            : message.payload as ActionRequestPayload;
-          console.log('[useWebSocket] action_request payload:', payload);
-          setGameState((prev) => ({
-            ...prev,
-            currentActor: payload.seatIndex,
-            validActions: payload.validActions,
-            callAmount: payload.callAmount,
-          }));
-        } else if (message.type === 'action_result' && message.payload) {
+         } else if (message.type === 'action_request' && message.payload) {
+           // Handle action_request message
+           console.log('[useWebSocket] action_request received, payload:', message.payload);
+           const payload = typeof message.payload === 'string'
+             ? JSON.parse(message.payload) as ActionRequestPayload
+             : message.payload as ActionRequestPayload;
+           console.log('[useWebSocket] action_request payload:', payload);
+           setGameState((prev) => {
+             const updated = { ...prev };
+             updated.currentActor = payload.seatIndex;
+             updated.validActions = payload.validActions;
+             updated.callAmount = payload.callAmount;
+             
+             // Include minRaise and maxRaise if present in payload
+             if (payload.minRaise !== undefined) {
+               updated.minRaise = payload.minRaise;
+             }
+             if (payload.maxRaise !== undefined) {
+               updated.maxRaise = payload.maxRaise;
+             }
+             
+             return updated;
+           });
+         } else if (message.type === 'action_result' && message.payload) {
           // Handle action_result message
           console.log('[useWebSocket] action_result received, payload:', message.payload);
           const payload = typeof message.payload === 'string'
@@ -383,24 +408,50 @@ export function useWebSocket(
     };
   }, [url, token]);
 
-  // Memoize sendMessage to prevent unnecessary re-renders
-  const sendMessage = useCallback((message: string) => {
-    if (serviceRef.current) {
-      try {
-        serviceRef.current.send(message);
-      } catch (error) {
-        console.error('Failed to send message:', error);
-      }
-    }
-  }, []);
+   // Memoize sendMessage to prevent unnecessary re-renders
+   const sendMessage = useCallback((message: string) => {
+     if (serviceRef.current) {
+       try {
+         serviceRef.current.send(message);
+       } catch (error) {
+         console.error('Failed to send message:', error);
+       }
+     }
+   }, []);
 
-  return {
-    status,
-    sendMessage,
-    lastMessage,
-    lobbyState,
-    lastSeatMessage,
-    tableState,
-    gameState,
-  };
+   // Memoize sendAction to send player actions with optional amount for raises
+   const sendAction = useCallback((action: string, amount?: number) => {
+     if (serviceRef.current && playerSeatIndex !== null) {
+       try {
+         const payload: Record<string, unknown> = {
+           seatIndex: playerSeatIndex,
+           action: action,
+         };
+         
+         // Include amount only for raise actions
+         if (amount !== undefined) {
+           payload.amount = amount;
+         }
+         
+         const message = JSON.stringify({
+           type: 'player_action',
+           payload: payload,
+         });
+         serviceRef.current.send(message);
+       } catch (error) {
+         console.error('Failed to send action:', error);
+       }
+     }
+   }, [playerSeatIndex]);
+
+   return {
+     status,
+     sendMessage,
+     sendAction,
+     lastMessage,
+     lobbyState,
+     lastSeatMessage,
+     tableState,
+     gameState,
+   };
 }

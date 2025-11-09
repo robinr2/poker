@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 interface SeatInfo {
   index: number;
   playerName: string | null;
@@ -17,6 +19,8 @@ interface GameState {
   callAmount?: number | null;
   foldedPlayers?: number[];
   roundOver?: boolean | null;
+  minRaise?: number;
+  maxRaise?: number;
 }
 
 interface TableViewProps {
@@ -60,6 +64,8 @@ export function TableView({
   gameState,
   onSendMessage,
 }: TableViewProps) {
+  const [raiseAmount, setRaiseAmount] = useState<string>('');
+
   console.log('[TableView] render with gameState:', gameState);
   console.log('[TableView] currentSeatIndex:', currentSeatIndex);
   console.log('[TableView] seats:', seats.map(s => ({ 
@@ -74,6 +80,9 @@ export function TableView({
   const hasNoActiveHand = !gameState || gameState.pot === 0 || gameState.pot === undefined;
   const showStartHandButton = isSeated && hasNoActiveHand;
 
+  // Get player's current stack
+  const playerStack = currentSeatIndex !== null ? seats[currentSeatIndex]?.stack ?? 0 : 0;
+
   const handleStartHand = () => {
     if (onSendMessage) {
       const message = JSON.stringify({
@@ -84,17 +93,41 @@ export function TableView({
     }
   };
 
-  const handleAction = (action: string) => {
+  const handleAction = (action: string, amount?: number) => {
     if (onSendMessage && currentSeatIndex !== null) {
+      const payload: any = {
+        seatIndex: currentSeatIndex,
+        action: action,
+      };
+      if (amount !== undefined) {
+        payload.amount = amount;
+      }
       const message = JSON.stringify({
         type: 'player_action',
-        payload: {
-          seatIndex: currentSeatIndex,
-          action: action,
-        },
+        payload,
       });
       onSendMessage(message);
     }
+  };
+
+  // Raise button validation logic
+  const isRaiseValid = gameState?.validActions?.includes('raise') || false;
+  const raiseAmountNum = raiseAmount ? parseInt(raiseAmount, 10) : 0;
+  const isRaiseAmountValid = 
+    raiseAmountNum >= (gameState?.minRaise ?? 0) &&
+    raiseAmountNum <= (gameState?.maxRaise ?? 0);
+
+  const handleMinRaise = () => {
+    setRaiseAmount((gameState?.minRaise ?? 0).toString());
+  };
+
+  const handlePotRaise = () => {
+    const potSized = (gameState?.callAmount ?? 0) + (gameState?.pot ?? 0);
+    setRaiseAmount(potSized.toString());
+  };
+
+  const handleAllIn = () => {
+    setRaiseAmount(playerStack.toString());
   };
 
   return (
@@ -164,19 +197,58 @@ export function TableView({
          {gameState && <div className="pot-display">Pot: {gameState.pot}</div>}
        </div>
 
-       {/* Action Bar */}
-       {gameState?.currentActor === currentSeatIndex && (
-         <div className="action-bar">
-           <button onClick={() => handleAction('fold')}>Fold</button>
-           {gameState.callAmount === 0 ? (
-             <button onClick={() => handleAction('check')}>Check</button>
-           ) : (
-             <button onClick={() => handleAction('call')}>
-               Call {gameState.callAmount}
-             </button>
-           )}
-         </div>
-       )}
+        {/* Action Bar */}
+        {gameState?.currentActor === currentSeatIndex && (
+          <div className="action-bar">
+            <button onClick={() => handleAction('fold')}>Fold</button>
+            {gameState.callAmount === 0 ? (
+              <button onClick={() => handleAction('check')}>Check</button>
+            ) : (
+              <button onClick={() => handleAction('call')}>
+                Call {gameState.callAmount}
+              </button>
+            )}
+            
+            {/* Raise Controls */}
+            {isRaiseValid && (
+              <div className="raise-controls">
+                <input
+                  type="text"
+                  aria-label="Raise Amount"
+                  value={raiseAmount}
+                  onChange={(e) => setRaiseAmount(e.target.value)}
+                  placeholder="Raise amount"
+                  className="raise-input"
+                />
+                <button 
+                  onClick={() => handleMinRaise()} 
+                  className="preset-button"
+                >
+                  Min
+                </button>
+                <button 
+                  onClick={() => handlePotRaise()} 
+                  className="preset-button"
+                >
+                  Pot
+                </button>
+                <button 
+                  onClick={() => handleAllIn()} 
+                  className="preset-button"
+                >
+                  All-in
+                </button>
+                <button 
+                  onClick={() => handleAction('raise', raiseAmountNum)}
+                  disabled={!isRaiseAmountValid || raiseAmount === ''}
+                  className="raise-button"
+                >
+                  Raise
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
        <div className="button-group">
         {showStartHandButton && (

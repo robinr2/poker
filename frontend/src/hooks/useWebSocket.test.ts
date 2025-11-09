@@ -764,6 +764,269 @@ describe('useWebSocket', () => {
    });
 });
 
+describe('Phase 5: Raise Protocol - Frontend Protocol and State', () => {
+  describe('TestUseWebSocket_ParseRaiseProtocol', () => {
+    it('parses minRaise and maxRaise from action_request', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      const actionRequestMessage = JSON.stringify({
+        type: 'action_request',
+        payload: {
+          seatIndex: 2,
+          validActions: ['fold', 'call', 'raise'],
+          callAmount: 20,
+          minRaise: 40,
+          maxRaise: 500,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(actionRequestMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.currentActor).toBe(2);
+        expect(result.current.gameState.validActions).toEqual(['fold', 'call', 'raise']);
+        expect(result.current.gameState.callAmount).toBe(20);
+        expect(result.current.gameState.minRaise).toBe(40);
+        expect(result.current.gameState.maxRaise).toBe(500);
+      });
+    });
+
+    it('includes minRaise and maxRaise in gameState when raise is available', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      const actionRequestMessage = JSON.stringify({
+        type: 'action_request',
+        payload: {
+          seatIndex: 0,
+          validActions: ['fold', 'raise'],
+          callAmount: 0,
+          minRaise: 40,
+          maxRaise: 1000,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(actionRequestMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.minRaise).toBe(40);
+        expect(result.current.gameState.maxRaise).toBe(1000);
+      });
+    });
+
+    it('handles action_request without minRaise/maxRaise fields', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      const actionRequestMessage = JSON.stringify({
+        type: 'action_request',
+        payload: {
+          seatIndex: 1,
+          validActions: ['fold', 'check'],
+          callAmount: 0,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(actionRequestMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.currentActor).toBe(1);
+        expect(result.current.gameState.validActions).toEqual(['fold', 'check']);
+        // minRaise and maxRaise should not be present or undefined
+        expect(result.current.gameState.minRaise).toBeUndefined();
+        expect(result.current.gameState.maxRaise).toBeUndefined();
+      });
+    });
+  });
+
+  describe('TestUseWebSocket_SendActionWithAmount', () => {
+    it('sendAction includes amount for raise', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      await waitFor(() => {
+        expect(mockServiceInstance.connect).toHaveBeenCalled();
+      });
+
+      // First send seat_assigned message to set player's seat
+      const seatAssignedMessage = JSON.stringify({
+        type: 'seat_assigned',
+        payload: {
+          tableId: 'table-1',
+          seatIndex: 2,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(seatAssignedMessage));
+      });
+
+      // Reset mock to clear previous calls
+      vi.clearAllMocks();
+
+      act(() => {
+        result.current.sendAction?.('raise', 100);
+      });
+
+      expect(mockServiceInstance.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          type: 'player_action',
+          payload: {
+            seatIndex: 2,
+            action: 'raise',
+            amount: 100,
+          },
+        })
+      );
+    });
+
+    it('sendAction omits amount for fold', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      await waitFor(() => {
+        expect(mockServiceInstance.connect).toHaveBeenCalled();
+      });
+
+      // First send seat_assigned message to set player's seat
+      const seatAssignedMessage = JSON.stringify({
+        type: 'seat_assigned',
+        payload: {
+          tableId: 'table-1',
+          seatIndex: 1,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(seatAssignedMessage));
+      });
+
+      // Reset mock to clear previous calls
+      vi.clearAllMocks();
+
+      act(() => {
+        result.current.sendAction?.('fold');
+      });
+
+      expect(mockServiceInstance.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          type: 'player_action',
+          payload: {
+            seatIndex: 1,
+            action: 'fold',
+          },
+        })
+      );
+    });
+
+    it('sendAction omits amount for check', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      await waitFor(() => {
+        expect(mockServiceInstance.connect).toHaveBeenCalled();
+      });
+
+      // First send seat_assigned message to set player's seat
+      const seatAssignedMessage = JSON.stringify({
+        type: 'seat_assigned',
+        payload: {
+          tableId: 'table-1',
+          seatIndex: 0,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(seatAssignedMessage));
+      });
+
+      // Reset mock to clear previous calls
+      vi.clearAllMocks();
+
+      act(() => {
+        result.current.sendAction?.('check');
+      });
+
+      expect(mockServiceInstance.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          type: 'player_action',
+          payload: {
+            seatIndex: 0,
+            action: 'check',
+          },
+        })
+      );
+    });
+
+    it('sendAction omits amount for call', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      await waitFor(() => {
+        expect(mockServiceInstance.connect).toHaveBeenCalled();
+      });
+
+      // First send seat_assigned message to set player's seat
+      const seatAssignedMessage = JSON.stringify({
+        type: 'seat_assigned',
+        payload: {
+          tableId: 'table-1',
+          seatIndex: 3,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(seatAssignedMessage));
+      });
+
+      // Reset mock to clear previous calls
+      vi.clearAllMocks();
+
+      act(() => {
+        result.current.sendAction?.('call');
+      });
+
+      expect(mockServiceInstance.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          type: 'player_action',
+          payload: {
+            seatIndex: 3,
+            action: 'call',
+          },
+        })
+      );
+    });
+  });
+});
+
 describe('Action Request and Result Handlers', () => {
   describe('TestUseWebSocket_ActionRequest', () => {
     it('should update game state when action_request message is received', async () => {

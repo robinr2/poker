@@ -89,12 +89,15 @@ type ActionRequestPayload struct {
 	CurrentBet   int      `json:"currentBet"`
 	PlayerBet    int      `json:"playerBet"`
 	Pot          int      `json:"pot"`
+	MinRaise     int      `json:"minRaise"`
+	MaxRaise     int      `json:"maxRaise"`
 }
 
 // PlayerActionPayload represents the payload for player_action messages
 type PlayerActionPayload struct {
 	SeatIndex int    `json:"seatIndex"`
 	Action    string `json:"action"`
+	Amount    *int   `json:"amount,omitempty"`
 }
 
 // ActionResultPayload represents the payload for action_result messages
@@ -1083,8 +1086,9 @@ func (c *Client) HandleStartHand(sm *SessionManager, server *Server, logger *slo
 	return nil
 }
 
-// HandlePlayerAction processes a player action (fold, check, call) during a hand
-func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, seatIndex int, action string) error {
+// HandlePlayerAction processes a player action (fold, check, call, raise) during a hand
+// For raise actions, amount should be provided as variadic parameter
+func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, seatIndex int, action string, amount ...int) error {
 	// Get the session for the client
 	session, err := sm.GetSession(client.Token)
 	if err != nil {
@@ -1143,8 +1147,18 @@ func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, sea
 		return fmt.Errorf("invalid action '%s' for seat %d: valid actions are %v", action, seatIndex, validActions)
 	}
 
-	// Process the action
-	amountActed, err := table.CurrentHand.ProcessAction(seatIndex, action, table.Seats[seatIndex].Stack)
+	// Process the action - pass amount if provided
+	var amountActed int
+	if action == "raise" {
+		// Raise requires an amount
+		if len(amount) == 0 {
+			return fmt.Errorf("raise action requires amount parameter")
+		}
+		amountActed, err = table.CurrentHand.ProcessAction(seatIndex, action, table.Seats[seatIndex].Stack, amount[0])
+	} else {
+		// Other actions don't use amount
+		amountActed, err = table.CurrentHand.ProcessAction(seatIndex, action, table.Seats[seatIndex].Stack)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to process action: %w", err)
 	}
@@ -1231,8 +1245,12 @@ func (c *Client) HandlePlayerActionMessage(sm *SessionManager, server *Server, l
 		return fmt.Errorf("invalid player_action payload: %w", err)
 	}
 
-	// Call the main handler
-	err = server.HandlePlayerAction(sm, c, actionPayload.SeatIndex, actionPayload.Action)
+	// Call the main handler, passing amount if present
+	if actionPayload.Amount != nil {
+		err = server.HandlePlayerAction(sm, c, actionPayload.SeatIndex, actionPayload.Action, *actionPayload.Amount)
+	} else {
+		err = server.HandlePlayerAction(sm, c, actionPayload.SeatIndex, actionPayload.Action)
+	}
 	if err != nil {
 		return err
 	}

@@ -1952,3 +1952,395 @@ func TestHandlePlayerAction_BroadcastsResult(t *testing.T) {
 		t.Error("client2: did not receive action_result message")
 	}
 }
+
+// TestHandlePlayerAction_RaiseWithAmount verifies handler extracts amount and calls ProcessAction correctly for raises
+func TestHandlePlayerAction_RaiseWithAmount(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players with sessions
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	sm.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	sm.UpdateSession(token2, &table.ID, &[]int{1}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Player at seat 0 raises to 50
+	client := &Client{
+		hub:   hub,
+		Token: token1,
+		send:  make(chan []byte, 256),
+	}
+
+	// Test that we can marshal a PlayerActionPayload with an Amount field
+	raiseAmount := 50
+	payload := PlayerActionPayload{
+		SeatIndex: 0,
+		Action:    "raise",
+		Amount:    &raiseAmount,
+	}
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("failed to marshal payload: %v", err)
+	}
+
+	// Test the message handler which should extract the amount
+	err = client.HandlePlayerActionMessage(sm, server, logger, payloadBytes)
+	if err != nil {
+		t.Errorf("expected no error for valid raise with amount, got %v", err)
+	}
+
+	// Verify action was processed
+	table.mu.RLock()
+	if table.CurrentHand.ActedPlayers == nil {
+		t.Fatal("ActedPlayers should be initialized")
+	}
+	if !table.CurrentHand.ActedPlayers[0] {
+		t.Errorf("expected seat 0 to be marked as acted")
+	}
+	// Verify the raise was recorded at the correct amount
+	if table.CurrentHand.PlayerBets[0] != 50 {
+		t.Errorf("expected seat 0 bet to be 50, got %d", table.CurrentHand.PlayerBets[0])
+	}
+	table.mu.RUnlock()
+}
+
+// TestHandlePlayerAction_RaiseMissingAmount verifies handler returns error when raise lacks amount
+func TestHandlePlayerAction_RaiseMissingAmount(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players with sessions
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	sm.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	sm.UpdateSession(token2, &table.ID, &[]int{1}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Player at seat 0 tries to raise without an amount - should fail
+	client := &Client{
+		hub:   hub,
+		Token: token1,
+		send:  make(chan []byte, 256),
+	}
+
+	// Create a raise action without amount
+	payload := PlayerActionPayload{
+		SeatIndex: 0,
+		Action:    "raise",
+		Amount:    nil, // Missing amount
+	}
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("failed to marshal payload: %v", err)
+	}
+
+	err = client.HandlePlayerActionMessage(sm, server, logger, payloadBytes)
+	if err == nil {
+		t.Error("expected error for raise without amount, got nil")
+	}
+	if err != nil && err.Error() != "raise action requires amount parameter" {
+		t.Errorf("expected error 'raise action requires amount parameter', got %v", err)
+	}
+}
+
+// TestBroadcastActionRequest_IncludesMinMaxRaise verifies action_request payload includes minRaise and maxRaise fields
+func TestBroadcastActionRequest_IncludesMinMaxRaise(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players with sessions
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	sm.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	sm.UpdateSession(token2, &table.ID, &[]int{1}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Create clients and register them
+	client1 := &Client{
+		hub:   hub,
+		Token: token1,
+		send:  make(chan []byte, 256),
+	}
+	client2 := &Client{
+		hub:   hub,
+		Token: token2,
+		send:  make(chan []byte, 256),
+	}
+	hub.register <- client1
+	hub.register <- client2
+	time.Sleep(50 * time.Millisecond)
+
+	// Request action for seat 0
+	validActions := []string{"fold", "check", "raise"}
+	callAmount := 10 // Seat 0 is dealer with SB=10, so call amount is 0, but we'll test with next actor
+	currentBet := 20
+	pot := 30
+
+	err = server.BroadcastActionRequest(table.ID, 0, validActions, callAmount, currentBet, pot)
+	if err != nil {
+		t.Fatalf("failed to broadcast action_request: %v", err)
+	}
+
+	// Give time for broadcast
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify client received action_request with minRaise and maxRaise
+	select {
+	case msg := <-client1.send:
+		var wsMsg WebSocketMessage
+		err := json.Unmarshal(msg, &wsMsg)
+		if err != nil {
+			t.Errorf("failed to unmarshal message: %v", err)
+		}
+		if wsMsg.Type != "action_request" {
+			t.Errorf("expected message type 'action_request', got %q", wsMsg.Type)
+		}
+		var payload ActionRequestPayload
+		err = json.Unmarshal(wsMsg.Payload, &payload)
+		if err != nil {
+			t.Errorf("failed to unmarshal payload: %v", err)
+		}
+		// Verify minRaise and maxRaise fields are present and accessible
+		if payload.MinRaise < 0 {
+			t.Errorf("minRaise should be non-negative, got %d", payload.MinRaise)
+		}
+		if payload.MaxRaise < 0 {
+			t.Errorf("maxRaise should be non-negative, got %d", payload.MaxRaise)
+		}
+	default:
+		t.Error("client1 did not receive action_request message")
+	}
+}
+
+// TestBroadcastActionRequest_MinMaxCalculation verifies MinRaise and MaxRaise are calculated correctly
+func TestBroadcastActionRequest_MinMaxCalculation(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Test Case 1: Multi-player game (stack sizes: 1000, 1000)
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	token1 := session1.Token
+	token2 := session2.Token
+
+	sm.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	sm.UpdateSession(token2, &table.ID, &[]int{1}[0])
+
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Create clients and register
+	client1 := &Client{
+		hub:   hub,
+		Token: token1,
+		send:  make(chan []byte, 256),
+	}
+	client2 := &Client{
+		hub:   hub,
+		Token: token2,
+		send:  make(chan []byte, 256),
+	}
+	hub.register <- client1
+	hub.register <- client2
+	time.Sleep(50 * time.Millisecond)
+
+	// Broadcast action request for multi-player game
+	validActions := []string{"fold", "check", "raise"}
+	err = server.BroadcastActionRequest(table.ID, 0, validActions, 0, 20, 30)
+	if err != nil {
+		t.Fatalf("failed to broadcast action_request: %v", err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify min/max calculation for multi-player
+	select {
+	case msg := <-client1.send:
+		var wsMsg WebSocketMessage
+		json.Unmarshal(msg, &wsMsg)
+		var payload ActionRequestPayload
+		json.Unmarshal(wsMsg.Payload, &payload)
+
+		// With BB=20 and opponent stack after posting BB=20 (1000-20=980), minRaise should be 20 + 20 = 40
+		// maxRaise is min of player's remaining stack (1000-10=990) and opponent's stack (1000-20=980) = 980
+		if payload.MinRaise != 40 {
+			t.Errorf("multi-player: expected minRaise=40, got %d", payload.MinRaise)
+		}
+		// maxRaise should be opponent's remaining stack after posting BB (1000 - 20 = 980)
+		if payload.MaxRaise != 980 {
+			t.Errorf("multi-player: expected maxRaise=980, got %d", payload.MaxRaise)
+		}
+	default:
+		t.Error("client1 did not receive action_request message")
+	}
+
+	// Test Case 2: Heads-up game (different stack sizes: 800, 1200)
+	// Clear table and recreate
+	table.mu.Lock()
+	table.CurrentHand = nil
+	table.mu.Unlock()
+
+	session3, _ := sm.CreateSession("Player3")
+	session4, _ := sm.CreateSession("Player4")
+	token3 := session3.Token
+	token4 := session4.Token
+
+	sm.UpdateSession(token3, &table.ID, &[]int{0}[0])
+	sm.UpdateSession(token4, &table.ID, &[]int{1}[0])
+
+	table.mu.Lock()
+	table.Seats[0].Token = &token3
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 800
+	table.Seats[1].Token = &token4
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1200
+	table.mu.Unlock()
+
+	err = table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start second hand: %v", err)
+	}
+
+	client3 := &Client{
+		hub:   hub,
+		Token: token3,
+		send:  make(chan []byte, 256),
+	}
+	client4 := &Client{
+		hub:   hub,
+		Token: token4,
+		send:  make(chan []byte, 256),
+	}
+	hub.register <- client3
+	hub.register <- client4
+	time.Sleep(50 * time.Millisecond)
+
+	// Broadcast action request for heads-up
+	err = server.BroadcastActionRequest(table.ID, 0, validActions, 0, 20, 30)
+	if err != nil {
+		t.Fatalf("failed to broadcast action_request for heads-up: %v", err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify min/max calculation for heads-up
+	select {
+	case msg := <-client3.send:
+		var wsMsg WebSocketMessage
+		json.Unmarshal(msg, &wsMsg)
+		var payload ActionRequestPayload
+		json.Unmarshal(wsMsg.Payload, &payload)
+
+		// Heads-up scenario:
+		// Dealer (seat 1) posts SB: 1200 - 10 = 1190
+		// Non-dealer (seat 0, our player) posts BB: 800 - 20 = 780
+		// Player at seat 0 is acting, so GetMaxRaise(0) = min(780, 1190) = 780
+		if payload.MaxRaise != 780 {
+			t.Errorf("heads-up: expected maxRaise=780, got %d", payload.MaxRaise)
+		}
+	default:
+		t.Error("client3 did not receive action_request message")
+	}
+}
