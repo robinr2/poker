@@ -1721,3 +1721,716 @@ func TestStartHandAllInBlind(t *testing.T) {
 		t.Errorf("expected pot 25 (5 SB all-in + 20 BB), got %d", table.CurrentHand.Pot)
 	}
 }
+
+// ============ PHASE 1: TURN ORDER & ACTION STATE TESTS ============
+
+// TestGetFirstActor_HeadsUp verifies dealer acts first preflop in heads-up
+func TestGetFirstActor_HeadsUp(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up heads-up: seats 0 and 2 active (dealer at 0)
+	token0 := "player-0"
+	token2 := "player-2"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+
+	// Start hand to set dealer and blinds
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// In heads-up, dealer (seat 0) should act first preflop
+	firstActor := table.CurrentHand.GetFirstActor(table.Seats)
+	if firstActor != 0 {
+		t.Errorf("expected first actor to be dealer (seat 0) in heads-up, got %d", firstActor)
+	}
+}
+
+// TestGetFirstActor_MultiPlayer verifies first seat after BB acts first in 3+ player game
+func TestGetFirstActor_MultiPlayer(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 4 active players (seats 0, 1, 2, 3)
+	for i := 0; i < 4; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand to set dealer and blinds
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// In multi-player preflop, UTG (seat after BB) acts first
+	// Dealer at 0, SB at 1, BB at 2, so UTG (first to act) is seat 3
+	firstActor := table.CurrentHand.GetFirstActor(table.Seats)
+	if firstActor != 3 {
+		t.Errorf("expected first actor to be UTG (seat 3), got %d", firstActor)
+	}
+}
+
+// TestGetFirstActor_MultiPlayer_WithScatteredSeats verifies UTG with non-consecutive seats
+func TestGetFirstActor_MultiPlayer_WithScatteredSeats(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 3 active players at scattered seats (1, 3, 5)
+	token1 := "player-1"
+	token3 := "player-3"
+	token5 := "player-5"
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	table.Seats[3].Token = &token3
+	table.Seats[3].Status = "active"
+	table.Seats[3].Stack = 1000
+
+	table.Seats[5].Token = &token5
+	table.Seats[5].Status = "active"
+	table.Seats[5].Stack = 1000
+
+	// Start hand to set dealer and blinds
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// After StartHand, we need to determine positions
+	// Dealer should be seat 1 (first active), SB seat 3, BB seat 5
+	// So UTG (first to act) is seat 1 (next after BB in rotation)
+	firstActor := table.CurrentHand.GetFirstActor(table.Seats)
+	if firstActor != 1 {
+		t.Errorf("expected first actor to be UTG (seat 1), got %d", firstActor)
+	}
+}
+
+// TestGetFirstActor_HeadsUp_DealerValidation verifies dealer seat is validated as active in heads-up
+func TestGetFirstActor_HeadsUp_DealerValidation(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up heads-up: seats 1 and 3 active
+	token1 := "player-1"
+	token3 := "player-3"
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	table.Seats[3].Token = &token3
+	table.Seats[3].Status = "active"
+	table.Seats[3].Stack = 1000
+
+	// Start hand to set dealer and blinds
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Manually mark the dealer as inactive (simulate edge case where dealer became inactive)
+	dealerSeat := table.CurrentHand.DealerSeat
+	table.Seats[dealerSeat].Status = "empty"
+
+	// GetFirstActor should still return a valid seat (not panic or return invalid seat)
+	firstActor := table.CurrentHand.GetFirstActor(table.Seats)
+
+	// Verify the returned seat is actually active
+	if table.Seats[firstActor].Status != "active" {
+		t.Errorf("expected first actor to be an active seat, got seat %d with status %s", firstActor, table.Seats[firstActor].Status)
+	}
+}
+
+// TestGetFirstActor_BBNotFound verifies handling when BB is not in active seats (edge case)
+func TestGetFirstActor_BBNotFound(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 3 active players (seats 0, 1, 2)
+	for i := 0; i < 3; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand to set dealer and blinds
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Save the BB seat before we mess with it
+	bbSeat := table.CurrentHand.BigBlindSeat
+
+	// Manually mark the BB as inactive (simulate edge case where BB became inactive)
+	table.Seats[bbSeat].Status = "empty"
+
+	// GetFirstActor should handle this gracefully without panic
+	// It should return a valid active seat as fallback
+	firstActor := table.CurrentHand.GetFirstActor(table.Seats)
+
+	// Verify the returned seat is actually active
+	if table.Seats[firstActor].Status != "active" {
+		t.Errorf("expected first actor to be an active seat, got seat %d with status %s", firstActor, table.Seats[firstActor].Status)
+	}
+
+	// Verify it's not the BB seat (since BB is inactive)
+	if firstActor == bbSeat {
+		t.Errorf("expected first actor to NOT be the inactive BB seat %d, got %d", bbSeat, firstActor)
+	}
+}
+
+// TestGetNextActiveSeat verifies wrap-around and folded player skipping
+func TestGetNextActiveSeat(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 4 active players (seats 0, 1, 2, 3)
+	for i := 0; i < 4; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize folded players map
+	if table.CurrentHand.FoldedPlayers == nil {
+		table.CurrentHand.FoldedPlayers = make(map[int]bool)
+	}
+
+	// Test: from seat 0, next active should be 1
+	next := table.CurrentHand.GetNextActiveSeat(0, table.Seats)
+	if next == nil || *next != 1 {
+		t.Errorf("expected next active seat after 0 to be 1, got %v", next)
+	}
+
+	// Test: from seat 1 (with seat 2 folded), next active should be 3
+	table.CurrentHand.FoldedPlayers[2] = true
+	next = table.CurrentHand.GetNextActiveSeat(1, table.Seats)
+	if next == nil || *next != 3 {
+		t.Errorf("expected next active seat after 1 (skipping folded 2) to be 3, got %v", next)
+	}
+
+	// Test: from seat 3 (wrap-around), next active should be 0
+	next = table.CurrentHand.GetNextActiveSeat(3, table.Seats)
+	if next == nil || *next != 0 {
+		t.Errorf("expected next active seat after 3 (wrap to 0) to be 0, got %v", next)
+	}
+
+	// Test: from seat 2 (folded), next active should be 3 (skip self)
+	next = table.CurrentHand.GetNextActiveSeat(2, table.Seats)
+	if next == nil || *next != 3 {
+		t.Errorf("expected next active seat after folded 2 to be 3, got %v", next)
+	}
+}
+
+// TestGetNextActiveSeat_AllButOneFinished verifies returns nil when all others are folded
+func TestGetNextActiveSeat_AllButOneFinished(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 3 active players (seats 0, 1, 2)
+	for i := 0; i < 3; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize folded players map
+	if table.CurrentHand.FoldedPlayers == nil {
+		table.CurrentHand.FoldedPlayers = make(map[int]bool)
+	}
+
+	// Mark seats 1 and 2 as folded
+	table.CurrentHand.FoldedPlayers[1] = true
+	table.CurrentHand.FoldedPlayers[2] = true
+
+	// From seat 0, there are no active players left (all others folded)
+	next := table.CurrentHand.GetNextActiveSeat(0, table.Seats)
+	if next != nil {
+		t.Errorf("expected next active seat to be nil when all others folded, got %v", next)
+	}
+}
+
+// TestGetCallAmount_NoCurrentBet verifies call amount is 0 when no bet is set
+func TestGetCallAmount_NoCurrentBet(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players
+	for i := 0; i < 2; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize action state
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+
+	// CurrentBet is 0, PlayerBets for seat 0 is 0
+	callAmount := table.CurrentHand.GetCallAmount(0)
+	if callAmount != 0 {
+		t.Errorf("expected call amount 0 when no current bet, got %d", callAmount)
+	}
+}
+
+// TestGetCallAmount_BehindCurrentBet verifies call amount is difference between CurrentBet and PlayerBet
+func TestGetCallAmount_BehindCurrentBet(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players
+	for i := 0; i < 2; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize action state
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+
+	// Player has bet 10, current bet is 50
+	table.CurrentHand.PlayerBets[0] = 10
+	table.CurrentHand.CurrentBet = 50
+
+	callAmount := table.CurrentHand.GetCallAmount(0)
+	if callAmount != 40 {
+		t.Errorf("expected call amount 40 (50-10), got %d", callAmount)
+	}
+}
+
+// TestGetCallAmount_AlreadyMatched verifies call amount is 0 when player has already matched bet
+func TestGetCallAmount_AlreadyMatched(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players
+	for i := 0; i < 2; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize action state
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+
+	// Player has already matched the current bet
+	table.CurrentHand.PlayerBets[0] = 50
+	table.CurrentHand.CurrentBet = 50
+
+	callAmount := table.CurrentHand.GetCallAmount(0)
+	if callAmount != 0 {
+		t.Errorf("expected call amount 0 when bet matched, got %d", callAmount)
+	}
+}
+
+// TestGetValidActions_CanCheck verifies check and fold are valid when bet is matched
+func TestGetValidActions_CanCheck(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players
+	for i := 0; i < 2; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize action state
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+
+	// Player has already matched the current bet
+	table.CurrentHand.PlayerBets[0] = 50
+	table.CurrentHand.CurrentBet = 50
+
+	validActions := table.CurrentHand.GetValidActions(0)
+
+	// Should allow check and fold
+	hasCheck := false
+	hasFold := false
+	for _, action := range validActions {
+		if action == "check" {
+			hasCheck = true
+		}
+		if action == "fold" {
+			hasFold = true
+		}
+	}
+
+	if !hasCheck {
+		t.Errorf("expected 'check' in valid actions, got %v", validActions)
+	}
+	if !hasFold {
+		t.Errorf("expected 'fold' in valid actions, got %v", validActions)
+	}
+	if len(validActions) != 2 {
+		t.Errorf("expected exactly 2 valid actions (check, fold), got %d: %v", len(validActions), validActions)
+	}
+}
+
+// TestGetValidActions_MustCall verifies call and fold are valid when behind current bet
+func TestGetValidActions_MustCall(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players
+	for i := 0; i < 2; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize action state
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+
+	// Player has bet 10, current bet is 50
+	table.CurrentHand.PlayerBets[0] = 10
+	table.CurrentHand.CurrentBet = 50
+
+	validActions := table.CurrentHand.GetValidActions(0)
+
+	// Should allow call and fold only
+	hasCall := false
+	hasFold := false
+	for _, action := range validActions {
+		if action == "call" {
+			hasCall = true
+		}
+		if action == "fold" {
+			hasFold = true
+		}
+	}
+
+	if !hasCall {
+		t.Errorf("expected 'call' in valid actions, got %v", validActions)
+	}
+	if !hasFold {
+		t.Errorf("expected 'fold' in valid actions, got %v", validActions)
+	}
+	if len(validActions) != 2 {
+		t.Errorf("expected exactly 2 valid actions (call, fold), got %d: %v", len(validActions), validActions)
+	}
+}
+
+// TestProcessAction_Fold marks player as folded without changing pot or stacks
+func TestProcessAction_Fold(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 3 active players
+	for i := 0; i < 3; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize action state
+	if table.CurrentHand.FoldedPlayers == nil {
+		table.CurrentHand.FoldedPlayers = make(map[int]bool)
+	}
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+
+	initialPot := table.CurrentHand.Pot
+	initialStack := table.Seats[0].Stack
+
+	// Process fold action for seat 0
+	chipsMoved, err := table.CurrentHand.ProcessAction(0, "fold", table.Seats[0].Stack)
+	if err != nil {
+		t.Errorf("expected no error processing fold, got %v", err)
+	}
+
+	// Verify no chips were moved
+	if chipsMoved != 0 {
+		t.Errorf("expected 0 chips moved on fold, got %d", chipsMoved)
+	}
+
+	// Verify player is marked as folded
+	if !table.CurrentHand.FoldedPlayers[0] {
+		t.Errorf("expected player 0 to be marked as folded")
+	}
+
+	// Verify pot and stack didn't change
+	if table.CurrentHand.Pot != initialPot {
+		t.Errorf("expected pot to remain %d, got %d", initialPot, table.CurrentHand.Pot)
+	}
+	if table.Seats[0].Stack != initialStack {
+		t.Errorf("expected stack to remain %d, got %d", initialStack, table.Seats[0].Stack)
+	}
+}
+
+// TestProcessAction_Check succeeds when bet is matched, no state change
+func TestProcessAction_Check(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players
+	for i := 0; i < 2; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize action state
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+	if table.CurrentHand.ActedPlayers == nil {
+		table.CurrentHand.ActedPlayers = make(map[int]bool)
+	}
+
+	// Set bet so player can check (50/50 matched)
+	table.CurrentHand.PlayerBets[0] = 50
+	table.CurrentHand.CurrentBet = 50
+
+	initialPot := table.CurrentHand.Pot
+	initialStack := table.Seats[0].Stack
+
+	// Process check action
+	chipsMoved, err := table.CurrentHand.ProcessAction(0, "check", table.Seats[0].Stack)
+	if err != nil {
+		t.Errorf("expected no error processing check, got %v", err)
+	}
+
+	// Verify no chips were moved
+	if chipsMoved != 0 {
+		t.Errorf("expected 0 chips moved on check, got %d", chipsMoved)
+	}
+
+	// Verify player marked as acted
+	if !table.CurrentHand.ActedPlayers[0] {
+		t.Errorf("expected player 0 to be marked as acted")
+	}
+
+	// Verify no state change (pot, stack)
+	if table.CurrentHand.Pot != initialPot {
+		t.Errorf("expected pot to remain %d, got %d", initialPot, table.CurrentHand.Pot)
+	}
+	if table.Seats[0].Stack != initialStack {
+		t.Errorf("expected stack to remain %d, got %d", initialStack, table.Seats[0].Stack)
+	}
+}
+
+// TestProcessAction_CheckInvalidWhenBehind verifies check fails when player is behind current bet
+func TestProcessAction_CheckInvalidWhenBehind(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players
+	for i := 0; i < 2; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize action state
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+
+	// Player behind: bet 10, current bet 50
+	table.CurrentHand.PlayerBets[0] = 10
+	table.CurrentHand.CurrentBet = 50
+
+	// Try to check when behind
+	_, err = table.CurrentHand.ProcessAction(0, "check", table.Seats[0].Stack)
+	if err == nil {
+		t.Errorf("expected error processing check when behind current bet, got nil")
+	}
+}
+
+// TestProcessAction_Call updates pot and stack correctly
+func TestProcessAction_Call(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players
+	for i := 0; i < 2; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize action state
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+	if table.CurrentHand.ActedPlayers == nil {
+		table.CurrentHand.ActedPlayers = make(map[int]bool)
+	}
+
+	// Set up: player has bet 10, current bet is 50, stack is 1000
+	table.CurrentHand.PlayerBets[0] = 10
+	table.CurrentHand.CurrentBet = 50
+	initialPot := table.CurrentHand.Pot
+
+	// Process call action (need to call 40 more)
+	chipsMoved, err := table.CurrentHand.ProcessAction(0, "call", table.Seats[0].Stack)
+	if err != nil {
+		t.Errorf("expected no error processing call, got %v", err)
+	}
+
+	// Verify correct amount of chips were moved
+	if chipsMoved != 40 {
+		t.Errorf("expected 40 chips moved, got %d", chipsMoved)
+	}
+
+	// Verify pot increased by call amount (40)
+	expectedPot := initialPot + 40
+	if table.CurrentHand.Pot != expectedPot {
+		t.Errorf("expected pot to be %d, got %d", expectedPot, table.CurrentHand.Pot)
+	}
+
+	// Verify PlayerBets updated to match current bet
+	if table.CurrentHand.PlayerBets[0] != 50 {
+		t.Errorf("expected PlayerBets[0] to be 50, got %d", table.CurrentHand.PlayerBets[0])
+	}
+
+	// Verify player marked as acted
+	if !table.CurrentHand.ActedPlayers[0] {
+		t.Errorf("expected player 0 to be marked as acted")
+	}
+
+	// Note: stack update is the caller's responsibility, so we verify chipsMoved instead
+	// In actual handler code, the caller would do: table.Seats[seatIndex].Stack -= chipsMoved
+}
+
+// TestProcessAction_CallPartial handles all-in when stack < call amount
+func TestProcessAction_CallPartial(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players
+	for i := 0; i < 2; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize action state
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+	if table.CurrentHand.ActedPlayers == nil {
+		table.CurrentHand.ActedPlayers = make(map[int]bool)
+	}
+
+	// Set up: player needs to call 50, but only has 30 chips left
+	table.CurrentHand.PlayerBets[0] = 0
+	table.CurrentHand.CurrentBet = 50
+	playerStack := 30 // Only 30 chips available
+	initialPot := table.CurrentHand.Pot
+
+	// Process call action (go all-in with 30)
+	chipsMoved, err := table.CurrentHand.ProcessAction(0, "call", playerStack)
+	if err != nil {
+		t.Errorf("expected no error processing partial call, got %v", err)
+	}
+
+	// Verify all-in amount returned (30)
+	if chipsMoved != 30 {
+		t.Errorf("expected 30 chips moved (all-in), got %d", chipsMoved)
+	}
+
+	// Verify pot increased by available chips (30)
+	expectedPot := initialPot + 30
+	if table.CurrentHand.Pot != expectedPot {
+		t.Errorf("expected pot to be %d, got %d", expectedPot, table.CurrentHand.Pot)
+	}
+
+	// Verify PlayerBets updated to 30 (not the full current bet)
+	if table.CurrentHand.PlayerBets[0] != 30 {
+		t.Errorf("expected PlayerBets[0] to be 30, got %d", table.CurrentHand.PlayerBets[0])
+	}
+}

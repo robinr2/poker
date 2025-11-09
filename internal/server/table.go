@@ -40,6 +40,12 @@ type Hand struct {
 	Pot            int            // Current pot amount
 	Deck           []Card         // Cards remaining in the deck
 	HoleCards      map[int][]Card // Hole cards for each seat (key = seat number, value = 2 cards)
+	CurrentActor   *int           // Seat number of the player whose turn it is (nil if no active action)
+	CurrentBet     int            // Current bet amount in this round (what players must match)
+	PlayerBets     map[int]int    // Amount each player has bet in current round (key = seat number)
+	FoldedPlayers  map[int]bool   // Players who have folded (key = seat number, value = true if folded)
+	ActedPlayers   map[int]bool   // Players who have acted this round (key = seat number, value = true if acted)
+	Street         string         // Current street: "preflop", "flop", "turn", "river"
 }
 
 // Seat represents a seat at a poker table
@@ -590,4 +596,196 @@ func (t *Table) getBlindPositionsLocked(dealerSeat int) (int, int, error) {
 	bigBlind := activePlayers[bbIndex]
 
 	return smallBlind, bigBlind, nil
+}
+
+// GetFirstActor determines who acts first preflop
+// - Heads-up (2 active players): dealer acts first (dealer is small blind)
+// - Multi-player (3+ active players): first seat after BB acts first (UTG position)
+// Returns the seat number of the player who acts first
+func (h *Hand) GetFirstActor(seats [6]Seat) int {
+	// Count active players
+	activeCount := 0
+	activeSeats := []int{}
+	for i := 0; i < 6; i++ {
+		if seats[i].Status == "active" {
+			activeCount++
+			activeSeats = append(activeSeats, i)
+		}
+	}
+
+	// Heads-up: dealer (small blind) acts first
+	if activeCount == 2 {
+		// Verify dealer is actually in the active seats list
+		for _, seat := range activeSeats {
+			if seat == h.DealerSeat {
+				return h.DealerSeat
+			}
+		}
+		// Fallback if dealer somehow not active
+		return activeSeats[0]
+	}
+
+	// Multi-player: find first active player after BB
+	// Find index of BB in activeSeats
+	bbIndex := -1
+	for i, seat := range activeSeats {
+		if seat == h.BigBlindSeat {
+			bbIndex = i
+			break
+		}
+	}
+
+	// Defensive check: if BB not found in activeSeats, fallback to first active player
+	if bbIndex == -1 {
+		// This should never happen if hand setup is correct, but defend against it
+		return activeSeats[0]
+	}
+
+	// First to act is next active player after BB
+	firstActorIndex := (bbIndex + 1) % len(activeSeats)
+	return activeSeats[firstActorIndex]
+}
+
+// GetNextActiveSeat returns the next active (non-folded) player after fromSeat
+// - Skips folded players
+// - Wraps around from seat 5 to seat 0
+// - If fromSeat is not in the active list, finds the next seat number greater than fromSeat
+// - If no seat is found after fromSeat, wraps around to find the first seat
+// - Returns nil if all other active players have folded (only one player left)
+func (h *Hand) GetNextActiveSeat(fromSeat int, seats [6]Seat) *int {
+	// Collect all active (not folded) seats
+	activeSeatsList := []int{}
+	for i := 0; i < 6; i++ {
+		if seats[i].Status == "active" && !h.FoldedPlayers[i] {
+			activeSeatsList = append(activeSeatsList, i)
+		}
+	}
+
+	// If 0 or 1 active seats remain, return nil (betting round should be over)
+	if len(activeSeatsList) <= 1 {
+		return nil
+	}
+
+	// Find current position in activeSeatsList
+	currentIndex := -1
+	for i, seat := range activeSeatsList {
+		if seat == fromSeat {
+			currentIndex = i
+			break
+		}
+	}
+
+	// If fromSeat not in active list, find closest one after it
+	if currentIndex == -1 {
+		for i, seat := range activeSeatsList {
+			if seat > fromSeat {
+				nextSeat := activeSeatsList[i]
+				return &nextSeat
+			}
+		}
+		// If not found after, wrap around to first
+		nextSeat := activeSeatsList[0]
+		return &nextSeat
+	}
+
+	// Get next seat (with wrap-around)
+	nextIndex := (currentIndex + 1) % len(activeSeatsList)
+	nextSeat := activeSeatsList[nextIndex]
+	return &nextSeat
+}
+
+// GetCallAmount returns the amount a player needs to call to match the current bet
+// - Returns 0 if CurrentBet <= PlayerBet (player has already matched or exceeded the bet)
+// - Returns CurrentBet - PlayerBet otherwise (amount needed to match)
+func (h *Hand) GetCallAmount(seatIndex int) int {
+	// Initialize maps if needed
+	if h.PlayerBets == nil {
+		h.PlayerBets = make(map[int]int)
+	}
+
+	playerBet := h.PlayerBets[seatIndex]
+	amountToCall := h.CurrentBet - playerBet
+
+	if amountToCall < 0 {
+		amountToCall = 0
+	}
+
+	return amountToCall
+}
+
+// GetValidActions returns the list of valid actions for a player
+// - If player must match a current bet: ["call", "fold"]
+// - If player has matched the current bet: ["check", "fold"]
+func (h *Hand) GetValidActions(seatIndex int) []string {
+	callAmount := h.GetCallAmount(seatIndex)
+
+	if callAmount > 0 {
+		// Player is behind, must call to continue
+		return []string{"call", "fold"}
+	}
+
+	// Player has matched current bet, can check or fold
+	return []string{"check", "fold"}
+}
+
+// ProcessAction processes a player action (fold, check, or call)
+// - "fold": marks player as folded (no pot/stack changes)
+// - "check": valid only when bet is matched; marks player as acted (no pot/stack changes)
+// - "call": moves chips from stack to pot to match current bet; handles all-in
+// The caller is responsible for updating the player's stack in the table's seats after calling this.
+// Returns the number of chips moved (for updating player stack), or error if action is invalid
+func (h *Hand) ProcessAction(seatIndex int, action string, playerStack int) (int, error) {
+	// Initialize maps if needed
+	if h.FoldedPlayers == nil {
+		h.FoldedPlayers = make(map[int]bool)
+	}
+	if h.PlayerBets == nil {
+		h.PlayerBets = make(map[int]int)
+	}
+	if h.ActedPlayers == nil {
+		h.ActedPlayers = make(map[int]bool)
+	}
+
+	switch action {
+	case "fold":
+		// Mark player as folded
+		h.FoldedPlayers[seatIndex] = true
+		h.ActedPlayers[seatIndex] = true
+		return 0, nil
+
+	case "check":
+		// Check is only valid when player has matched the current bet
+		callAmount := h.GetCallAmount(seatIndex)
+		if callAmount > 0 {
+			return 0, fmt.Errorf("cannot check when behind current bet (need to call %d)", callAmount)
+		}
+
+		// Mark player as acted
+		h.ActedPlayers[seatIndex] = true
+		return 0, nil
+
+	case "call":
+		// Get amount needed to match current bet
+		callAmount := h.GetCallAmount(seatIndex)
+
+		// Amount to actually move (min of what they need to call and what they have)
+		chipsToBet := callAmount
+		if chipsToBet > playerStack {
+			// Go all-in with available chips
+			chipsToBet = playerStack
+		}
+
+		// Update pot
+		h.Pot += chipsToBet
+
+		// Update player's bet for this round
+		h.PlayerBets[seatIndex] += chipsToBet
+
+		// Mark player as acted
+		h.ActedPlayers[seatIndex] = true
+		return chipsToBet, nil
+
+	default:
+		return 0, fmt.Errorf("invalid action: %s", action)
+	}
 }
