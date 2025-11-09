@@ -46,6 +46,7 @@ type Hand struct {
 	FoldedPlayers  map[int]bool   // Players who have folded (key = seat number, value = true if folded)
 	ActedPlayers   map[int]bool   // Players who have acted this round (key = seat number, value = true if acted)
 	Street         string         // Current street: "preflop", "flop", "turn", "river"
+	LastRaise      int            // Amount of the last raise increment (used to compute min-raise)
 }
 
 // Seat represents a seat at a poker table
@@ -418,6 +419,7 @@ func (t *Table) StartHand() error {
 		PlayerBets:     make(map[int]int),
 		FoldedPlayers:  make(map[int]bool),
 		ActedPlayers:   make(map[int]bool),
+		LastRaise:      bigBlind,
 	}
 
 	// Step 4: Shuffle the deck
@@ -771,6 +773,14 @@ func (h *Hand) GetValidActions(seatIndex int) []string {
 	return []string{"check", "fold"}
 }
 
+// GetMinRaise returns the minimum raise amount (what players must raise to at minimum)
+// Minimum raise = CurrentBet + LastRaise
+// Example: If BB=20, then min-raise to 40 (20 + 20)
+// After raise to 60, min-raise becomes 100 (60 + 40)
+func (h *Hand) GetMinRaise() int {
+	return h.CurrentBet + h.LastRaise
+}
+
 // ProcessAction processes a player action (fold, check, or call)
 // - "fold": marks player as folded (no pot/stack changes)
 // - "check": valid only when bet is matched; marks player as acted (no pot/stack changes)
@@ -907,4 +917,28 @@ func (h *Hand) AdvanceAction(seats [6]Seat) (*int, error) {
 	// Get the next active seat after current actor
 	nextSeat := h.GetNextActiveSeat(*h.CurrentActor, seats)
 	return nextSeat, nil
+}
+
+// AdvanceStreet moves the hand to the next street and resets betting state
+// Streets: preflop -> flop -> turn -> river
+// Resets CurrentBet, LastRaise, and ActedPlayers for the new street
+func (h *Hand) AdvanceStreet() {
+	switch h.Street {
+	case "preflop":
+		h.Street = "flop"
+	case "flop":
+		h.Street = "turn"
+	case "turn":
+		h.Street = "river"
+	case "river":
+		// Hand is over (no advance from river)
+		return
+	}
+
+	// Reset betting state for new street
+	h.CurrentBet = 0
+	h.LastRaise = 0
+	h.PlayerBets = make(map[int]int)
+	h.ActedPlayers = make(map[int]bool)
+	h.CurrentActor = nil
 }

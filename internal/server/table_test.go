@@ -2889,3 +2889,163 @@ func TestStartHandBroadcastsFirstActionRequest(t *testing.T) {
 		t.Errorf("CurrentActor %d is not valid for 2-player setup", *table.CurrentHand.CurrentActor)
 	}
 }
+
+// TestGetMinRaise_Preflop verifies min-raise calculation on preflop
+// With BB=20, first raise should be 40 (20 + 20 increment)
+func TestGetMinRaise_Preflop(t *testing.T) {
+	hand := &Hand{
+		BigBlindSeat: 1,
+		CurrentBet:   20,
+		LastRaise:    20,
+		Street:       "preflop",
+	}
+
+	expected := 40
+	result := hand.GetMinRaise()
+	if result != expected {
+		t.Errorf("GetMinRaise() = %d, want %d", result, expected)
+	}
+}
+
+// TestGetMinRaise_AfterRaise verifies min-raise after player raises
+// After raise to 60, min-raise should be 100 (60 + 40 increment)
+func TestGetMinRaise_AfterRaise(t *testing.T) {
+	hand := &Hand{
+		BigBlindSeat: 1,
+		CurrentBet:   60,
+		LastRaise:    40,
+		Street:       "preflop",
+	}
+
+	expected := 100
+	result := hand.GetMinRaise()
+	if result != expected {
+		t.Errorf("GetMinRaise() = %d, want %d", result, expected)
+	}
+}
+
+// TestGetMinRaise_AfterMultipleRaises verifies chain of raises maintains correct increments
+// Sequence: BB 20 -> Raise to 60 (increment 40) -> Raise to 140 (increment 80)
+func TestGetMinRaise_AfterMultipleRaises(t *testing.T) {
+	hand := &Hand{
+		BigBlindSeat: 1,
+		CurrentBet:   140,
+		LastRaise:    80,
+		Street:       "preflop",
+	}
+
+	expected := 220
+	result := hand.GetMinRaise()
+	if result != expected {
+		t.Errorf("GetMinRaise() = %d, want %d", result, expected)
+	}
+}
+
+// TestGetMinRaise_PostFlop verifies min-raise on later streets
+// First bet on flop is 30, min-raise should be 60
+func TestGetMinRaise_PostFlop(t *testing.T) {
+	hand := &Hand{
+		BigBlindSeat: 1,
+		CurrentBet:   30,
+		LastRaise:    30,
+		Street:       "flop",
+	}
+
+	expected := 60
+	result := hand.GetMinRaise()
+	if result != expected {
+		t.Errorf("GetMinRaise() = %d, want %d", result, expected)
+	}
+}
+
+// TestGetMinRaise_HeadsUp verifies GetMinRaise works in heads-up scenario
+// 2-player scenario with standard min-raise
+func TestGetMinRaise_HeadsUp(t *testing.T) {
+	hand := &Hand{
+		BigBlindSeat: 0,
+		CurrentBet:   20,
+		LastRaise:    20,
+		Street:       "preflop",
+	}
+
+	expected := 40
+	result := hand.GetMinRaise()
+	if result != expected {
+		t.Errorf("GetMinRaise() = %d, want %d", result, expected)
+	}
+}
+
+// TestNewHand_InitializesLastRaise verifies LastRaise is initialized to BigBlind
+// When StartHand creates a new Hand, LastRaise should be set to bigBlind amount
+func TestNewHand_InitializesLastRaise(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	sm := NewSessionManager(logger)
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	token1 := session1.Token
+	token2 := session2.Token
+
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "waiting"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "waiting"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	table.mu.RLock()
+	defer table.mu.RUnlock()
+
+	if table.CurrentHand == nil {
+		t.Fatal("CurrentHand should be set")
+	}
+
+	if table.CurrentHand.LastRaise != 20 {
+		t.Errorf("LastRaise = %d, want 20 (bigBlind)", table.CurrentHand.LastRaise)
+	}
+}
+
+// TestAdvanceStreet_ResetsLastRaise verifies LastRaise is reset when advancing to next street
+// After advancing from preflop to flop, LastRaise should reset to 0
+func TestAdvanceStreet_ResetsLastRaise(t *testing.T) {
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            100,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+		Street:         "preflop",
+		CurrentBet:     20,
+		PlayerBets:     make(map[int]int),
+		FoldedPlayers:  make(map[int]bool),
+		ActedPlayers:   make(map[int]bool),
+		LastRaise:      50,
+	}
+
+	hand.AdvanceStreet()
+
+	if hand.Street != "flop" {
+		t.Errorf("Street = %s, want flop", hand.Street)
+	}
+
+	if hand.LastRaise != 0 {
+		t.Errorf("LastRaise = %d, want 0 after street advance", hand.LastRaise)
+	}
+
+	if hand.CurrentBet != 0 {
+		t.Errorf("CurrentBet = %d, want 0 after street advance", hand.CurrentBet)
+	}
+}
