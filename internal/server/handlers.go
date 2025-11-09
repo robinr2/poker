@@ -112,6 +112,12 @@ type ActionResultPayload struct {
 	RoundWinner *int   `json:"roundWinner,omitempty"`
 }
 
+// BoardDealtPayload represents the payload for board_dealt messages
+type BoardDealtPayload struct {
+	BoardCards []Card `json:"boardCards"`
+	Street     string `json:"street"`
+}
+
 // HandleSetName processes a set_name message and creates a session for the client
 func (c *Client) HandleSetName(sm *SessionManager, server *Server, logger *slog.Logger, payload []byte) error {
 	var setNamePayload SetNamePayload
@@ -1046,6 +1052,54 @@ func (s *Server) broadcastCardsDealt(table *Table) error {
 	return nil
 }
 
+// broadcastBoardDealt sends board_dealt message to all clients at the table with community cards
+// street parameter should be "flop", "turn", or "river"
+func (s *Server) broadcastBoardDealt(table *Table, street string) error {
+	// Get all clients at the table
+	clients := s.GetClientsAtTable(table.ID)
+
+	table.mu.RLock()
+	hand := table.CurrentHand
+	if hand == nil {
+		table.mu.RUnlock()
+		return fmt.Errorf("CurrentHand is nil")
+	}
+	boardCards := hand.BoardCards
+	table.mu.RUnlock()
+
+	// Create payload with board cards and street indicator
+	payloadObj := BoardDealtPayload{
+		BoardCards: boardCards,
+		Street:     street,
+	}
+
+	payloadBytes, err := json.Marshal(payloadObj)
+	if err != nil {
+		return fmt.Errorf("failed to marshal board_dealt payload: %w", err)
+	}
+
+	response := WebSocketMessage{
+		Type:    "board_dealt",
+		Payload: json.RawMessage(payloadBytes),
+	}
+
+	responseBytes, err := json.Marshal(response)
+	if err != nil {
+		return fmt.Errorf("failed to marshal board_dealt response: %w", err)
+	}
+
+	// Send to all clients at the table
+	for _, client := range clients {
+		select {
+		case client.send <- responseBytes:
+		default:
+			s.logger.Warn("client send channel full, skipping board_dealt message")
+		}
+	}
+
+	return nil
+}
+
 // HandleStartHand processes a start_hand message to manually trigger hand start (temporary testing feature)
 func (c *Client) HandleStartHand(sm *SessionManager, server *Server, logger *slog.Logger, payload []byte) error {
 	// Verify session exists
@@ -1180,7 +1234,41 @@ func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, sea
 		if err != nil {
 			server.logger.Warn("failed to broadcast action_result", "error", err)
 		}
-		// TODO: Move to next street or determine winner
+
+		// Check if we're not on the river - advance to next street
+		currentStreet := table.CurrentHand.Street
+		if currentStreet != "river" {
+			// Unlock before calling AdvanceToNextStreetWithBroadcast (long-running operation with broadcasting)
+			table.mu.Unlock()
+			err = table.AdvanceToNextStreetWithBroadcast()
+			if err != nil {
+				server.logger.Warn("failed to advance to next street", "error", err)
+			}
+			table.mu.Lock()
+
+			// After advancing street, set first actor for the new street and request their action
+			// Determine who acts first on the new street
+			if table.CurrentHand != nil {
+				firstActor := table.CurrentHand.GetFirstActor(table.Seats)
+				table.CurrentHand.CurrentActor = &firstActor
+
+				// Get valid actions and call amount for the first actor of the new street
+				nextValidActions := table.CurrentHand.GetValidActions(firstActor, table.Seats[firstActor].Stack, table.Seats)
+				nextCallAmount := table.CurrentHand.GetCallAmount(firstActor)
+
+				// Unlock to broadcast action_request for the new street
+				table.mu.Unlock()
+				err = server.BroadcastActionRequest(
+					table.ID, firstActor, nextValidActions, nextCallAmount,
+					table.CurrentHand.CurrentBet, table.CurrentHand.Pot,
+				)
+				table.mu.Lock()
+				if err != nil {
+					server.logger.Warn("failed to broadcast action_request for new street", "error", err)
+				}
+			}
+		}
+
 		return nil
 	}
 
@@ -1201,6 +1289,40 @@ func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, sea
 		table.mu.Lock()
 		if err != nil {
 			server.logger.Warn("failed to broadcast action_result", "error", err)
+		}
+
+		// Check if we're not on the river - advance to next street
+		currentStreet := table.CurrentHand.Street
+		if currentStreet != "river" {
+			// Unlock before calling AdvanceToNextStreetWithBroadcast (long-running operation with broadcasting)
+			table.mu.Unlock()
+			err = table.AdvanceToNextStreetWithBroadcast()
+			if err != nil {
+				server.logger.Warn("failed to advance to next street", "error", err)
+			}
+			table.mu.Lock()
+
+			// After advancing street, set first actor for the new street and request their action
+			// Determine who acts first on the new street
+			if table.CurrentHand != nil {
+				firstActor := table.CurrentHand.GetFirstActor(table.Seats)
+				table.CurrentHand.CurrentActor = &firstActor
+
+				// Get valid actions and call amount for the first actor of the new street
+				nextValidActions := table.CurrentHand.GetValidActions(firstActor, table.Seats[firstActor].Stack, table.Seats)
+				nextCallAmount := table.CurrentHand.GetCallAmount(firstActor)
+
+				// Unlock to broadcast action_request for the new street
+				table.mu.Unlock()
+				err = server.BroadcastActionRequest(
+					table.ID, firstActor, nextValidActions, nextCallAmount,
+					table.CurrentHand.CurrentBet, table.CurrentHand.Pot,
+				)
+				table.mu.Lock()
+				if err != nil {
+					server.logger.Warn("failed to broadcast action_request for new street", "error", err)
+				}
+			}
 		}
 		return nil
 	}

@@ -2577,3 +2577,213 @@ func TestStartHandBroadcastsCardPrivacy(t *testing.T) {
 		t.Errorf("player2 should not receive hole cards for seat 0 (opponent's seat)")
 	}
 }
+
+// TestWebSocketFlow_FlopBroadcast_AfterPreflopComplete verifies board_dealt is broadcast after preflop
+func TestWebSocketFlow_FlopBroadcast_AfterPreflopComplete(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players with sessions
+	session1, _ := server.sessionManager.CreateSession("Player1")
+	session2, _ := server.sessionManager.CreateSession("Player2")
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	server.sessionManager.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	server.sessionManager.UpdateSession(token2, &table.ID, &[]int{1}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start a hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Advance to flop
+	table.mu.Lock()
+	if table.CurrentHand == nil {
+		table.mu.Unlock()
+		t.Fatal("CurrentHand is nil after StartHand")
+	}
+	err = table.CurrentHand.AdvanceToNextStreet()
+	if err != nil {
+		table.mu.Unlock()
+		t.Fatalf("failed to advance to flop: %v", err)
+	}
+	boardCards := make([]Card, len(table.CurrentHand.BoardCards))
+	copy(boardCards, table.CurrentHand.BoardCards)
+	table.mu.Unlock()
+
+	// Broadcast board dealt for flop
+	err = server.broadcastBoardDealt(table, "flop")
+	if err != nil {
+		t.Fatalf("failed to broadcast board dealt: %v", err)
+	}
+
+	// Verify board has 3 flop cards
+	if len(boardCards) != 3 {
+		t.Errorf("expected 3 flop cards, got %d", len(boardCards))
+	}
+}
+
+// TestWebSocketFlow_TurnBroadcast_AfterFlopComplete verifies board_dealt is broadcast for turn
+func TestWebSocketFlow_TurnBroadcast_AfterFlopComplete(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players with sessions
+	session1, _ := server.sessionManager.CreateSession("Player1")
+	session2, _ := server.sessionManager.CreateSession("Player2")
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	server.sessionManager.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	server.sessionManager.UpdateSession(token2, &table.ID, &[]int{1}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start a hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Advance to turn (flop then turn)
+	table.mu.Lock()
+	if table.CurrentHand == nil {
+		table.mu.Unlock()
+		t.Fatal("CurrentHand is nil after StartHand")
+	}
+	err = table.CurrentHand.AdvanceToNextStreet()
+	if err != nil {
+		table.mu.Unlock()
+		t.Fatalf("failed to advance to flop: %v", err)
+	}
+	err = table.CurrentHand.AdvanceToNextStreet()
+	if err != nil {
+		table.mu.Unlock()
+		t.Fatalf("failed to advance to turn: %v", err)
+	}
+	boardCards := make([]Card, len(table.CurrentHand.BoardCards))
+	copy(boardCards, table.CurrentHand.BoardCards)
+	table.mu.Unlock()
+
+	// Broadcast board dealt for turn
+	err = server.broadcastBoardDealt(table, "turn")
+	if err != nil {
+		t.Fatalf("failed to broadcast board dealt: %v", err)
+	}
+
+	// Verify turn board has 4 cards
+	if len(boardCards) != 4 {
+		t.Errorf("expected 4 turn cards, got %d", len(boardCards))
+	}
+}
+
+// TestWebSocketFlow_RiverBroadcast_AfterTurnComplete verifies board_dealt is broadcast for river
+func TestWebSocketFlow_RiverBroadcast_AfterTurnComplete(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players with sessions
+	session1, _ := server.sessionManager.CreateSession("Player1")
+	session2, _ := server.sessionManager.CreateSession("Player2")
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	server.sessionManager.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	server.sessionManager.UpdateSession(token2, &table.ID, &[]int{1}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start a hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Advance to river (flop, turn, river)
+	table.mu.Lock()
+	if table.CurrentHand == nil {
+		table.mu.Unlock()
+		t.Fatal("CurrentHand is nil after StartHand")
+	}
+	err = table.CurrentHand.AdvanceToNextStreet()
+	if err != nil {
+		table.mu.Unlock()
+		t.Fatalf("failed to advance to flop: %v", err)
+	}
+	err = table.CurrentHand.AdvanceToNextStreet()
+	if err != nil {
+		table.mu.Unlock()
+		t.Fatalf("failed to advance to turn: %v", err)
+	}
+	err = table.CurrentHand.AdvanceToNextStreet()
+	if err != nil {
+		table.mu.Unlock()
+		t.Fatalf("failed to advance to river: %v", err)
+	}
+	boardCards := make([]Card, len(table.CurrentHand.BoardCards))
+	copy(boardCards, table.CurrentHand.BoardCards)
+	table.mu.Unlock()
+
+	// Broadcast board dealt for river
+	err = server.broadcastBoardDealt(table, "river")
+	if err != nil {
+		t.Fatalf("failed to broadcast board dealt: %v", err)
+	}
+
+	// Verify river board has 5 cards
+	if len(boardCards) != 5 {
+		t.Errorf("expected 5 river cards, got %d", len(boardCards))
+	}
+}

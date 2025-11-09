@@ -1670,17 +1670,24 @@ func TestHandlePlayerAction_ValidCheck(t *testing.T) {
 		t.Errorf("expected check to be valid action for seat 1, got %v", validActions)
 	}
 
+	// Store street before check
+	table.mu.RLock()
+	streetBefore := table.CurrentHand.Street
+	table.mu.RUnlock()
+
 	err = server.HandlePlayerAction(sm, client2, 1, "check")
 	if err != nil {
 		t.Errorf("expected no error for valid check, got %v", err)
 	}
 
-	// Verify action was processed
+	// Verify action was processed and street advanced (since check completes betting round)
 	table.mu.RLock()
-	if !table.CurrentHand.ActedPlayers[1] {
-		t.Errorf("expected seat 1 to be marked as acted")
-	}
+	streetAfter := table.CurrentHand.Street
 	table.mu.RUnlock()
+
+	if streetAfter == streetBefore {
+		t.Errorf("expected street to advance after check completes betting round, but street stayed %s", streetBefore)
+	}
 }
 
 // TestHandlePlayerAction_ValidFold verifies fold action marks player folded
@@ -2342,5 +2349,438 @@ func TestBroadcastActionRequest_MinMaxCalculation(t *testing.T) {
 		}
 	default:
 		t.Error("client3 did not receive action_request message")
+	}
+}
+
+// TestBroadcastBoardDealt_SendsToAllTablePlayers verifies board_dealt message is sent to all players at the table
+func TestBroadcastBoardDealt_SendsToAllTablePlayers(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up players
+	token1 := "player-1"
+	token2 := "player-2"
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Create mock clients and register with hub
+	client1 := &Client{
+		hub:   hub,
+		Token: token1,
+		send:  make(chan []byte, 256),
+	}
+	client2 := &Client{
+		hub:   hub,
+		Token: token2,
+		send:  make(chan []byte, 256),
+	}
+	hub.register <- client1
+	hub.register <- client2
+	time.Sleep(50 * time.Millisecond)
+
+	// Start a hand to establish CurrentHand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Drain any messages from starting hand
+	drainChannels := func(c1, c2 *Client) {
+		for len(c1.send) > 0 {
+			<-c1.send
+		}
+		for len(c2.send) > 0 {
+			<-c2.send
+		}
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	drainChannels(client1, client2)
+
+	// Advance to flop to have board cards
+	table.mu.Lock()
+	if table.CurrentHand != nil {
+		table.CurrentHand.AdvanceToNextStreet()
+	}
+	table.mu.Unlock()
+
+	// Call broadcastBoardDealt
+	err = server.broadcastBoardDealt(table, "flop")
+	if err != nil {
+		t.Fatalf("failed to broadcast board dealt: %v", err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify both clients received messages
+	select {
+	case msg := <-client1.send:
+		var wsMsg WebSocketMessage
+		err := json.Unmarshal(msg, &wsMsg)
+		if err != nil {
+			t.Fatalf("failed to parse client1 message: %v", err)
+		}
+		if wsMsg.Type != "board_dealt" {
+			t.Errorf("client1 expected message type 'board_dealt', got %q", wsMsg.Type)
+		}
+	default:
+		t.Error("client1 did not receive board_dealt message")
+	}
+
+	select {
+	case msg := <-client2.send:
+		var wsMsg WebSocketMessage
+		err := json.Unmarshal(msg, &wsMsg)
+		if err != nil {
+			t.Fatalf("failed to parse client2 message: %v", err)
+		}
+		if wsMsg.Type != "board_dealt" {
+			t.Errorf("client2 expected message type 'board_dealt', got %q", wsMsg.Type)
+		}
+	default:
+		t.Error("client2 did not receive board_dealt message")
+	}
+}
+
+// TestBroadcastBoardDealt_IncludesCorrectBoardCards verifies board_dealt includes the correct board cards
+func TestBroadcastBoardDealt_IncludesCorrectBoardCards(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players
+	token1 := "player-1"
+	token2 := "player-2"
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Create mock clients
+	client1 := &Client{
+		hub:   hub,
+		Token: token1,
+		send:  make(chan []byte, 256),
+	}
+	hub.register <- client1
+	time.Sleep(50 * time.Millisecond)
+
+	// Start a hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Drain messages from starting hand
+	time.Sleep(100 * time.Millisecond)
+	for len(client1.send) > 0 {
+		<-client1.send
+	}
+
+	// Advance to flop to have board cards
+	table.mu.Lock()
+	if table.CurrentHand != nil {
+		table.CurrentHand.AdvanceToNextStreet()
+		// Get the board cards
+		boardCards := table.CurrentHand.BoardCards
+		table.mu.Unlock()
+
+		// Broadcast
+		err = server.broadcastBoardDealt(table, "flop")
+		if err != nil {
+			t.Fatalf("failed to broadcast board dealt: %v", err)
+		}
+
+		time.Sleep(50 * time.Millisecond)
+
+		// Read and verify the message
+		select {
+		case msg := <-client1.send:
+			var wsMsg WebSocketMessage
+			json.Unmarshal(msg, &wsMsg)
+			var payload BoardDealtPayload
+			json.Unmarshal(wsMsg.Payload, &payload)
+
+			if len(payload.BoardCards) != len(boardCards) {
+				t.Errorf("expected %d board cards, got %d", len(boardCards), len(payload.BoardCards))
+			}
+
+			for i, card := range payload.BoardCards {
+				if card.Rank != boardCards[i].Rank || card.Suit != boardCards[i].Suit {
+					t.Errorf("card %d mismatch: expected %s%s, got %s%s", i,
+						boardCards[i].Rank, boardCards[i].Suit, card.Rank, card.Suit)
+				}
+			}
+		default:
+			t.Error("client did not receive board_dealt message")
+		}
+	} else {
+		table.mu.Unlock()
+		t.Fatal("CurrentHand is nil")
+	}
+}
+
+// TestBroadcastBoardDealt_IncludesStreetIndicator verifies board_dealt includes the correct street indicator
+func TestBroadcastBoardDealt_IncludesStreetIndicator(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players
+	token1 := "player-1"
+	token2 := "player-2"
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Create mock client
+	client1 := &Client{
+		hub:   hub,
+		Token: token1,
+		send:  make(chan []byte, 256),
+	}
+	hub.register <- client1
+	time.Sleep(50 * time.Millisecond)
+
+	// Start a hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Test all three streets
+	streetsToTest := []string{"flop", "turn", "river"}
+
+	for _, streetName := range streetsToTest {
+		// Clear previous messages
+		time.Sleep(100 * time.Millisecond)
+		for len(client1.send) > 0 {
+			<-client1.send
+		}
+
+		// Broadcast for this street
+		err = server.broadcastBoardDealt(table, streetName)
+		if err != nil {
+			t.Fatalf("failed to broadcast board dealt for %s: %v", streetName, err)
+		}
+
+		time.Sleep(50 * time.Millisecond)
+
+		// Read and verify the message
+		select {
+		case msg := <-client1.send:
+			var wsMsg WebSocketMessage
+			json.Unmarshal(msg, &wsMsg)
+			var payload BoardDealtPayload
+			json.Unmarshal(wsMsg.Payload, &payload)
+
+			if payload.Street != streetName {
+				t.Errorf("expected street %q, got %q", streetName, payload.Street)
+			}
+		default:
+			t.Errorf("client did not receive board_dealt message for street %s", streetName)
+		}
+
+		// Advance to next street
+		table.mu.Lock()
+		if table.CurrentHand != nil {
+			table.CurrentHand.AdvanceToNextStreet()
+		}
+		table.mu.Unlock()
+	}
+}
+
+// TestHandlePlayerAction_AdvancesStreetAfterRoundComplete verifies that when a betting round
+// completes, the street is advanced and board cards are dealt and broadcast
+func TestHandlePlayerAction_AdvancesStreetAfterRoundComplete(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players with sessions
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	sm.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	sm.UpdateSession(token2, &table.ID, &[]int{1}[0])
+
+	// Assign seats and set to active (heads-up: dealer = small blind = seat 0)
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Start hand
+	// In heads-up: dealer (seat 0) posts SB, seat 1 posts BB
+	// Preflop: dealer (seat 0) acts first
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Verify we're on preflop street
+	table.mu.RLock()
+	if table.CurrentHand.Street != "preflop" {
+		t.Fatalf("expected street preflop, got %s", table.CurrentHand.Street)
+	}
+	table.mu.RUnlock()
+
+	// Create clients for both players
+	client1 := &Client{
+		hub:   hub,
+		Token: token1,
+		send:  make(chan []byte, 256),
+	}
+	client2 := &Client{
+		hub:   hub,
+		Token: token2,
+		send:  make(chan []byte, 256),
+	}
+
+	hub.register <- client1
+	hub.register <- client2
+	time.Sleep(50 * time.Millisecond)
+
+	// Clear initial hand setup messages
+	for len(client1.send) > 0 {
+		<-client1.send
+	}
+	for len(client2.send) > 0 {
+		<-client2.send
+	}
+
+	// Get current action state
+	table.mu.RLock()
+	currentActor := *table.CurrentHand.CurrentActor
+	table.mu.RUnlock()
+
+	if currentActor != 0 {
+		t.Fatalf("expected dealer (seat 0) to act first in heads-up, got seat %d", currentActor)
+	}
+
+	// Seat 0 (dealer/small blind) calls the big blind
+	err = server.HandlePlayerAction(sm, client1, 0, "call")
+	if err != nil {
+		t.Errorf("expected no error for dealer call, got %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify seat 1 is now the current actor (big blind can check since dealer called)
+	table.mu.RLock()
+	currentActor = *table.CurrentHand.CurrentActor
+	table.mu.RUnlock()
+
+	if currentActor != 1 {
+		t.Fatalf("expected seat 1 to act after dealer calls, got seat %d", currentActor)
+	}
+
+	// Clear messages from client2 before next action
+	for len(client2.send) > 0 {
+		<-client2.send
+	}
+
+	// Seat 1 (big blind) checks to complete the preflop betting round
+	err = server.HandlePlayerAction(sm, client2, 1, "check")
+	if err != nil {
+		t.Errorf("expected no error for big blind check, got %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify street advanced from preflop to flop
+	table.mu.RLock()
+	currentStreet := table.CurrentHand.Street
+	boardCardCount := len(table.CurrentHand.BoardCards)
+	table.mu.RUnlock()
+
+	if currentStreet != "flop" {
+		t.Errorf("expected street to advance to 'flop' after betting round complete, got '%s'", currentStreet)
+	}
+
+	if boardCardCount != 3 {
+		t.Errorf("expected flop to have 3 cards, got %d", boardCardCount)
+	}
+
+	// Verify board_dealt message was broadcast with "flop" street
+	// Drain and check messages from both clients
+	boardDealReceived := false
+	checkChannelForBoardDealt := func(client *Client) bool {
+		for {
+			select {
+			case msg := <-client.send:
+				var wsMsg WebSocketMessage
+				if err := json.Unmarshal(msg, &wsMsg); err == nil {
+					if wsMsg.Type == "board_dealt" {
+						var payload BoardDealtPayload
+						if err := json.Unmarshal(wsMsg.Payload, &payload); err == nil {
+							if payload.Street == "flop" && len(payload.BoardCards) == 3 {
+								return true
+							}
+						}
+					}
+				}
+			default:
+				return false
+			}
+		}
+	}
+
+	if checkChannelForBoardDealt(client1) || checkChannelForBoardDealt(client2) {
+		boardDealReceived = true
+	}
+
+	if !boardDealReceived {
+		t.Error("expected board_dealt message with 'flop' street to be broadcast")
 	}
 }

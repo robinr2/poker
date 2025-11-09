@@ -1196,3 +1196,48 @@ func (h *Hand) AdvanceToNextStreet() error {
 
 	return nil
 }
+
+// AdvanceToNextStreetWithBroadcast advances the hand to the next street and broadcasts the board dealt event
+// This is the table-level method that wraps the hand's AdvanceToNextStreet and adds WebSocket broadcasting
+func (t *Table) AdvanceToNextStreetWithBroadcast() error {
+	t.mu.RLock()
+	hand := t.CurrentHand
+	if hand == nil {
+		t.mu.RUnlock()
+		return fmt.Errorf("no hand in progress")
+	}
+
+	currentStreet := hand.Street
+	t.mu.RUnlock()
+
+	// Advance to the next street (deals the board cards)
+	err := hand.AdvanceToNextStreet()
+	if err != nil {
+		return err
+	}
+
+	// Determine the street name for the broadcast
+	var streetName string
+	switch currentStreet {
+	case "preflop":
+		streetName = "flop"
+	case "flop":
+		streetName = "turn"
+	case "turn":
+		streetName = "river"
+	default:
+		// No board cards on river or if hand is complete
+		return nil
+	}
+
+	// Broadcast the board dealt event to all players at the table
+	if t.Server != nil {
+		err = t.Server.broadcastBoardDealt(t, streetName)
+		if err != nil {
+			t.Server.logger.Warn("failed to broadcast board_dealt", "tableID", t.ID, "street", streetName, "error", err)
+			// Don't return error here - game should continue even if broadcast fails
+		}
+	}
+
+	return nil
+}

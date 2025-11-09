@@ -128,39 +128,39 @@ describe('TableView', () => {
       expect(holeCardsContainer?.textContent).toContain('K♥');
     });
 
-     it('displays opponent card backs', () => {
-       const mockOnLeave = vi.fn();
-       const gameState: GameState = {
-         dealerSeat: 1,
-         smallBlindSeat: 3,
-         bigBlindSeat: 5,
-         holeCards: ['As', 'Kh'],
-         pot: 0,
-       };
+    it('displays opponent card backs', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: GameState = {
+        dealerSeat: 1,
+        smallBlindSeat: 3,
+        bigBlindSeat: 5,
+        holeCards: ['As', 'Kh'],
+        pot: 0,
+      };
 
-       const seatsWithCardCount = mockSeats.map((seat) => ({
-         ...seat,
-         cardCount: seat.playerName ? 2 : undefined,
-       }));
+      const seatsWithCardCount = mockSeats.map((seat) => ({
+        ...seat,
+        cardCount: seat.playerName ? 2 : undefined,
+      }));
 
-       render(
-         <TableView
-           tableId="table-1"
-           seats={seatsWithCardCount}
-           currentSeatIndex={1}
-           onLeave={mockOnLeave}
-           gameState={gameState}
-         />
-       );
+      render(
+        <TableView
+          tableId="table-1"
+          seats={seatsWithCardCount}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
 
-       // Find opponent seats (not current seat)
-       const seatContainers = document.querySelectorAll('.seat');
-       const opponentSeat = seatContainers[3]; // Bob's seat
+      // Find opponent seats (not current seat)
+      const seatContainers = document.querySelectorAll('.seat');
+      const opponentSeat = seatContainers[3]; // Bob's seat
 
-       // Check if opponent seat has card back indicator
-       const cardBacks = opponentSeat.querySelectorAll('.card-back');
-       expect(cardBacks.length).toBe(2);
-     });
+      // Check if opponent seat has card back indicator
+      const cardBacks = opponentSeat.querySelectorAll('.card-back');
+      expect(cardBacks.length).toBe(2);
+    });
 
     it('displays chip stacks for each player', () => {
       const mockOnLeave = vi.fn();
@@ -588,249 +588,249 @@ describe('TableView', () => {
     });
   });
 
-   describe('TestTableViewStartHandButton', () => {
-     it('should render Start Hand button when player is seated and no active hand', () => {
-       const mockOnLeave = vi.fn();
-       const mockSendMessage = vi.fn();
-       const gameState: GameState = {
-         dealerSeat: null,
-         smallBlindSeat: null,
-         bigBlindSeat: null,
-         holeCards: null,
-         pot: 0,
-       };
+  describe('TestTableViewStartHandButton', () => {
+    it('should render Start Hand button when player is seated and no active hand', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: GameState = {
+        dealerSeat: null,
+        smallBlindSeat: null,
+        bigBlindSeat: null,
+        holeCards: null,
+        pot: 0,
+      };
 
-       render(
-         <TableView
-           tableId="table-1"
-           seats={mockSeats}
-           currentSeatIndex={1}
-           onLeave={mockOnLeave}
-           gameState={gameState}
-           onSendMessage={mockSendMessage}
-         />
-       );
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
 
-       const startHandButton = screen.getByRole('button', {
-         name: /Start Hand/i,
-       });
-       expect(startHandButton).toBeInTheDocument();
-     });
+      const startHandButton = screen.getByRole('button', {
+        name: /Start Hand/i,
+      });
+      expect(startHandButton).toBeInTheDocument();
+    });
 
-     it('should not render Start Hand button when player is not seated', () => {
-       const mockOnLeave = vi.fn();
-       const mockSendMessage = vi.fn();
-       const gameState: GameState = {
-         dealerSeat: null,
-         smallBlindSeat: null,
-         bigBlindSeat: null,
-         holeCards: null,
-         pot: 0,
-       };
+    it('should not render Start Hand button when player is not seated', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: GameState = {
+        dealerSeat: null,
+        smallBlindSeat: null,
+        bigBlindSeat: null,
+        holeCards: null,
+        pot: 0,
+      };
 
-       render(
-         <TableView
-           tableId="table-1"
-           seats={mockSeats}
-           currentSeatIndex={null}
-           onLeave={mockOnLeave}
-           gameState={gameState}
-           onSendMessage={mockSendMessage}
-         />
-       );
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={null}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
 
-       const startHandButton = screen.queryByRole('button', {
-         name: /Start Hand/i,
-       });
-       expect(startHandButton).not.toBeInTheDocument();
-     });
+      const startHandButton = screen.queryByRole('button', {
+        name: /Start Hand/i,
+      });
+      expect(startHandButton).not.toBeInTheDocument();
+    });
 
-     it('should not render Start Hand button when hand is active (pot > 0)', () => {
-       const mockOnLeave = vi.fn();
-       const mockSendMessage = vi.fn();
-       const gameState: GameState = {
-         dealerSeat: 1,
-         smallBlindSeat: 3,
-         bigBlindSeat: 5,
-         holeCards: null,
-         pot: 30, // Active hand has pot > 0
-       };
+    it('should not render Start Hand button when hand is active (pot > 0)', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: GameState = {
+        dealerSeat: 1,
+        smallBlindSeat: 3,
+        bigBlindSeat: 5,
+        holeCards: null,
+        pot: 30, // Active hand has pot > 0
+      };
 
-       render(
-         <TableView
-           tableId="table-1"
-           seats={mockSeats}
-           currentSeatIndex={1}
-           onLeave={mockOnLeave}
-           gameState={gameState}
-           onSendMessage={mockSendMessage}
-         />
-       );
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
 
-       const startHandButton = screen.queryByRole('button', {
-         name: /Start Hand/i,
-       });
-       expect(startHandButton).not.toBeInTheDocument();
-     });
+      const startHandButton = screen.queryByRole('button', {
+        name: /Start Hand/i,
+      });
+      expect(startHandButton).not.toBeInTheDocument();
+    });
 
-     it('should send start_hand message when button is clicked', () => {
-       const mockOnLeave = vi.fn();
-       const mockSendMessage = vi.fn();
-       const gameState: GameState = {
-         dealerSeat: null,
-         smallBlindSeat: null,
-         bigBlindSeat: null,
-         holeCards: null,
-         pot: 0,
-       };
+    it('should send start_hand message when button is clicked', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: GameState = {
+        dealerSeat: null,
+        smallBlindSeat: null,
+        bigBlindSeat: null,
+        holeCards: null,
+        pot: 0,
+      };
 
-       render(
-         <TableView
-           tableId="table-1"
-           seats={mockSeats}
-           currentSeatIndex={1}
-           onLeave={mockOnLeave}
-           gameState={gameState}
-           onSendMessage={mockSendMessage}
-         />
-       );
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
 
-       const startHandButton = screen.getByRole('button', {
-         name: /Start Hand/i,
-       });
-       fireEvent.click(startHandButton);
+      const startHandButton = screen.getByRole('button', {
+        name: /Start Hand/i,
+      });
+      fireEvent.click(startHandButton);
 
-       expect(mockSendMessage).toHaveBeenCalledOnce();
-       // The message should be a JSON string with action: "start_hand"
-       const call = mockSendMessage.mock.calls[0][0];
-       const message = JSON.parse(call);
-       expect(message.type).toBe('start_hand');
-     });
+      expect(mockSendMessage).toHaveBeenCalledOnce();
+      // The message should be a JSON string with action: "start_hand"
+      const call = mockSendMessage.mock.calls[0][0];
+      const message = JSON.parse(call);
+      expect(message.type).toBe('start_hand');
+    });
 
-     it('should call onSendMessage with proper message format', () => {
-       const mockOnLeave = vi.fn();
-       const mockSendMessage = vi.fn();
-       const gameState: GameState = {
-         dealerSeat: null,
-         smallBlindSeat: null,
-         bigBlindSeat: null,
-         holeCards: null,
-         pot: 0,
-       };
+    it('should call onSendMessage with proper message format', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: GameState = {
+        dealerSeat: null,
+        smallBlindSeat: null,
+        bigBlindSeat: null,
+        holeCards: null,
+        pot: 0,
+      };
 
-       render(
-         <TableView
-           tableId="table-1"
-           seats={mockSeats}
-           currentSeatIndex={1}
-           onLeave={mockOnLeave}
-           gameState={gameState}
-           onSendMessage={mockSendMessage}
-         />
-       );
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
 
-       const startHandButton = screen.getByRole('button', {
-         name: /Start Hand/i,
-       });
-       fireEvent.click(startHandButton);
+      const startHandButton = screen.getByRole('button', {
+        name: /Start Hand/i,
+      });
+      fireEvent.click(startHandButton);
 
-       const sentMessage = mockSendMessage.mock.calls[0][0];
-       expect(typeof sentMessage).toBe('string');
-       expect(sentMessage).toContain('start_hand');
-     });
-   });
+      const sentMessage = mockSendMessage.mock.calls[0][0];
+      expect(typeof sentMessage).toBe('string');
+      expect(sentMessage).toContain('start_hand');
+    });
+  });
 
-   describe('TestTableViewPhase4CardRendering', () => {
-     it('renders card backs based on cardCount', () => {
-       const mockOnLeave = vi.fn();
-       const gameState: GameState = {
-         dealerSeat: 1,
-         smallBlindSeat: 3,
-         bigBlindSeat: 5,
-         holeCards: null,
-         pot: 0,
-       };
+  describe('TestTableViewPhase4CardRendering', () => {
+    it('renders card backs based on cardCount', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: GameState = {
+        dealerSeat: 1,
+        smallBlindSeat: 3,
+        bigBlindSeat: 5,
+        holeCards: null,
+        pot: 0,
+      };
 
-        const seatsWithCardCount: SeatInfo[] = mockSeats.map((seat) => ({
-          ...seat,
-          cardCount: seat.playerName ? 2 : undefined,
-        }));
+      const seatsWithCardCount: SeatInfo[] = mockSeats.map((seat) => ({
+        ...seat,
+        cardCount: seat.playerName ? 2 : undefined,
+      }));
 
-       render(
-         <TableView
-           tableId="table-1"
-           seats={seatsWithCardCount}
-           currentSeatIndex={1}
-           onLeave={mockOnLeave}
-           gameState={gameState}
-         />
-       );
+      render(
+        <TableView
+          tableId="table-1"
+          seats={seatsWithCardCount}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
 
-       // Find opponent seats that should have card backs
-       const seatContainers = document.querySelectorAll('.seat');
-       
-       // Seat 3 (Bob) should have card backs
-       const seat3 = seatContainers[3];
-       const cardBacks3 = seat3.querySelectorAll('.card-back');
-       expect(cardBacks3.length).toBe(2);
-     });
+      // Find opponent seats that should have card backs
+      const seatContainers = document.querySelectorAll('.seat');
 
-     it('renders stack values for all seated players', () => {
-       const mockOnLeave = vi.fn();
-       const gameState: GameState = {
-         dealerSeat: 1,
-         smallBlindSeat: 3,
-         bigBlindSeat: 5,
-         holeCards: null,
-         pot: 0,
-       };
+      // Seat 3 (Bob) should have card backs
+      const seat3 = seatContainers[3];
+      const cardBacks3 = seat3.querySelectorAll('.card-back');
+      expect(cardBacks3.length).toBe(2);
+    });
 
-       const seatsWithStacks: SeatInfo[] = mockSeats.map((seat, idx) => ({
-         ...seat,
-         stack: seat.playerName ? 1000 + idx * 100 : undefined,
-       }));
+    it('renders stack values for all seated players', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: GameState = {
+        dealerSeat: 1,
+        smallBlindSeat: 3,
+        bigBlindSeat: 5,
+        holeCards: null,
+        pot: 0,
+      };
 
-       render(
-         <TableView
-           tableId="table-1"
-           seats={seatsWithStacks}
-           currentSeatIndex={1}
-           onLeave={mockOnLeave}
-           gameState={gameState}
-         />
-       );
+      const seatsWithStacks: SeatInfo[] = mockSeats.map((seat, idx) => ({
+        ...seat,
+        stack: seat.playerName ? 1000 + idx * 100 : undefined,
+      }));
 
-       // Check that stacks are displayed for occupied seats
-       expect(screen.getByText('💰 1100')).toBeInTheDocument(); // Seat 1 (Alice)
-       expect(screen.getByText('💰 1300')).toBeInTheDocument(); // Seat 3 (Bob)
-       expect(screen.getByText('💰 1500')).toBeInTheDocument(); // Seat 5 (Charlie)
-     });
+      render(
+        <TableView
+          tableId="table-1"
+          seats={seatsWithStacks}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
 
-     it('renders pot amount when present', () => {
-       const mockOnLeave = vi.fn();
-       const gameState: GameState = {
-         dealerSeat: 1,
-         smallBlindSeat: 3,
-         bigBlindSeat: 5,
-         holeCards: null,
-         pot: 250,
-       };
+      // Check that stacks are displayed for occupied seats
+      expect(screen.getByText('💰 1100')).toBeInTheDocument(); // Seat 1 (Alice)
+      expect(screen.getByText('💰 1300')).toBeInTheDocument(); // Seat 3 (Bob)
+      expect(screen.getByText('💰 1500')).toBeInTheDocument(); // Seat 5 (Charlie)
+    });
 
-       render(
-         <TableView
-           tableId="table-1"
-           seats={mockSeats}
-           currentSeatIndex={1}
-           onLeave={mockOnLeave}
-           gameState={gameState}
-         />
-       );
+    it('renders pot amount when present', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: GameState = {
+        dealerSeat: 1,
+        smallBlindSeat: 3,
+        bigBlindSeat: 5,
+        holeCards: null,
+        pot: 250,
+      };
 
-       const potDisplay = screen.getByText('Pot: 250');
-       expect(potDisplay).toBeInTheDocument();
-       expect(potDisplay).toHaveClass('pot-display');
-     });
-   });
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      const potDisplay = screen.getByText('Pot: 250');
+      expect(potDisplay).toBeInTheDocument();
+      expect(potDisplay).toHaveClass('pot-display');
+    });
+  });
 });
 
 describe('Bet Amount Display Tests', () => {
@@ -1234,8 +1234,12 @@ describe('Action Bar Tests - Phase 5', () => {
       );
 
       // Action buttons should not be visible
-      expect(screen.queryByRole('button', { name: /Fold/i })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /Call/i })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /Fold/i })
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /Call/i })
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -1296,8 +1300,12 @@ describe('Action Bar Tests - Phase 5', () => {
         />
       );
 
-      expect(screen.getByRole('button', { name: /Check/i })).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /Call/i })).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /Check/i })
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /Call/i })
+      ).not.toBeInTheDocument();
     });
 
     it('should display Call button when call amount is greater than 0', () => {
@@ -1325,8 +1333,12 @@ describe('Action Bar Tests - Phase 5', () => {
         />
       );
 
-      expect(screen.getByRole('button', { name: /Call 50/i })).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /Check/i })).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /Call 50/i })
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /Check/i })
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -1501,7 +1513,9 @@ describe('Action Bar Tests - Phase 5', () => {
         />
       );
 
-      expect(screen.getByRole('button', { name: /Raise/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /Raise/i })
+      ).toBeInTheDocument();
     });
 
     it('should hide Raise button when raise not available', () => {
@@ -1529,7 +1543,9 @@ describe('Action Bar Tests - Phase 5', () => {
         />
       );
 
-      expect(screen.queryByRole('button', { name: /Raise/i })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /Raise/i })
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -1710,7 +1726,9 @@ describe('Action Bar Tests - Phase 5', () => {
       );
 
       // Set raise amount
-      const raiseInput = screen.getByRole('textbox', { name: /Raise Amount/i }) as HTMLInputElement;
+      const raiseInput = screen.getByRole('textbox', {
+        name: /Raise Amount/i,
+      }) as HTMLInputElement;
       fireEvent.change(raiseInput, { target: { value: '100' } });
 
       // Click Raise button
@@ -1754,7 +1772,9 @@ describe('Action Bar Tests - Phase 5', () => {
       );
 
       // Set raise amount below minimum
-      const raiseInput = screen.getByRole('textbox', { name: /Raise Amount/i }) as HTMLInputElement;
+      const raiseInput = screen.getByRole('textbox', {
+        name: /Raise Amount/i,
+      }) as HTMLInputElement;
       fireEvent.change(raiseInput, { target: { value: '30' } });
 
       const raiseButton = screen.getByRole('button', { name: /^Raise$/ });
@@ -1789,7 +1809,9 @@ describe('Action Bar Tests - Phase 5', () => {
       );
 
       // Set raise amount above maximum
-      const raiseInput = screen.getByRole('textbox', { name: /Raise Amount/i }) as HTMLInputElement;
+      const raiseInput = screen.getByRole('textbox', {
+        name: /Raise Amount/i,
+      }) as HTMLInputElement;
       fireEvent.change(raiseInput, { target: { value: '1000' } });
 
       const raiseButton = screen.getByRole('button', { name: /^Raise$/ });
@@ -1824,7 +1846,9 @@ describe('Action Bar Tests - Phase 5', () => {
       );
 
       // Set valid raise amount
-      const raiseInput = screen.getByRole('textbox', { name: /Raise Amount/i }) as HTMLInputElement;
+      const raiseInput = screen.getByRole('textbox', {
+        name: /Raise Amount/i,
+      }) as HTMLInputElement;
       fireEvent.change(raiseInput, { target: { value: '100' } });
 
       const raiseButton = screen.getByRole('button', { name: /^Raise$/ });
@@ -1859,7 +1883,9 @@ describe('Action Bar Tests - Phase 5', () => {
       );
 
       // Set raise amount
-      const raiseInput = screen.getByRole('textbox', { name: /Raise Amount/i }) as HTMLInputElement;
+      const raiseInput = screen.getByRole('textbox', {
+        name: /Raise Amount/i,
+      }) as HTMLInputElement;
       fireEvent.change(raiseInput, { target: { value: '100' } });
       expect(raiseInput.value).toBe('100');
 
@@ -1869,6 +1895,290 @@ describe('Action Bar Tests - Phase 5', () => {
 
       // Raise input should be cleared
       expect(raiseInput.value).toBe('');
+    });
+  });
+});
+
+describe('Phase 4: Board Card Display', () => {
+  const mockSeats: SeatInfo[] = [
+    { index: 0, playerName: 'Alice', status: 'occupied', stack: 1000 },
+    { index: 1, playerName: 'Bob', status: 'occupied', stack: 980 },
+    { index: 2, playerName: 'Charlie', status: 'occupied', stack: 1000 },
+    { index: 3, playerName: null, status: 'empty' },
+    { index: 4, playerName: null, status: 'empty' },
+    { index: 5, playerName: null, status: 'empty' },
+  ];
+
+  interface ExtendedGameState extends GameState {
+    boardCards?:
+      | [string, string, string]
+      | [string, string, string, string]
+      | [string, string, string, string, string];
+  }
+
+  describe('TestTableView_DisplaysBoardCards', () => {
+    it('should not render board cards container when hand is not active (pot is 0)', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 0,
+        boardCards: [],
+      };
+
+      const { container } = render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      const boardContainer = container.querySelector('.board-cards');
+      expect(boardContainer).not.toBeInTheDocument();
+    });
+
+    it('should render board cards container when hand is active', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 50,
+        boardCards: [],
+      };
+
+      const { container } = render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      const boardContainer = container.querySelector('.board-cards');
+      expect(boardContainer).toBeInTheDocument();
+    });
+
+    it('should display empty board slots preflop when hand is active', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 30,
+        boardCards: [],
+      };
+
+      const { container } = render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      const boardSlots = container.querySelectorAll('.board-card');
+      expect(boardSlots.length).toBe(5);
+
+      // All should be empty slots
+      boardSlots.forEach((slot) => {
+        expect(slot.className).toContain('empty');
+      });
+    });
+
+    it('should display three cards after flop', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 60,
+        boardCards: ['As', 'Kh', 'Qd'],
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      expect(screen.getByText(/A♠/)).toBeInTheDocument();
+      expect(screen.getByText(/K♥/)).toBeInTheDocument();
+      expect(screen.getByText(/Q♦/)).toBeInTheDocument();
+    });
+
+    it('should display four cards after turn', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 120,
+        boardCards: ['As', 'Kh', 'Qd', 'Jc'],
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      expect(screen.getByText(/A♠/)).toBeInTheDocument();
+      expect(screen.getByText(/K♥/)).toBeInTheDocument();
+      expect(screen.getByText(/Q♦/)).toBeInTheDocument();
+      expect(screen.getByText(/J♣/)).toBeInTheDocument();
+    });
+
+    it('should display five cards after river', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 200,
+        boardCards: ['As', 'Kh', 'Qd', 'Jc', 'Ts'],
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      expect(screen.getByText(/A♠/)).toBeInTheDocument();
+      expect(screen.getByText(/K♥/)).toBeInTheDocument();
+      expect(screen.getByText(/Q♦/)).toBeInTheDocument();
+      expect(screen.getByText(/J♣/)).toBeInTheDocument();
+      expect(screen.getByText(/T♠/)).toBeInTheDocument();
+    });
+
+    it('should apply red-suit class to red cards', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 80,
+        boardCards: ['Ah', 'Kd'],
+      };
+
+      const { container } = render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      const redCards = container.querySelectorAll(
+        '.board-card.face-up.red-suit'
+      );
+      expect(redCards.length).toBeGreaterThan(0);
+    });
+
+    it('should apply black-suit class to black cards', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 90,
+        boardCards: ['As', 'Kc'],
+      };
+
+      const { container } = render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      const blackCards = container.querySelectorAll(
+        '.board-card.face-up.black-suit'
+      );
+      expect(blackCards.length).toBeGreaterThan(0);
+    });
+
+    it('should update board cards when gameState changes', () => {
+      const mockOnLeave = vi.fn();
+      const initialGameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 30,
+        boardCards: [],
+      };
+
+      const { rerender } = render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={initialGameState}
+        />
+      );
+
+      // Initially no board cards
+      expect(screen.queryByText(/A♠/)).not.toBeInTheDocument();
+
+      // Update with flop
+      const flopGameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 60,
+        boardCards: ['As', 'Kh', 'Qd'],
+      };
+
+      rerender(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={flopGameState}
+        />
+      );
+
+      expect(screen.getByText(/A♠/)).toBeInTheDocument();
+      expect(screen.getByText(/K♥/)).toBeInTheDocument();
+      expect(screen.getByText(/Q♦/)).toBeInTheDocument();
     });
   });
 });

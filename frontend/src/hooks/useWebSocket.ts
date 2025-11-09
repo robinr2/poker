@@ -45,6 +45,8 @@ interface GameState {
   minRaise?: number;
   maxRaise?: number;
   playerBets: Record<number, number>; // Track each player's bet amount in current round
+  boardCards?: string[];
+  street?: string;
 }
 
 interface HandStartedPayload {
@@ -85,6 +87,11 @@ interface ActionResultPayload {
   nextActor: number | null;
   roundOver: boolean;
   validActions?: string[];
+}
+
+interface BoardDealtPayload {
+  boardCards: Card[];
+  street: string;
 }
 
 interface UseWebSocketReturn {
@@ -175,25 +182,25 @@ export function useWebSocket(
             maxSeats: t.max_seats,
           }));
           setLobbyState(convertedTables);
-         } else if (
-           message.type === 'seat_assigned' ||
-           message.type === 'seat_cleared'
-         ) {
-           // Store the seat message for the app to handle
-           setLastSeatMessage({
-             type: message.type,
-             payload: message.payload,
-           });
-           
-           // If seat_assigned, store the player's seat index
-           if (message.type === 'seat_assigned' && message.payload) {
-             const payload = message.payload as SeatAssignedPayload;
-             setPlayerSeatIndex(payload.seatIndex);
-           } else if (message.type === 'seat_cleared') {
-             // Clear seat index when seat is cleared
-             setPlayerSeatIndex(null);
-           }
-         } else if (message.type === 'table_state' && message.payload) {
+        } else if (
+          message.type === 'seat_assigned' ||
+          message.type === 'seat_cleared'
+        ) {
+          // Store the seat message for the app to handle
+          setLastSeatMessage({
+            type: message.type,
+            payload: message.payload,
+          });
+
+          // If seat_assigned, store the player's seat index
+          if (message.type === 'seat_assigned' && message.payload) {
+            const payload = message.payload as SeatAssignedPayload;
+            setPlayerSeatIndex(payload.seatIndex);
+          } else if (message.type === 'seat_cleared') {
+            // Clear seat index when seat is cleared
+            setPlayerSeatIndex(null);
+          }
+        } else if (message.type === 'table_state' && message.payload) {
           // Handle table_state message with seat information
           const payload = message.payload as {
             tableId: string;
@@ -211,9 +218,12 @@ export function useWebSocket(
             pot?: number;
             holeCards?: { [seatIndex: string]: Card[] };
           };
-          
+
           // Update table state with all seat information
-          console.log('[DEBUG] table_state payload:', JSON.stringify(payload, null, 2));
+          console.log(
+            '[DEBUG] table_state payload:',
+            JSON.stringify(payload, null, 2)
+          );
           setTableState({
             tableId: payload.tableId,
             seats: payload.seats,
@@ -229,7 +239,7 @@ export function useWebSocket(
           ) {
             setGameState((prev) => {
               const updated = { ...prev };
-              
+
               // Update game state positions if present
               if (payload.dealerSeat !== undefined) {
                 updated.dealerSeat = payload.dealerSeat;
@@ -265,10 +275,14 @@ export function useWebSocket(
         } else if (message.type === 'hand_started' && message.payload) {
           // Handle hand_started message
           // Payload can be either a string (needs parsing) or already an object
-          console.log('[useWebSocket] hand_started received, payload:', message.payload);
-          const payload = typeof message.payload === 'string' 
-            ? JSON.parse(message.payload) as HandStartedPayload
-            : message.payload as HandStartedPayload;
+          console.log(
+            '[useWebSocket] hand_started received, payload:',
+            message.payload
+          );
+          const payload =
+            typeof message.payload === 'string'
+              ? (JSON.parse(message.payload) as HandStartedPayload)
+              : (message.payload as HandStartedPayload);
           console.log('[useWebSocket] hand_started payload:', payload);
           setGameState((prev) => ({
             ...prev,
@@ -277,21 +291,33 @@ export function useWebSocket(
             bigBlindSeat: payload.bigBlindSeat,
             playerBets: {}, // Clear player bets for new hand
           }));
-          console.log('[useWebSocket] gameState updated with dealer:', payload.dealerSeat, 'SB:', payload.smallBlindSeat, 'BB:', payload.bigBlindSeat);
+          console.log(
+            '[useWebSocket] gameState updated with dealer:',
+            payload.dealerSeat,
+            'SB:',
+            payload.smallBlindSeat,
+            'BB:',
+            payload.bigBlindSeat
+          );
         } else if (message.type === 'blind_posted' && message.payload) {
           // Handle blind_posted message - update pot and player bets
           // Payload can be either a string (needs parsing) or already an object
-          console.log('[useWebSocket] blind_posted received, payload:', message.payload);
-          const payload = typeof message.payload === 'string'
-            ? JSON.parse(message.payload) as BlindPostedPayload
-            : message.payload as BlindPostedPayload;
+          console.log(
+            '[useWebSocket] blind_posted received, payload:',
+            message.payload
+          );
+          const payload =
+            typeof message.payload === 'string'
+              ? (JSON.parse(message.payload) as BlindPostedPayload)
+              : (message.payload as BlindPostedPayload);
           console.log('[useWebSocket] blind_posted payload:', payload);
           setGameState((prev) => ({
             ...prev,
             pot: prev.pot + payload.amount,
             playerBets: {
               ...prev.playerBets,
-              [payload.seatIndex]: (prev.playerBets[payload.seatIndex] || 0) + payload.amount,
+              [payload.seatIndex]:
+                (prev.playerBets[payload.seatIndex] || 0) + payload.amount,
             },
           }));
           console.log('[useWebSocket] gameState updated, pot:', payload.amount);
@@ -310,10 +336,14 @@ export function useWebSocket(
         } else if (message.type === 'cards_dealt' && message.payload) {
           // Handle cards_dealt message
           // Payload can be either a string (needs parsing) or already an object
-          console.log('[useWebSocket] cards_dealt received, payload:', message.payload);
-          const payload = typeof message.payload === 'string'
-            ? JSON.parse(message.payload) as CardsDealtPayload
-            : message.payload as CardsDealtPayload;
+          console.log(
+            '[useWebSocket] cards_dealt received, payload:',
+            message.payload
+          );
+          const payload =
+            typeof message.payload === 'string'
+              ? (JSON.parse(message.payload) as CardsDealtPayload)
+              : (message.payload as CardsDealtPayload);
           console.log('[useWebSocket] cards_dealt payload:', payload);
           // Find the current player's hole cards
           // The backend sends personalized cards, so we need to find which seat index has cards
@@ -330,40 +360,51 @@ export function useWebSocket(
                 ...prev,
                 holeCards: cardStrings,
               }));
-              console.log('[useWebSocket] gameState updated with hole cards:', cardStrings);
+              console.log(
+                '[useWebSocket] gameState updated with hole cards:',
+                cardStrings
+              );
             }
           }
-         } else if (message.type === 'action_request' && message.payload) {
-           // Handle action_request message
-           console.log('[useWebSocket] action_request received, payload:', message.payload);
-           const payload = typeof message.payload === 'string'
-             ? JSON.parse(message.payload) as ActionRequestPayload
-             : message.payload as ActionRequestPayload;
-           console.log('[useWebSocket] action_request payload:', payload);
-           setGameState((prev) => {
-             const updated = { ...prev };
-             updated.currentActor = payload.seatIndex;
-             updated.validActions = payload.validActions;
-             updated.callAmount = payload.callAmount;
-             
-             // Include minRaise and maxRaise if present in payload
-             if (payload.minRaise !== undefined) {
-               updated.minRaise = payload.minRaise;
-             }
-             if (payload.maxRaise !== undefined) {
-               updated.maxRaise = payload.maxRaise;
-             }
-             
-             return updated;
-           });
-         } else if (message.type === 'action_result' && message.payload) {
+        } else if (message.type === 'action_request' && message.payload) {
+          // Handle action_request message
+          console.log(
+            '[useWebSocket] action_request received, payload:',
+            message.payload
+          );
+          const payload =
+            typeof message.payload === 'string'
+              ? (JSON.parse(message.payload) as ActionRequestPayload)
+              : (message.payload as ActionRequestPayload);
+          console.log('[useWebSocket] action_request payload:', payload);
+          setGameState((prev) => {
+            const updated = { ...prev };
+            updated.currentActor = payload.seatIndex;
+            updated.validActions = payload.validActions;
+            updated.callAmount = payload.callAmount;
+
+            // Include minRaise and maxRaise if present in payload
+            if (payload.minRaise !== undefined) {
+              updated.minRaise = payload.minRaise;
+            }
+            if (payload.maxRaise !== undefined) {
+              updated.maxRaise = payload.maxRaise;
+            }
+
+            return updated;
+          });
+        } else if (message.type === 'action_result' && message.payload) {
           // Handle action_result message
-          console.log('[useWebSocket] action_result received, payload:', message.payload);
-          const payload = typeof message.payload === 'string'
-            ? JSON.parse(message.payload) as ActionResultPayload
-            : message.payload as ActionResultPayload;
+          console.log(
+            '[useWebSocket] action_result received, payload:',
+            message.payload
+          );
+          const payload =
+            typeof message.payload === 'string'
+              ? (JSON.parse(message.payload) as ActionResultPayload)
+              : (message.payload as ActionResultPayload);
           console.log('[useWebSocket] action_result payload:', payload);
-          
+
           // Update table state with new stack
           setTableState((prev) => {
             if (!prev) return prev;
@@ -383,13 +424,15 @@ export function useWebSocket(
             updated.pot = payload.pot;
             updated.currentActor = payload.nextActor;
             updated.roundOver = payload.roundOver;
-            
+
             // Update player bets based on action
             if (payload.action === 'call' || payload.action === 'raise') {
               // Add the amount acted to the player's current bet
               updated.playerBets = {
                 ...prev.playerBets,
-                [payload.seatIndex]: (prev.playerBets[payload.seatIndex] || 0) + payload.amountActed,
+                [payload.seatIndex]:
+                  (prev.playerBets[payload.seatIndex] || 0) +
+                  payload.amountActed,
               };
             } else if (payload.action === 'check') {
               // Check doesn't add to bets, but ensure player has entry
@@ -401,19 +444,50 @@ export function useWebSocket(
               }
             }
             // Note: fold doesn't update playerBets, keeps their existing bet visible
-            
+
             // If player folded, add to folded players list
             if (payload.action === 'fold') {
-              updated.foldedPlayers = [...prev.foldedPlayers, payload.seatIndex];
+              updated.foldedPlayers = [
+                ...prev.foldedPlayers,
+                payload.seatIndex,
+              ];
             }
-            
+
             // Update valid actions if provided
             if (payload.validActions) {
               updated.validActions = payload.validActions;
             }
-            
+
             return updated;
           });
+        } else if (message.type === 'board_dealt' && message.payload) {
+          // Handle board_dealt message
+          console.log(
+            '[useWebSocket] board_dealt received, payload:',
+            message.payload
+          );
+          const payload =
+            typeof message.payload === 'string'
+              ? (JSON.parse(message.payload) as BoardDealtPayload)
+              : (message.payload as BoardDealtPayload);
+          console.log('[useWebSocket] board_dealt payload:', payload);
+
+          // Convert Card objects {Rank, Suit} to string format "As", "Kh", etc.
+          const boardCardStrings = payload.boardCards.map(
+            (card) => card.Rank + card.Suit
+          );
+
+          setGameState((prev) => ({
+            ...prev,
+            boardCards: boardCardStrings,
+            street: payload.street,
+          }));
+          console.log(
+            '[useWebSocket] gameState updated with boardCards:',
+            boardCardStrings,
+            'street:',
+            payload.street
+          );
         }
       } catch {
         // Silently ignore parsing errors for non-JSON messages
@@ -433,50 +507,53 @@ export function useWebSocket(
     };
   }, [url, token]);
 
-   // Memoize sendMessage to prevent unnecessary re-renders
-   const sendMessage = useCallback((message: string) => {
-     if (serviceRef.current) {
-       try {
-         serviceRef.current.send(message);
-       } catch (error) {
-         console.error('Failed to send message:', error);
-       }
-     }
-   }, []);
+  // Memoize sendMessage to prevent unnecessary re-renders
+  const sendMessage = useCallback((message: string) => {
+    if (serviceRef.current) {
+      try {
+        serviceRef.current.send(message);
+      } catch (error) {
+        console.error('Failed to send message:', error);
+      }
+    }
+  }, []);
 
-   // Memoize sendAction to send player actions with optional amount for raises
-   const sendAction = useCallback((action: string, amount?: number) => {
-     if (serviceRef.current && playerSeatIndex !== null) {
-       try {
-         const payload: Record<string, unknown> = {
-           seatIndex: playerSeatIndex,
-           action: action,
-         };
-         
-         // Include amount only for raise actions
-         if (amount !== undefined) {
-           payload.amount = amount;
-         }
-         
-         const message = JSON.stringify({
-           type: 'player_action',
-           payload: payload,
-         });
-         serviceRef.current.send(message);
-       } catch (error) {
-         console.error('Failed to send action:', error);
-       }
-     }
-   }, [playerSeatIndex]);
+  // Memoize sendAction to send player actions with optional amount for raises
+  const sendAction = useCallback(
+    (action: string, amount?: number) => {
+      if (serviceRef.current && playerSeatIndex !== null) {
+        try {
+          const payload: Record<string, unknown> = {
+            seatIndex: playerSeatIndex,
+            action: action,
+          };
 
-   return {
-     status,
-     sendMessage,
-     sendAction,
-     lastMessage,
-     lobbyState,
-     lastSeatMessage,
-     tableState,
-     gameState,
-   };
+          // Include amount only for raise actions
+          if (amount !== undefined) {
+            payload.amount = amount;
+          }
+
+          const message = JSON.stringify({
+            type: 'player_action',
+            payload: payload,
+          });
+          serviceRef.current.send(message);
+        } catch (error) {
+          console.error('Failed to send action:', error);
+        }
+      }
+    },
+    [playerSeatIndex]
+  );
+
+  return {
+    status,
+    sendMessage,
+    sendAction,
+    lastMessage,
+    lobbyState,
+    lastSeatMessage,
+    tableState,
+    gameState,
+  };
 }

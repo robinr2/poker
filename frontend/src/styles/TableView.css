@@ -65,7 +65,8 @@
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
   }
   50% {
@@ -263,6 +264,50 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   white-space: nowrap;
   pointer-events: none;
+}
+
+/* Board Cards Display */
+.board-cards {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  justify-content: center;
+  align-items: center;
+}
+
+.board-card {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 70px;
+  border-radius: 6px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  border: 2px solid #ddd;
+  background-color: #f0f0f0;
+  transition: all 0.2s ease;
+}
+
+.board-card.empty {
+  background-color: #e5e7eb;
+  border-color: #9ca3af;
+  color: #9ca3af;
+  font-size: 0.8rem;
+}
+
+.board-card.face-up {
+  background-color: #fff;
+  border: 2px solid #1f2937;
+  color: #1f2937;
+}
+
+.board-card.face-up.red-suit {
+  color: #dc2626;
+}
+
+.board-card.face-up.black-suit {
+  color: #1f2937;
 }
 
 .leave-button {

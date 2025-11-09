@@ -22,6 +22,8 @@ interface GameState {
   minRaise?: number;
   maxRaise?: number;
   playerBets?: Record<number, number>;
+  boardCards?: string[];
+  street?: string;
 }
 
 interface TableViewProps {
@@ -69,20 +71,25 @@ export function TableView({
 
   console.log('[TableView] render with gameState:', gameState);
   console.log('[TableView] currentSeatIndex:', currentSeatIndex);
-  console.log('[TableView] seats:', seats.map(s => ({ 
-    index: s.index, 
-    name: s.playerName, 
-    cardCount: s.cardCount 
-  })));
-  
+  console.log(
+    '[TableView] seats:',
+    seats.map((s) => ({
+      index: s.index,
+      name: s.playerName,
+      cardCount: s.cardCount,
+    }))
+  );
+
   // Determine if Start Hand button should be visible
   // Show only when: player is seated AND no active hand (pot === 0 or undefined)
   const isSeated = currentSeatIndex !== null && currentSeatIndex !== undefined;
-  const hasNoActiveHand = !gameState || gameState.pot === 0 || gameState.pot === undefined;
+  const hasNoActiveHand =
+    !gameState || gameState.pot === 0 || gameState.pot === undefined;
   const showStartHandButton = isSeated && hasNoActiveHand;
 
   // Get player's current stack
-  const playerStack = currentSeatIndex !== null ? seats[currentSeatIndex]?.stack ?? 0 : 0;
+  const playerStack =
+    currentSeatIndex !== null ? (seats[currentSeatIndex]?.stack ?? 0) : 0;
 
   const handleStartHand = () => {
     if (onSendMessage) {
@@ -96,7 +103,7 @@ export function TableView({
 
   const handleAction = (action: string, amount?: number) => {
     if (onSendMessage && currentSeatIndex !== null) {
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         seatIndex: currentSeatIndex,
         action: action,
       };
@@ -116,7 +123,7 @@ export function TableView({
   // Raise button validation logic
   const isRaiseValid = gameState?.validActions?.includes('raise') || false;
   const raiseAmountNum = raiseAmount ? parseInt(raiseAmount, 10) : 0;
-  const isRaiseAmountValid = 
+  const isRaiseAmountValid =
     raiseAmountNum >= (gameState?.minRaise ?? 0) &&
     raiseAmountNum <= (gameState?.maxRaise ?? 0);
 
@@ -138,11 +145,11 @@ export function TableView({
       <h1>Table: {tableId}</h1>
       <div className="table-container">
         <div className="seats-grid">
-           {seats.map((seat) => (
-             <div
-               key={seat.index}
-               className={`seat ${seat.index === currentSeatIndex ? 'own-seat' : ''} ${gameState?.currentActor === seat.index ? 'turn-active' : ''}`}
-             >
+          {seats.map((seat) => (
+            <div
+              key={seat.index}
+              className={`seat ${seat.index === currentSeatIndex ? 'own-seat' : ''} ${gameState?.currentActor === seat.index ? 'turn-active' : ''}`}
+            >
               {/* Dealer Button */}
               {gameState?.dealerSeat === seat.index && (
                 <span className="dealer-badge">D</span>
@@ -160,18 +167,21 @@ export function TableView({
               <p className="seat-player">{seat.playerName || 'Empty'}</p>
 
               {/* Bet Amount Display */}
-              {seat.playerName && gameState?.playerBets && gameState.playerBets[seat.index] !== undefined && gameState.playerBets[seat.index] > 0 && (
-                <div className="bet-amount">
-                  💵 {gameState.playerBets[seat.index]}
-                </div>
-              )}
+              {seat.playerName &&
+                gameState?.playerBets &&
+                gameState.playerBets[seat.index] !== undefined &&
+                gameState.playerBets[seat.index] > 0 && (
+                  <div className="bet-amount">
+                    💵 {gameState.playerBets[seat.index]}
+                  </div>
+                )}
 
               {/* Hole Cards Display */}
               {seat.index === currentSeatIndex && gameState?.holeCards && (
                 <div className="hole-cards">
                   {gameState.holeCards.map((card, idx) => (
-                    <span 
-                      key={idx} 
+                    <span
+                      key={idx}
                       className={`card face-up ${isRedSuit(card) ? 'red-suit' : 'black-suit'}`}
                     >
                       {formatCardDisplay(card)}
@@ -180,18 +190,19 @@ export function TableView({
                 </div>
               )}
 
-               {/* Card Backs for Opponents */}
-               {seat.index !== currentSeatIndex &&
-                 seat.playerName &&
-                 seat.cardCount && seat.cardCount > 0 && (
-                   <div className="opponent-cards">
-                     {Array.from({ length: seat.cardCount }).map((_, idx) => (
-                       <span key={idx} className="card card-back">
-                         🂠
-                       </span>
-                     ))}
-                   </div>
-                 )}
+              {/* Card Backs for Opponents */}
+              {seat.index !== currentSeatIndex &&
+                seat.playerName &&
+                seat.cardCount &&
+                seat.cardCount > 0 && (
+                  <div className="opponent-cards">
+                    {Array.from({ length: seat.cardCount }).map((_, idx) => (
+                      <span key={idx} className="card card-back">
+                        🂠
+                      </span>
+                    ))}
+                  </div>
+                )}
 
               {/* Chip Stack Display */}
               {seat.playerName && (
@@ -204,63 +215,79 @@ export function TableView({
         </div>
 
         {/* Pot Display in Center */}
-         {gameState && <div className="pot-display">Pot: {gameState.pot}</div>}
-       </div>
-
-        {/* Action Bar */}
-        {gameState?.currentActor === currentSeatIndex && (
-          <div className="action-bar">
-            <button onClick={() => handleAction('fold')}>Fold</button>
-            {gameState.callAmount === 0 ? (
-              <button onClick={() => handleAction('check')}>Check</button>
-            ) : (
-              <button onClick={() => handleAction('call')}>
-                Call {gameState.callAmount}
-              </button>
-            )}
-            
-            {/* Raise Controls */}
-            {isRaiseValid && (
-              <div className="raise-controls">
-                <input
-                  type="text"
-                  aria-label="Raise Amount"
-                  value={raiseAmount}
-                  onChange={(e) => setRaiseAmount(e.target.value)}
-                  placeholder="Raise amount"
-                  className="raise-input"
-                />
-                <button 
-                  onClick={() => handleMinRaise()} 
-                  className="preset-button"
-                >
-                  Min
-                </button>
-                <button 
-                  onClick={() => handlePotRaise()} 
-                  className="preset-button"
-                >
-                  Pot
-                </button>
-                <button 
-                  onClick={() => handleAllIn()} 
-                  className="preset-button"
-                >
-                  All-in
-                </button>
-                <button 
-                  onClick={() => handleAction('raise', raiseAmountNum)}
-                  disabled={!isRaiseAmountValid || raiseAmount === ''}
-                  className="raise-button"
-                >
-                  Raise
-                </button>
-              </div>
-            )}
-          </div>
+        {gameState && gameState.pot > 0 && (
+          <div className="pot-display">Pot: {gameState.pot}</div>
         )}
 
-       <div className="button-group">
+        {/* Board Cards Display - only show when hand is active */}
+        {gameState && gameState.pot > 0 && (
+          <div className="board-cards">
+            {Array.from({ length: 5 }).map((_, idx) => {
+              const card = gameState?.boardCards?.[idx];
+              return (
+                <div
+                  key={idx}
+                  className={`board-card ${card ? 'face-up' : 'empty'} ${card && isRedSuit(card) ? 'red-suit' : card ? 'black-suit' : ''}`}
+                >
+                  {card ? formatCardDisplay(card) : ''}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Action Bar */}
+      {gameState?.currentActor === currentSeatIndex && (
+        <div className="action-bar">
+          <button onClick={() => handleAction('fold')}>Fold</button>
+          {gameState.callAmount === 0 ? (
+            <button onClick={() => handleAction('check')}>Check</button>
+          ) : (
+            <button onClick={() => handleAction('call')}>
+              Call {gameState.callAmount}
+            </button>
+          )}
+
+          {/* Raise Controls */}
+          {isRaiseValid && (
+            <div className="raise-controls">
+              <input
+                type="text"
+                aria-label="Raise Amount"
+                value={raiseAmount}
+                onChange={(e) => setRaiseAmount(e.target.value)}
+                placeholder="Raise amount"
+                className="raise-input"
+              />
+              <button
+                onClick={() => handleMinRaise()}
+                className="preset-button"
+              >
+                Min
+              </button>
+              <button
+                onClick={() => handlePotRaise()}
+                className="preset-button"
+              >
+                Pot
+              </button>
+              <button onClick={() => handleAllIn()} className="preset-button">
+                All-in
+              </button>
+              <button
+                onClick={() => handleAction('raise', raiseAmountNum)}
+                disabled={!isRaiseAmountValid || raiseAmount === ''}
+                className="raise-button"
+              >
+                Raise
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="button-group">
         {showStartHandButton && (
           <button onClick={handleStartHand} className="start-hand-button">
             Start Hand
