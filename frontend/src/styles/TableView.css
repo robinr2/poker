@@ -175,6 +175,14 @@
   box-shadow: 0 2px 4px rgba(22, 163, 74, 0.2);
 }
 
+.bet-amount .money-icon {
+  display: inline-block;
+  font-weight: 800;
+  color: #15803d;
+  font-size: 1rem;
+  margin-right: 2px;
+}
+
 .seat.own-seat .bet-amount {
   color: #15803d;
   background-color: #bbf7d0;
@@ -242,9 +250,21 @@
   text-align: center;
 }
 
+.stack .chip-icon {
+  display: inline-block;
+  color: #fbbf24;
+  font-size: 0.75rem;
+  margin-right: 3px;
+  vertical-align: middle;
+}
+
 .seat.own-seat .stack {
   color: #047857;
   font-weight: 700;
+}
+
+.seat.own-seat .stack .chip-icon {
+  color: #f59e0b;
 }
 
 /* Pot Display */

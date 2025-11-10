@@ -882,8 +882,8 @@ describe('App', () => {
 
       // Verify stacks are displayed
       await waitFor(() => {
-        expect(screen.getByText('💰 1000')).toBeInTheDocument();
-        expect(screen.getByText('💰 2000')).toBeInTheDocument();
+        expect(screen.getByText(/1000/)).toBeInTheDocument();
+        expect(screen.getByText(/2000/)).toBeInTheDocument();
       });
     });
 

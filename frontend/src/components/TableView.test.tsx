@@ -1087,9 +1087,9 @@ describe('TableView', () => {
       );
 
       // Check that stacks are displayed for occupied seats
-      expect(screen.getByText('💰 1100')).toBeInTheDocument(); // Seat 1 (Alice)
-      expect(screen.getByText('💰 1300')).toBeInTheDocument(); // Seat 3 (Bob)
-      expect(screen.getByText('💰 1500')).toBeInTheDocument(); // Seat 5 (Charlie)
+      expect(screen.getByText(/1100/)).toBeInTheDocument(); // Seat 1 (Alice)
+      expect(screen.getByText(/1300/)).toBeInTheDocument(); // Seat 3 (Bob)
+      expect(screen.getByText(/1500/)).toBeInTheDocument(); // Seat 5 (Charlie)
     });
 
     it('renders pot amount when present', () => {
@@ -1149,7 +1149,7 @@ describe('Bet Amount Display Tests', () => {
         },
       };
 
-      render(
+      const { container } = render(
         <TableView
           tableId="table-1"
           seats={mockSeats}
@@ -1160,8 +1160,10 @@ describe('Bet Amount Display Tests', () => {
       );
 
       // Check that bet amounts are displayed
-      const betAmounts = screen.getAllByText(/💵 50/);
+      const betAmounts = container.querySelectorAll('.bet-amount');
       expect(betAmounts.length).toBeGreaterThanOrEqual(3);
+      // Check first bet amount contains 50
+      expect(betAmounts[0].textContent).toContain('50');
     });
 
     it('should not display bet amount for players with no bets', () => {
@@ -1178,7 +1180,7 @@ describe('Bet Amount Display Tests', () => {
         },
       };
 
-      render(
+      const { container } = render(
         <TableView
           tableId="table-1"
           seats={mockSeats}
@@ -1189,11 +1191,9 @@ describe('Bet Amount Display Tests', () => {
       );
 
       // Alice should have bet amount
-      expect(screen.getByText(/💵 50/)).toBeInTheDocument();
-
-      // Should only be one bet amount displayed
-      const betAmounts = screen.getAllByText(/💵/);
+      const betAmounts = container.querySelectorAll('.bet-amount');
       expect(betAmounts.length).toBe(1);
+      expect(betAmounts[0].textContent).toContain('50');
     });
 
     it('should not display bet amount for empty seats', () => {
@@ -1210,7 +1210,7 @@ describe('Bet Amount Display Tests', () => {
         },
       };
 
-      render(
+      const { container } = render(
         <TableView
           tableId="table-1"
           seats={mockSeats}
@@ -1221,7 +1221,7 @@ describe('Bet Amount Display Tests', () => {
       );
 
       // Should only display bet for Alice (seat 0)
-      const betAmounts = screen.getAllByText(/💵/);
+      const betAmounts = container.querySelectorAll('.bet-amount');
       expect(betAmounts.length).toBe(1);
     });
 
@@ -1240,7 +1240,7 @@ describe('Bet Amount Display Tests', () => {
         },
       };
 
-      render(
+      const { container } = render(
         <TableView
           tableId="table-1"
           seats={mockSeats}
@@ -1250,9 +1250,11 @@ describe('Bet Amount Display Tests', () => {
         />
       );
 
-      expect(screen.getByText(/💵 100/)).toBeInTheDocument();
-      expect(screen.getByText(/💵 50/)).toBeInTheDocument();
-      expect(screen.getByText(/💵 30/)).toBeInTheDocument();
+      const betAmounts = container.querySelectorAll('.bet-amount');
+      expect(betAmounts.length).toBe(3);
+      expect(betAmounts[0].textContent).toContain('100');
+      expect(betAmounts[1].textContent).toContain('50');
+      expect(betAmounts[2].textContent).toContain('30');
     });
 
     it('should not display bet amounts when playerBets is undefined', () => {
@@ -1265,7 +1267,7 @@ describe('Bet Amount Display Tests', () => {
         pot: 0,
       };
 
-      render(
+      const { container } = render(
         <TableView
           tableId="table-1"
           seats={mockSeats}
@@ -1276,7 +1278,7 @@ describe('Bet Amount Display Tests', () => {
       );
 
       // Should not display any bet amounts
-      const betAmounts = screen.queryAllByText(/💵/);
+      const betAmounts = container.querySelectorAll('.bet-amount');
       expect(betAmounts.length).toBe(0);
     });
 
@@ -1295,7 +1297,7 @@ describe('Bet Amount Display Tests', () => {
         },
       };
 
-      render(
+      const { container } = render(
         <TableView
           tableId="table-1"
           seats={mockSeats}
@@ -1306,7 +1308,7 @@ describe('Bet Amount Display Tests', () => {
       );
 
       // Should only display bet for Alice (seat 0)
-      const betAmounts = screen.getAllByText(/💵/);
+      const betAmounts = container.querySelectorAll('.bet-amount');
       expect(betAmounts.length).toBe(1);
     });
 
@@ -1323,7 +1325,7 @@ describe('Bet Amount Display Tests', () => {
         },
       };
 
-      const { rerender } = render(
+      const { rerender, container } = render(
         <TableView
           tableId="table-1"
           seats={mockSeats}
@@ -1334,7 +1336,9 @@ describe('Bet Amount Display Tests', () => {
       );
 
       // Initially Alice has bet 50
-      expect(screen.getByText(/💵 50/)).toBeInTheDocument();
+      let betAmounts = container.querySelectorAll('.bet-amount');
+      expect(betAmounts.length).toBe(1);
+      expect(betAmounts[0].textContent).toContain('50');
 
       // Update game state - Bob now bets 100
       const updatedGameState: ExtendedGameState = {
@@ -1359,9 +1363,9 @@ describe('Bet Amount Display Tests', () => {
         />
       );
 
-      // Both bet amounts should be visible
-      expect(screen.getByText(/💵 50/)).toBeInTheDocument();
-      expect(screen.getByText(/💵 100/)).toBeInTheDocument();
+      // Now both Alice and Bob should have bets
+      betAmounts = container.querySelectorAll('.bet-amount');
+      expect(betAmounts.length).toBe(2);
     });
 
     it('should clear bet amounts on new hand', () => {
@@ -1379,7 +1383,7 @@ describe('Bet Amount Display Tests', () => {
         },
       };
 
-      const { rerender } = render(
+      const { rerender, container } = render(
         <TableView
           tableId="table-1"
           seats={mockSeats}
@@ -1390,7 +1394,8 @@ describe('Bet Amount Display Tests', () => {
       );
 
       // Initially bets should be displayed
-      expect(screen.getAllByText(/💵/).length).toBeGreaterThan(0);
+      let betAmounts = container.querySelectorAll('.bet-amount');
+      expect(betAmounts.length).toBeGreaterThan(0);
 
       // New hand starts - playerBets cleared
       const newHandGameState: ExtendedGameState = {
@@ -1413,7 +1418,7 @@ describe('Bet Amount Display Tests', () => {
       );
 
       // No bet amounts should be displayed
-      const betAmounts = screen.queryAllByText(/💵/);
+      betAmounts = container.querySelectorAll('.bet-amount');
       expect(betAmounts.length).toBe(0);
     });
 
@@ -1443,7 +1448,7 @@ describe('Bet Amount Display Tests', () => {
       // Find bet amount element and verify CSS class
       const betAmountElement = container.querySelector('.bet-amount');
       expect(betAmountElement).toBeInTheDocument();
-      expect(betAmountElement?.textContent).toContain('💵 50');
+      expect(betAmountElement?.textContent).toContain('$ 50');
     });
   });
 });

@@ -210,7 +210,7 @@ export function TableView({
                 gameState.playerBets[seat.index] !== undefined &&
                 gameState.playerBets[seat.index] > 0 && (
                   <div className="bet-amount">
-                    💵 {gameState.playerBets[seat.index]}
+                    <span className="money-icon">$</span> {gameState.playerBets[seat.index]}
                   </div>
                 )}
 
@@ -245,7 +245,7 @@ export function TableView({
               {/* Chip Stack Display */}
               {seat.playerName && (
                 <p className="stack">
-                  💰 {seat.stack !== undefined ? seat.stack : 'N/A'}
+                  <span className="chip-icon">⬤</span> {seat.stack !== undefined ? seat.stack : 'N/A'}
                 </p>
               )}
             </div>
