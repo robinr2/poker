@@ -1366,7 +1366,23 @@ func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, sea
 			server.logger.Warn("failed to broadcast action_result", "error", err)
 		}
 
-		// Check if we're not on the river - advance to next street
+		// Check if only one player remains (all others folded) - early winner
+		nonFoldedCount := 0
+		for i := 0; i < 6; i++ {
+			if table.Seats[i].Status == "active" && !table.CurrentHand.FoldedPlayers[i] {
+				nonFoldedCount++
+			}
+		}
+
+		// If only one player remains, award pot immediately (early winner)
+		if nonFoldedCount <= 1 {
+			table.mu.Unlock()
+			table.HandleShowdown()
+			table.mu.Lock()
+			return nil
+		}
+
+		// Multiple players remain - check if we're not on the river - advance to next street
 		currentStreet := table.CurrentHand.Street
 		if currentStreet != "river" {
 			// Unlock before calling AdvanceToNextStreetWithBroadcast (long-running operation with broadcasting)
@@ -1415,8 +1431,7 @@ func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, sea
 	}
 
 	if nextActor == nil {
-		// Only one player left (others folded) - betting round complete
-		// Broadcast with no next actor
+		// Only one player left (all others folded) - award pot immediately
 		table.mu.Unlock()
 		err = server.BroadcastActionResult(
 			table.ID, seatIndex, action, amountActed, newStack, table.CurrentHand.Pot,
@@ -1427,44 +1442,12 @@ func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, sea
 			server.logger.Warn("failed to broadcast action_result", "error", err)
 		}
 
-		// Check if we're not on the river - advance to next street
-		currentStreet := table.CurrentHand.Street
-		if currentStreet != "river" {
-			// Unlock before calling AdvanceToNextStreetWithBroadcast (long-running operation with broadcasting)
-			table.mu.Unlock()
-			err = table.AdvanceToNextStreetWithBroadcast()
-			if err != nil {
-				server.logger.Warn("failed to advance to next street", "error", err)
-			}
-			table.mu.Lock()
+		// Immediately award pot to remaining player (early winner)
+		// HandleShowdown already has correct logic for this (table.go lines 180-211)
+		table.mu.Unlock()
+		table.HandleShowdown()
+		table.mu.Lock()
 
-			// After advancing street, set first actor for the new street and request their action
-			// Determine who acts first on the new street
-			if table.CurrentHand != nil {
-				firstActor := table.CurrentHand.GetFirstActor(table.Seats)
-				table.CurrentHand.CurrentActor = &firstActor
-
-				// Get valid actions and call amount for the first actor of the new street
-				nextValidActions := table.CurrentHand.GetValidActions(firstActor, table.Seats[firstActor].Stack, table.Seats)
-				nextCallAmount := table.CurrentHand.GetCallAmount(firstActor)
-
-				// Unlock to broadcast action_request for the new street
-				table.mu.Unlock()
-				err = server.BroadcastActionRequest(
-					table.ID, firstActor, nextValidActions, nextCallAmount,
-					table.CurrentHand.CurrentBet, table.CurrentHand.Pot,
-				)
-				table.mu.Lock()
-				if err != nil {
-					server.logger.Warn("failed to broadcast action_request for new street", "error", err)
-				}
-			}
-		} else {
-			// We're on the river and betting is complete - trigger showdown
-			table.mu.Unlock()
-			table.HandleShowdown()
-			table.mu.Lock()
-		}
 		return nil
 	}
 

@@ -1703,15 +1703,18 @@ func TestHandlePlayerAction_ValidFold(t *testing.T) {
 	table := server.tables[0]
 	server.mu.RUnlock()
 
-	// Set up 2 players with sessions
+	// Set up 3 players with sessions (need 3 so hand doesn't end on single fold)
 	session1, _ := sm.CreateSession("Player1")
 	session2, _ := sm.CreateSession("Player2")
+	session3, _ := sm.CreateSession("Player3")
 	token1 := session1.Token
 	token2 := session2.Token
+	token3 := session3.Token
 
 	// Update sessions with table and seat info
 	sm.UpdateSession(token1, &table.ID, &[]int{0}[0])
 	sm.UpdateSession(token2, &table.ID, &[]int{1}[0])
+	sm.UpdateSession(token3, &table.ID, &[]int{2}[0])
 
 	// Assign seats and set to active
 	table.mu.Lock()
@@ -1721,6 +1724,9 @@ func TestHandlePlayerAction_ValidFold(t *testing.T) {
 	table.Seats[1].Token = &token2
 	table.Seats[1].Status = "active"
 	table.Seats[1].Stack = 1000
+	table.Seats[2].Token = &token3
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
 	table.mu.Unlock()
 
 	// Start hand
@@ -2640,7 +2646,7 @@ func TestHandlePlayerAction_AdvancesStreetAfterRoundComplete(t *testing.T) {
 	table := server.tables[0]
 	server.mu.RUnlock()
 
-	// Set up 2 players with sessions
+	// Set up 2 players with sessions (heads-up scenario)
 	session1, _ := sm.CreateSession("Player1")
 	session2, _ := sm.CreateSession("Player2")
 	token1 := session1.Token
@@ -2650,7 +2656,7 @@ func TestHandlePlayerAction_AdvancesStreetAfterRoundComplete(t *testing.T) {
 	sm.UpdateSession(token1, &table.ID, &[]int{0}[0])
 	sm.UpdateSession(token2, &table.ID, &[]int{1}[0])
 
-	// Assign seats and set to active (heads-up: dealer = small blind = seat 0)
+	// Assign seats and set to active
 	table.mu.Lock()
 	table.Seats[0].Token = &token1
 	table.Seats[0].Status = "active"
@@ -3416,6 +3422,413 @@ func TestHandleAction_RiverNoShowdownIfNotComplete(t *testing.T) {
 		t.Errorf("expected to remain on river street, got %s", table.CurrentHand.Street)
 	}
 	table.mu.RUnlock()
+}
+
+// ============ PHASE 1: EARLY WINNER FOLD HANDLING TESTS ============
+
+// TestHandlePlayerAction_AllFoldPreflop_EarlyWinner verifies that when all but one player folds on preflop,
+// the remaining player wins immediately without advancing to flop
+func TestHandlePlayerAction_AllFoldPreflop_EarlyWinner(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 3 players with sessions
+	session0, _ := sm.CreateSession("Player0")
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	token0 := session0.Token
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	sm.UpdateSession(token0, &table.ID, &[]int{0}[0])
+	sm.UpdateSession(token1, &table.ID, &[]int{1}[0])
+	sm.UpdateSession(token2, &table.ID, &[]int{2}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+	table.mu.Unlock()
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Verify hand is on preflop
+	table.mu.RLock()
+	if table.CurrentHand.Street != "preflop" {
+		t.Fatalf("expected hand to be on preflop, got %s", table.CurrentHand.Street)
+	}
+	initialPot := table.CurrentHand.Pot
+	table.mu.RUnlock()
+
+	// Player 0 folds
+	client0 := &Client{
+		hub:   hub,
+		Token: token0,
+		send:  make(chan []byte, 256),
+	}
+	err = server.HandlePlayerAction(sm, client0, 0, "fold")
+	if err != nil {
+		t.Errorf("expected no error for player 0 fold, got %v", err)
+	}
+
+	table.mu.RLock()
+	handAfterFold1 := table.CurrentHand
+	table.mu.RUnlock()
+
+	// Player 1 folds (now only player 2 remains)
+	client1 := &Client{
+		hub:   hub,
+		Token: token1,
+		send:  make(chan []byte, 256),
+	}
+	err = server.HandlePlayerAction(sm, client1, 1, "fold")
+	if err != nil {
+		t.Errorf("expected no error for player 1 fold, got %v", err)
+	}
+
+	// Verify hand is completed and player 2 won the pot
+	table.mu.Lock()
+	defer table.mu.Unlock()
+
+	// Hand should be nil after early winner (HandleShowdown clears it)
+	if table.CurrentHand != nil {
+		t.Errorf("expected CurrentHand to be nil after early winner, got %v", table.CurrentHand)
+	}
+
+	// Player 2 should have received the pot
+	// Player 2 is BB (posted 20), so final stack = 1000 - 20 (BB posted) + initialPot (won)
+	player2Stack := table.Seats[2].Stack
+	expectedStack := 1000 - 20 + initialPot // Started with 1000, paid 20 for BB, won pot
+	if player2Stack != expectedStack {
+		t.Errorf("expected player 2 stack to be %d, got %d", expectedStack, player2Stack)
+	}
+
+	// Board should have no cards on preflop early winner
+	if handAfterFold1 != nil && len(handAfterFold1.BoardCards) > 0 {
+		t.Errorf("expected no board cards on preflop early winner, got %d cards", len(handAfterFold1.BoardCards))
+	}
+}
+
+// TestHandlePlayerAction_AllFoldFlop_EarlyWinner verifies that when all but one player folds on flop,
+// the remaining player wins immediately without advancing to turn
+func TestHandlePlayerAction_AllFoldFlop_EarlyWinner(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 3 players with sessions
+	session0, _ := sm.CreateSession("Player0")
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	token0 := session0.Token
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	sm.UpdateSession(token0, &table.ID, &[]int{0}[0])
+	sm.UpdateSession(token1, &table.ID, &[]int{1}[0])
+	sm.UpdateSession(token2, &table.ID, &[]int{2}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+	table.mu.Unlock()
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Manually advance to flop and set up state
+	table.mu.Lock()
+	table.CurrentHand.Street = "flop"
+	table.CurrentHand.BoardCards = []Card{
+		{Rank: "A", Suit: "s"},
+		{Rank: "K", Suit: "h"},
+		{Rank: "Q", Suit: "d"},
+	}
+	// Mark two players as folded, only player 2 remains
+	table.CurrentHand.FoldedPlayers[0] = true
+	table.CurrentHand.FoldedPlayers[1] = true
+	table.CurrentHand.CurrentActor = newInt(2)
+	table.CurrentHand.ActedPlayers[0] = true
+	table.CurrentHand.ActedPlayers[1] = true
+	initialPot := table.CurrentHand.Pot
+	boardLengthBefore := len(table.CurrentHand.BoardCards)
+	table.mu.Unlock()
+
+	// Player 2 checks (which completes betting round with only them left)
+	client2 := &Client{
+		hub:   hub,
+		Token: token2,
+		send:  make(chan []byte, 256),
+	}
+	err = server.HandlePlayerAction(sm, client2, 2, "check")
+	if err != nil {
+		t.Errorf("expected no error for player 2 check, got %v", err)
+	}
+
+	// Verify hand is completed and player 2 won the pot
+	table.mu.Lock()
+	defer table.mu.Unlock()
+
+	// Hand should be nil after early winner
+	if table.CurrentHand != nil {
+		t.Errorf("expected CurrentHand to be nil after early winner, got %v", table.CurrentHand)
+	}
+
+	// Player 2 should have received the pot
+	// Player 2 is BB (posted 20), so final stack = 1000 - 20 (BB posted) + initialPot (won)
+	player2Stack := table.Seats[2].Stack
+	expectedStack := 1000 - 20 + initialPot
+	if player2Stack != expectedStack {
+		t.Errorf("expected player 2 stack to be %d, got %d", expectedStack, player2Stack)
+	}
+
+	// Board should have remained at 3 cards (not advanced to turn with 4)
+	if boardLengthBefore != 3 {
+		t.Errorf("expected 3 board cards on flop, got %d", boardLengthBefore)
+	}
+}
+
+// TestHandlePlayerAction_AllFoldTurn_EarlyWinner verifies that when all but one player folds on turn,
+// the remaining player wins immediately without advancing to river
+func TestHandlePlayerAction_AllFoldTurn_EarlyWinner(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 3 players with sessions
+	session0, _ := sm.CreateSession("Player0")
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	token0 := session0.Token
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	sm.UpdateSession(token0, &table.ID, &[]int{0}[0])
+	sm.UpdateSession(token1, &table.ID, &[]int{1}[0])
+	sm.UpdateSession(token2, &table.ID, &[]int{2}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+	table.mu.Unlock()
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Manually advance to turn and set up state
+	table.mu.Lock()
+	table.CurrentHand.Street = "turn"
+	table.CurrentHand.BoardCards = []Card{
+		{Rank: "A", Suit: "s"},
+		{Rank: "K", Suit: "h"},
+		{Rank: "Q", Suit: "d"},
+		{Rank: "J", Suit: "c"},
+	}
+	// Mark two players as folded, only player 2 remains
+	table.CurrentHand.FoldedPlayers[0] = true
+	table.CurrentHand.FoldedPlayers[1] = true
+	table.CurrentHand.CurrentActor = newInt(2)
+	table.CurrentHand.ActedPlayers[0] = true
+	table.CurrentHand.ActedPlayers[1] = true
+	initialPot := table.CurrentHand.Pot
+	boardLengthBefore := len(table.CurrentHand.BoardCards)
+	table.mu.Unlock()
+
+	// Player 2 checks (which completes betting round with only them left)
+	client2 := &Client{
+		hub:   hub,
+		Token: token2,
+		send:  make(chan []byte, 256),
+	}
+	err = server.HandlePlayerAction(sm, client2, 2, "check")
+	if err != nil {
+		t.Errorf("expected no error for player 2 check, got %v", err)
+	}
+
+	// Verify hand is completed and player 2 won the pot
+	table.mu.Lock()
+	defer table.mu.Unlock()
+
+	// Hand should be nil after early winner
+	if table.CurrentHand != nil {
+		t.Errorf("expected CurrentHand to be nil after early winner, got %v", table.CurrentHand)
+	}
+
+	// Player 2 should have received the pot
+	// Player 2 is BB (posted 20), so final stack = 1000 - 20 (BB posted) + initialPot (won)
+	player2Stack := table.Seats[2].Stack
+	expectedStack := 1000 - 20 + initialPot
+	if player2Stack != expectedStack {
+		t.Errorf("expected player 2 stack to be %d, got %d", expectedStack, player2Stack)
+	}
+
+	// Board should have remained at 4 cards (not advanced to river with 5)
+	if boardLengthBefore != 4 {
+		t.Errorf("expected 4 board cards on turn, got %d", boardLengthBefore)
+	}
+}
+
+// TestHandlePlayerAction_AllFoldRiver_EarlyWinner verifies that when all but one player folds on river,
+// the remaining player wins immediately (should already work as river is final street)
+func TestHandlePlayerAction_AllFoldRiver_EarlyWinner(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 3 players with sessions
+	session0, _ := sm.CreateSession("Player0")
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	token0 := session0.Token
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	sm.UpdateSession(token0, &table.ID, &[]int{0}[0])
+	sm.UpdateSession(token1, &table.ID, &[]int{1}[0])
+	sm.UpdateSession(token2, &table.ID, &[]int{2}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+	table.mu.Unlock()
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Manually advance to river and set up state
+	table.mu.Lock()
+	table.CurrentHand.Street = "river"
+	table.CurrentHand.BoardCards = []Card{
+		{Rank: "A", Suit: "s"},
+		{Rank: "K", Suit: "h"},
+		{Rank: "Q", Suit: "d"},
+		{Rank: "J", Suit: "c"},
+		{Rank: "T", Suit: "s"},
+	}
+	// Mark two players as folded, only player 2 remains
+	table.CurrentHand.FoldedPlayers[0] = true
+	table.CurrentHand.FoldedPlayers[1] = true
+	table.CurrentHand.CurrentActor = newInt(2)
+	table.CurrentHand.ActedPlayers[0] = true
+	table.CurrentHand.ActedPlayers[1] = true
+	initialPot := table.CurrentHand.Pot
+	boardLengthBefore := len(table.CurrentHand.BoardCards)
+	table.mu.Unlock()
+
+	// Player 2 checks (which completes betting round with only them left)
+	client2 := &Client{
+		hub:   hub,
+		Token: token2,
+		send:  make(chan []byte, 256),
+	}
+	err = server.HandlePlayerAction(sm, client2, 2, "check")
+	if err != nil {
+		t.Errorf("expected no error for player 2 check, got %v", err)
+	}
+
+	// Verify hand is completed and player 2 won the pot
+	table.mu.Lock()
+	defer table.mu.Unlock()
+
+	// Hand should be nil after early winner
+	if table.CurrentHand != nil {
+		t.Errorf("expected CurrentHand to be nil after early winner, got %v", table.CurrentHand)
+	}
+
+	// Player 2 should have received the pot
+	// Player 2 is BB (posted 20), so final stack = 1000 - 20 (BB posted) + initialPot (won)
+	player2Stack := table.Seats[2].Stack
+	expectedStack := 1000 - 20 + initialPot
+	if player2Stack != expectedStack {
+		t.Errorf("expected player 2 stack to be %d, got %d", expectedStack, player2Stack)
+	}
+
+	// Board should have remained at 5 cards (all river cards)
+	if boardLengthBefore != 5 {
+		t.Errorf("expected 5 board cards on river, got %d", boardLengthBefore)
+	}
+}
+
+// Helper function to create a pointer to an int
+func newInt(i int) *int {
+	return &i
 }
 
 // Helper function to create a pointer to a string
