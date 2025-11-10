@@ -1325,9 +1325,13 @@ describe('Phase 6: Showdown & Settlement - WebSocket Event Handling', () => {
       await waitFor(() => {
         expect(result.current.gameState.showdown).toBeDefined();
         expect(result.current.gameState.showdown?.winnerSeats).toEqual([1]);
-        expect(result.current.gameState.showdown?.winningHand).toBe('Pair of Aces');
+        expect(result.current.gameState.showdown?.winningHand).toBe(
+          'Pair of Aces'
+        );
         expect(result.current.gameState.showdown?.potAmount).toBe(300);
-        expect(result.current.gameState.showdown?.amountsWon).toEqual({ 1: 300 });
+        expect(result.current.gameState.showdown?.amountsWon).toEqual({
+          1: 300,
+        });
       });
     });
 
@@ -1472,6 +1476,159 @@ describe('Phase 6: Showdown & Settlement - WebSocket Event Handling', () => {
   });
 });
 
+describe('Phase 1: Clear Street Label on Hand Start', () => {
+  describe('TestUseWebSocket_StreetClearingOnStartHand', () => {
+    it('should clear street field when start_hand action is sent', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      // First set player's seat
+      const seatAssignedMessage = JSON.stringify({
+        type: 'seat_assigned',
+        payload: {
+          tableId: 'table-1',
+          seatIndex: 1,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(seatAssignedMessage));
+      });
+
+      // Set up initial board cards with street = 'river'
+      const boardDealtMessage = JSON.stringify({
+        type: 'board_dealt',
+        payload: {
+          boardCards: [
+            { Rank: 'A', Suit: 's' },
+            { Rank: 'K', Suit: 'h' },
+            { Rank: 'Q', Suit: 'd' },
+            { Rank: 'J', Suit: 'c' },
+            { Rank: 'T', Suit: 's' },
+          ],
+          street: 'river',
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(boardDealtMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.street).toBe('river');
+      });
+
+      // Now send start_hand action
+      act(() => {
+        result.current.sendAction('start_hand');
+      });
+
+      // After sending start_hand, street should be cleared (undefined)
+      expect(result.current.gameState.street).toBeUndefined();
+    });
+
+    it('hand_started message clears street field', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      // First set up board cards with street = 'turn'
+      const boardDealtMessage = JSON.stringify({
+        type: 'board_dealt',
+        payload: {
+          boardCards: [
+            { Rank: 'A', Suit: 's' },
+            { Rank: 'K', Suit: 'h' },
+            { Rank: 'Q', Suit: 'd' },
+            { Rank: 'J', Suit: 'c' },
+          ],
+          street: 'turn',
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(boardDealtMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.street).toBe('turn');
+      });
+
+      // Now receive hand_started message
+      const handStartedMessage = JSON.stringify({
+        type: 'hand_started',
+        payload: {
+          dealerSeat: 0,
+          smallBlindSeat: 1,
+          bigBlindSeat: 2,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(handStartedMessage));
+      });
+
+      // After hand_started, street should be cleared (undefined)
+      expect(result.current.gameState.street).toBeUndefined();
+    });
+
+    it('street remains undefined until board_dealt is received', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      // Initially, street should be undefined
+      expect(result.current.gameState.street).toBeUndefined();
+
+      // Receive hand_started message
+      const handStartedMessage = JSON.stringify({
+        type: 'hand_started',
+        payload: {
+          dealerSeat: 0,
+          smallBlindSeat: 1,
+          bigBlindSeat: 2,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(handStartedMessage));
+      });
+
+      // Street should still be undefined
+      expect(result.current.gameState.street).toBeUndefined();
+
+      // Now receive board_dealt message
+      const boardDealtMessage = JSON.stringify({
+        type: 'board_dealt',
+        payload: {
+          boardCards: [
+            { Rank: 'A', Suit: 's' },
+            { Rank: 'K', Suit: 'h' },
+            { Rank: 'Q', Suit: 'd' },
+          ],
+          street: 'flop',
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(boardDealtMessage));
+      });
+
+      // Now street should be set to 'flop'
+      await waitFor(() => {
+        expect(result.current.gameState.street).toBe('flop');
+      });
+    });
+  });
+});
+
 describe('Phase 3: Remove Auto-Clear and Show Start Hand Button After Showdown', () => {
   describe('TestUseWebSocket_ShowdownPersists', () => {
     it('should not auto-clear showdown state after timeout', async () => {
@@ -1597,6 +1754,265 @@ describe('Phase 3: Remove Auto-Clear and Show Start Hand Button After Showdown',
           payload: { seatIndex: 1, action: 'start_hand' },
         })
       );
+    });
+  });
+
+  describe('TestUseWebSocket_BoardCardsClearingOnStartHand', () => {
+    it('should clear boardCards array when start_hand action is sent', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      // First set player's seat
+      const seatAssignedMessage = JSON.stringify({
+        type: 'seat_assigned',
+        payload: {
+          tableId: 'table-1',
+          seatIndex: 0,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(seatAssignedMessage));
+      });
+
+      // Set up initial board cards
+      const boardDealtMessage = JSON.stringify({
+        type: 'board_dealt',
+        payload: {
+          boardCards: [
+            { Rank: 'A', Suit: 's' },
+            { Rank: 'K', Suit: 'h' },
+            { Rank: 'Q', Suit: 'd' },
+          ],
+          street: 'flop',
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(boardDealtMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.boardCards).toBeDefined();
+        expect(result.current.gameState.boardCards?.length).toBe(3);
+      });
+
+      // Now send start_hand action
+      act(() => {
+        result.current.sendAction('start_hand');
+      });
+
+      // After sending start_hand, boardCards should be cleared to empty array
+      expect(result.current.gameState.boardCards).toBeDefined();
+      expect(result.current.gameState.boardCards).toEqual([]);
+    });
+
+    it('should have boardCards as empty array (not undefined) after start_hand action', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      // First set player's seat
+      const seatAssignedMessage = JSON.stringify({
+        type: 'seat_assigned',
+        payload: {
+          tableId: 'table-1',
+          seatIndex: 2,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(seatAssignedMessage));
+      });
+
+      // Set up initial board cards
+      const boardDealtMessage = JSON.stringify({
+        type: 'board_dealt',
+        payload: {
+          boardCards: [
+            { Rank: '2', Suit: 's' },
+            { Rank: '3', Suit: 'h' },
+            { Rank: '4', Suit: 'd' },
+            { Rank: '5', Suit: 'c' },
+            { Rank: '6', Suit: 's' },
+          ],
+          street: 'river',
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(boardDealtMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.boardCards?.length).toBe(5);
+      });
+
+      // Now send start_hand action
+      act(() => {
+        result.current.sendAction('start_hand');
+      });
+
+      // boardCards should be an empty array, not undefined
+      expect(result.current.gameState.boardCards).toStrictEqual([]);
+      expect(Array.isArray(result.current.gameState.boardCards)).toBe(true);
+    });
+  });
+
+  describe('TestUseWebSocket_StartHandPotReset', () => {
+    it('sendAction resets pot to 0 when start_hand is sent', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      // First set player's seat
+      const seatAssignedMessage = JSON.stringify({
+        type: 'seat_assigned',
+        payload: {
+          tableId: 'table-1',
+          seatIndex: 1,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(seatAssignedMessage));
+      });
+
+      // Set up initial game state with pot > 0
+      const tableStateMessage = JSON.stringify({
+        type: 'table_state',
+        payload: {
+          tableId: 'table-1',
+          seats: [
+            { index: 0, playerName: 'Alice', status: 'occupied', stack: 5000 },
+            { index: 1, playerName: 'Bob', status: 'occupied', stack: 3500 },
+          ],
+          pot: 150,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(tableStateMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.pot).toBe(150);
+      });
+
+      // Now send start_hand action
+      act(() => {
+        result.current.sendAction('start_hand');
+      });
+
+      // After sending start_hand, pot should be reset to 0
+      expect(result.current.gameState.pot).toBe(0);
+    });
+
+    it('start_hand optimistic update clears all hand state (pot, boardCards, showdown, handComplete)', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      // First set player's seat
+      const seatAssignedMessage = JSON.stringify({
+        type: 'seat_assigned',
+        payload: {
+          tableId: 'table-1',
+          seatIndex: 0,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(seatAssignedMessage));
+      });
+
+      // Set up initial game state with multiple fields
+      const tableStateMessage = JSON.stringify({
+        type: 'table_state',
+        payload: {
+          tableId: 'table-1',
+          seats: [
+            { index: 0, playerName: 'Alice', status: 'occupied', stack: 5000 },
+          ],
+          pot: 300,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(tableStateMessage));
+      });
+
+      // Set board cards
+      const boardDealtMessage = JSON.stringify({
+        type: 'board_dealt',
+        payload: {
+          boardCards: [
+            { Rank: 'A', Suit: 's' },
+            { Rank: 'K', Suit: 'h' },
+            { Rank: 'Q', Suit: 'd' },
+          ],
+          street: 'flop',
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(boardDealtMessage));
+      });
+
+      // Set showdown state
+      const showdownMessage = JSON.stringify({
+        type: 'showdown_result',
+        payload: {
+          winnerSeats: [0],
+          winningHand: 'Pair of Aces',
+          potAmount: 300,
+          amountsWon: { '0': 300 },
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(showdownMessage));
+      });
+
+      // Set hand complete state
+      const handCompleteMessage = JSON.stringify({
+        type: 'hand_complete',
+        payload: {
+          message: 'Hand complete!',
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(handCompleteMessage));
+      });
+
+      // Verify all state is set
+      await waitFor(() => {
+        expect(result.current.gameState.pot).toBe(300);
+        expect(result.current.gameState.boardCards?.length).toBe(3);
+        expect(result.current.gameState.showdown).toBeDefined();
+        expect(result.current.gameState.handComplete).toBeDefined();
+      });
+
+      // Now send start_hand action
+      act(() => {
+        result.current.sendAction('start_hand');
+      });
+
+      // All state should be cleared
+      expect(result.current.gameState.pot).toBe(0);
+      expect(result.current.gameState.boardCards).toEqual([]);
+      expect(result.current.gameState.showdown).toBeUndefined();
+      expect(result.current.gameState.handComplete).toBeUndefined();
     });
   });
 });
@@ -1800,6 +2216,140 @@ describe('Action Request and Result Handlers', () => {
         expect(result.current.gameState.pot).toBe(60);
         expect(result.current.gameState.currentActor).toBeNull();
         expect(result.current.gameState.roundOver).toBe(true);
+      });
+    });
+  });
+});
+
+describe('Phase 3: Clear Board Cards on Hand Started Message (Backend Confirmation)', () => {
+  describe('TestUseWebSocket_HandStartedBoardCardsClear', () => {
+    it('hand_started message sets boardCards to empty array', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      // First set up board cards (from a previous hand)
+      const boardDealtMessage = JSON.stringify({
+        type: 'board_dealt',
+        payload: {
+          boardCards: [
+            { Rank: 'A', Suit: 's' },
+            { Rank: 'K', Suit: 'h' },
+            { Rank: 'Q', Suit: 'd' },
+          ],
+          street: 'flop',
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(boardDealtMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.boardCards?.length).toBe(3);
+      });
+
+      // Now send hand_started message
+      const handStartedMessage = JSON.stringify({
+        type: 'hand_started',
+        payload: {
+          dealerSeat: 0,
+          smallBlindSeat: 1,
+          bigBlindSeat: 2,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(handStartedMessage));
+      });
+
+      await waitFor(() => {
+        // boardCards should be cleared to empty array
+        expect(result.current.gameState.boardCards).toBeDefined();
+        expect(result.current.gameState.boardCards).toEqual([]);
+      });
+    });
+
+    it('hand_started preserves dealer/blind seats and other state', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      // First set up initial game state with some values
+      const initialTableState = JSON.stringify({
+        type: 'table_state',
+        payload: {
+          tableId: 'table-1',
+          seats: [
+            { index: 0, playerName: 'Alice', status: 'occupied', stack: 5000 },
+            { index: 1, playerName: 'Bob', status: 'occupied', stack: 3500 },
+          ],
+          pot: 150,
+          dealerSeat: 0,
+          smallBlindSeat: 1,
+          bigBlindSeat: 0,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(initialTableState));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.dealerSeat).toBe(0);
+        expect(result.current.gameState.smallBlindSeat).toBe(1);
+        expect(result.current.gameState.bigBlindSeat).toBe(0);
+        expect(result.current.gameState.pot).toBe(150);
+      });
+
+      // Set board cards
+      const boardDealtMessage = JSON.stringify({
+        type: 'board_dealt',
+        payload: {
+          boardCards: [
+            { Rank: 'A', Suit: 's' },
+            { Rank: 'K', Suit: 'h' },
+            { Rank: 'Q', Suit: 'd' },
+          ],
+          street: 'flop',
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(boardDealtMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.boardCards?.length).toBe(3);
+      });
+
+      // Now send hand_started message with new dealer positions
+      const handStartedMessage = JSON.stringify({
+        type: 'hand_started',
+        payload: {
+          dealerSeat: 1,
+          smallBlindSeat: 2,
+          bigBlindSeat: 0,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(handStartedMessage));
+      });
+
+      await waitFor(() => {
+        // Dealer/blind seats should be updated
+        expect(result.current.gameState.dealerSeat).toBe(1);
+        expect(result.current.gameState.smallBlindSeat).toBe(2);
+        expect(result.current.gameState.bigBlindSeat).toBe(0);
+        // boardCards should be cleared
+        expect(result.current.gameState.boardCards).toEqual([]);
+        // pot should be preserved (not affected by hand_started)
+        expect(result.current.gameState.pot).toBe(150);
       });
     });
   });

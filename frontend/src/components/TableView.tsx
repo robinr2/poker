@@ -109,12 +109,13 @@ export function TableView({
     }))
   );
 
-   // Determine if Start Hand button should be visible
-   // Show when: player is seated AND (first hand with pot=0 OR hand complete)
-   const isSeated = currentSeatIndex !== null && currentSeatIndex !== undefined;
-   const isFirstHand = !gameState || gameState.pot === 0 || gameState.pot === undefined;
-   const isHandComplete = gameState?.handComplete !== undefined;
-   const showStartHandButton = isSeated && (isFirstHand || isHandComplete);
+  // Determine if Start Hand button should be visible
+  // Show when: player is seated AND (first hand with pot=0 OR hand complete)
+  const isSeated = currentSeatIndex !== null && currentSeatIndex !== undefined;
+  const isFirstHand =
+    !gameState || gameState.pot === 0 || gameState.pot === undefined;
+  const isHandComplete = gameState?.handComplete !== undefined;
+  const showStartHandButton = isSeated && (isFirstHand || isHandComplete);
 
   // Get player's current stack
   const playerStack =
@@ -175,12 +176,12 @@ export function TableView({
     <div className="table-view">
       <h1>Table: {tableId}</h1>
       <div className="table-container">
-         <div className="seats-grid">
-           {seats.map((seat) => (
-             <div
-               key={seat.index}
-               className={`seat ${seat.index === currentSeatIndex ? 'own-seat' : ''} ${gameState?.currentActor === seat.index ? 'turn-active' : ''} ${gameState?.showdown?.winnerSeats.includes(seat.index) ? 'winner-seat' : ''}`}
-             >
+        <div className="seats-grid">
+          {seats.map((seat) => (
+            <div
+              key={seat.index}
+              className={`seat ${seat.index === currentSeatIndex ? 'own-seat' : ''} ${gameState?.currentActor === seat.index ? 'turn-active' : ''} ${gameState?.showdown?.winnerSeats.includes(seat.index) ? 'winner-seat' : ''}`}
+            >
               {/* Dealer Button */}
               {gameState?.dealerSeat === seat.index && (
                 <span className="dealer-badge">D</span>
@@ -245,17 +246,18 @@ export function TableView({
           ))}
         </div>
 
-       {/* Game Info Section */}
-       {gameState && gameState.pot > 0 && (
-         <div className="game-info">
-           {gameState.street && (
-             <div className="street-indicator">
-               {gameState.street.charAt(0).toUpperCase() + gameState.street.slice(1)}
-             </div>
-           )}
-           <div className="pot-display">Pot: {gameState.pot}</div>
-         </div>
-       )}
+        {/* Game Info Section */}
+        {gameState && gameState.pot > 0 && (
+          <div className="game-info">
+            {gameState.street && (
+              <div className="street-indicator">
+                {gameState.street.charAt(0).toUpperCase() +
+                  gameState.street.slice(1)}
+              </div>
+            )}
+            <div className="pot-display">Pot: {gameState.pot}</div>
+          </div>
+        )}
 
         {/* Board Cards Display - only show when hand is active */}
         {gameState && gameState.pot > 0 && (
@@ -272,35 +274,47 @@ export function TableView({
               );
             })}
           </div>
-         )}
-       </div>
+        )}
+      </div>
 
-       {/* Showdown Overlay */}
-       {gameState?.showdown && showShowdown && (
-         <div className="showdown-overlay" onClick={() => setShowShowdown(false)}>
-           <div className="showdown-content" onClick={(e) => e.stopPropagation()}>
-             <button 
-               className="showdown-close-button" 
-               onClick={() => setShowShowdown(false)}
-               aria-label="Close"
-             >
-               ×
-             </button>
-             <div className="winning-hand">{gameState.showdown.winningHand}</div>
-             <div className="winners">
-               Winners: {getPlayerNamesFromSeats(gameState.showdown.winnerSeats, seats).join(', ')}
-             </div>
-             <div className="pot-amount">Pot: {gameState.showdown.potAmount}</div>
-             {gameState.handComplete && (
-               <div className="hand-complete-message">
-                 {gameState.handComplete.message}
-               </div>
-             )}
-           </div>
-         </div>
-       )}
+      {/* Showdown Overlay */}
+      {gameState?.showdown && showShowdown && (
+        <div
+          className="showdown-overlay"
+          onClick={() => setShowShowdown(false)}
+        >
+          <div
+            className="showdown-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="showdown-close-button"
+              onClick={() => setShowShowdown(false)}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <div className="winning-hand">{gameState.showdown.winningHand}</div>
+            <div className="winners">
+              Winners:{' '}
+              {getPlayerNamesFromSeats(
+                gameState.showdown.winnerSeats,
+                seats
+              ).join(', ')}
+            </div>
+            <div className="pot-amount">
+              Pot: {gameState.showdown.potAmount}
+            </div>
+            {gameState.handComplete && (
+              <div className="hand-complete-message">
+                {gameState.handComplete.message}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
-       {/* Action Bar */}
+      {/* Action Bar */}
       {gameState?.currentActor === currentSeatIndex && (
         <div className="action-bar">
           <button onClick={() => handleAction('fold')}>Fold</button>

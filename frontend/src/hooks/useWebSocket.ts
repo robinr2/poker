@@ -148,8 +148,8 @@ export function useWebSocket(
     roundOver: null,
     playerBets: {},
   });
-   const serviceRef = useRef<WebSocketService | null>(null);
-   const onMessageRef = useRef(options?.onMessage);
+  const serviceRef = useRef<WebSocketService | null>(null);
+  const onMessageRef = useRef(options?.onMessage);
 
   // Update the ref when the callback changes
   useEffect(() => {
@@ -297,13 +297,15 @@ export function useWebSocket(
               ? (JSON.parse(message.payload) as HandStartedPayload)
               : (message.payload as HandStartedPayload);
           console.log('[useWebSocket] hand_started payload:', payload);
-          setGameState((prev) => ({
-            ...prev,
-            dealerSeat: payload.dealerSeat,
-            smallBlindSeat: payload.smallBlindSeat,
-            bigBlindSeat: payload.bigBlindSeat,
-            playerBets: {}, // Clear player bets for new hand
-          }));
+           setGameState((prev) => ({
+             ...prev,
+             dealerSeat: payload.dealerSeat,
+             smallBlindSeat: payload.smallBlindSeat,
+             bigBlindSeat: payload.bigBlindSeat,
+             playerBets: {}, // Clear player bets for new hand
+             boardCards: [], // Clear board cards for new hand
+             street: undefined, // Clear street for new hand
+           }));
           console.log(
             '[useWebSocket] gameState updated with dealer:',
             payload.dealerSeat,
@@ -474,87 +476,87 @@ export function useWebSocket(
             return updated;
           });
         } else if (message.type === 'board_dealt' && message.payload) {
-           // Handle board_dealt message
-           console.log(
-             '[useWebSocket] board_dealt received, payload:',
-             message.payload
-           );
-           const payload =
-             typeof message.payload === 'string'
-               ? (JSON.parse(message.payload) as BoardDealtPayload)
-               : (message.payload as BoardDealtPayload);
-           console.log('[useWebSocket] board_dealt payload:', payload);
+          // Handle board_dealt message
+          console.log(
+            '[useWebSocket] board_dealt received, payload:',
+            message.payload
+          );
+          const payload =
+            typeof message.payload === 'string'
+              ? (JSON.parse(message.payload) as BoardDealtPayload)
+              : (message.payload as BoardDealtPayload);
+          console.log('[useWebSocket] board_dealt payload:', payload);
 
-           // Convert Card objects {Rank, Suit} to string format "As", "Kh", etc.
-           const boardCardStrings = payload.boardCards.map(
-             (card) => card.Rank + card.Suit
-           );
+          // Convert Card objects {Rank, Suit} to string format "As", "Kh", etc.
+          const boardCardStrings = payload.boardCards.map(
+            (card) => card.Rank + card.Suit
+          );
 
-           setGameState((prev) => ({
-             ...prev,
-             boardCards: boardCardStrings,
-             street: payload.street,
-           }));
-           console.log(
-             '[useWebSocket] gameState updated with boardCards:',
-             boardCardStrings,
-             'street:',
-             payload.street
-           );
-         } else if (message.type === 'showdown_result' && message.payload) {
-           // Handle showdown_result message
-           console.log(
-             '[useWebSocket] showdown_result received, payload:',
-             message.payload
-           );
-           const payload =
-             typeof message.payload === 'string'
-               ? (JSON.parse(message.payload) as Record<string, unknown>)
-               : (message.payload as Record<string, unknown>);
-           console.log('[useWebSocket] showdown_result payload:', payload);
+          setGameState((prev) => ({
+            ...prev,
+            boardCards: boardCardStrings,
+            street: payload.street,
+          }));
+          console.log(
+            '[useWebSocket] gameState updated with boardCards:',
+            boardCardStrings,
+            'street:',
+            payload.street
+          );
+        } else if (message.type === 'showdown_result' && message.payload) {
+          // Handle showdown_result message
+          console.log(
+            '[useWebSocket] showdown_result received, payload:',
+            message.payload
+          );
+          const payload =
+            typeof message.payload === 'string'
+              ? (JSON.parse(message.payload) as Record<string, unknown>)
+              : (message.payload as Record<string, unknown>);
+          console.log('[useWebSocket] showdown_result payload:', payload);
 
-           // Convert amountsWon string keys to numbers
-           const amountsWonRaw = payload.amountsWon as Record<string, number>;
-           const amountsWon: Record<number, number> = {};
-           if (amountsWonRaw) {
-             Object.entries(amountsWonRaw).forEach(([key, value]) => {
-               amountsWon[parseInt(key, 10)] = value;
-             });
-           }
+          // Convert amountsWon string keys to numbers
+          const amountsWonRaw = payload.amountsWon as Record<string, number>;
+          const amountsWon: Record<number, number> = {};
+          if (amountsWonRaw) {
+            Object.entries(amountsWonRaw).forEach(([key, value]) => {
+              amountsWon[parseInt(key, 10)] = value;
+            });
+          }
 
-           setGameState((prev) => ({
-             ...prev,
-             showdown: {
-               winnerSeats: (payload.winnerSeats as number[]) || [],
-               winningHand: (payload.winningHand as string) || '',
-               potAmount: (payload.potAmount as number) || 0,
-               amountsWon,
-             },
-           }));
-           console.log('[useWebSocket] gameState updated with showdown');
-         } else if (message.type === 'hand_complete' && message.payload) {
-           // Handle hand_complete message
-           console.log(
-             '[useWebSocket] hand_complete received, payload:',
-             message.payload
-           );
-           const payload =
-             typeof message.payload === 'string'
-               ? (JSON.parse(message.payload) as Record<string, unknown>)
-               : (message.payload as Record<string, unknown>);
-           console.log('[useWebSocket] hand_complete payload:', payload);
+          setGameState((prev) => ({
+            ...prev,
+            showdown: {
+              winnerSeats: (payload.winnerSeats as number[]) || [],
+              winningHand: (payload.winningHand as string) || '',
+              potAmount: (payload.potAmount as number) || 0,
+              amountsWon,
+            },
+          }));
+          console.log('[useWebSocket] gameState updated with showdown');
+        } else if (message.type === 'hand_complete' && message.payload) {
+          // Handle hand_complete message
+          console.log(
+            '[useWebSocket] hand_complete received, payload:',
+            message.payload
+          );
+          const payload =
+            typeof message.payload === 'string'
+              ? (JSON.parse(message.payload) as Record<string, unknown>)
+              : (message.payload as Record<string, unknown>);
+          console.log('[useWebSocket] hand_complete payload:', payload);
 
-            setGameState((prev) => ({
-              ...prev,
-              handComplete: {
-                message: (payload.message as string) || '',
-              },
-            }));
-            console.log('[useWebSocket] gameState updated with handComplete');
-         }
-       } catch {
-         // Silently ignore parsing errors for non-JSON messages
-       }
+          setGameState((prev) => ({
+            ...prev,
+            handComplete: {
+              message: (payload.message as string) || '',
+            },
+          }));
+          console.log('[useWebSocket] gameState updated with handComplete');
+        }
+      } catch {
+        // Silently ignore parsing errors for non-JSON messages
+      }
     });
 
     // Connect
@@ -602,15 +604,18 @@ export function useWebSocket(
           });
           serviceRef.current.send(message);
 
-          // Clear showdown and handComplete state when starting a new hand
-          if (action === 'start_hand') {
-            setGameState((prev) => {
-              const updated = { ...prev };
-              delete updated.showdown;
-              delete updated.handComplete;
-              return updated;
-            });
-          }
+           // Clear showdown and handComplete state when starting a new hand
+           if (action === 'start_hand') {
+             setGameState((prev) => {
+               const updated = { ...prev };
+               delete updated.showdown;
+               delete updated.handComplete;
+               delete updated.street;
+               updated.boardCards = [];
+               updated.pot = 0;
+               return updated;
+             });
+           }
         } catch (error) {
           console.error('Failed to send action:', error);
         }

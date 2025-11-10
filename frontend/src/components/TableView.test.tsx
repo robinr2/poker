@@ -588,165 +588,165 @@ describe('TableView', () => {
     });
   });
 
-   describe('TestTableViewStartHandButton', () => {
-     it('Start Hand button shows when pot is 0 and player is seated (first hand)', () => {
-       const mockOnLeave = vi.fn();
-       const mockSendMessage = vi.fn();
-       const gameState: GameState = {
-         dealerSeat: null,
-         smallBlindSeat: null,
-         bigBlindSeat: null,
-         holeCards: null,
-         pot: 0,
-       };
+  describe('TestTableViewStartHandButton', () => {
+    it('Start Hand button shows when pot is 0 and player is seated (first hand)', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: GameState = {
+        dealerSeat: null,
+        smallBlindSeat: null,
+        bigBlindSeat: null,
+        holeCards: null,
+        pot: 0,
+      };
 
-       render(
-         <TableView
-           tableId="table-1"
-           seats={mockSeats}
-           currentSeatIndex={1}
-           onLeave={mockOnLeave}
-           gameState={gameState}
-           onSendMessage={mockSendMessage}
-         />
-       );
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
 
-       const startHandButton = screen.getByRole('button', {
-         name: /Start Hand/i,
-       });
-       expect(startHandButton).toBeInTheDocument();
-     });
+      const startHandButton = screen.getByRole('button', {
+        name: /Start Hand/i,
+      });
+      expect(startHandButton).toBeInTheDocument();
+    });
 
-     it('Start Hand button shows when handComplete is present (after winner determined)', () => {
-       const mockOnLeave = vi.fn();
-       const mockSendMessage = vi.fn();
-       const gameState: GameState = {
-         dealerSeat: 1,
-         smallBlindSeat: 3,
-         bigBlindSeat: 5,
-         holeCards: null,
-         pot: 50, // Hand was active
-         handComplete: {
-           message: 'Hand complete',
-         },
-       };
+    it('Start Hand button shows when handComplete is present (after winner determined)', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: GameState = {
+        dealerSeat: 1,
+        smallBlindSeat: 3,
+        bigBlindSeat: 5,
+        holeCards: null,
+        pot: 50, // Hand was active
+        handComplete: {
+          message: 'Hand complete',
+        },
+      };
 
-       render(
-         <TableView
-           tableId="table-1"
-           seats={mockSeats}
-           currentSeatIndex={1}
-           onLeave={mockOnLeave}
-           gameState={gameState}
-           onSendMessage={mockSendMessage}
-         />
-       );
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
 
-       const startHandButton = screen.getByRole('button', {
-         name: /Start Hand/i,
-       });
-       expect(startHandButton).toBeInTheDocument();
-     });
+      const startHandButton = screen.getByRole('button', {
+        name: /Start Hand/i,
+      });
+      expect(startHandButton).toBeInTheDocument();
+    });
 
-     it('Start Hand button hides during active hand play (pot > 0, no handComplete)', () => {
-       const mockOnLeave = vi.fn();
-       const mockSendMessage = vi.fn();
-       const gameState: GameState = {
-         dealerSeat: 1,
-         smallBlindSeat: 3,
-         bigBlindSeat: 5,
-         holeCards: null,
-         pot: 30, // Active hand has pot > 0
-       };
+    it('Start Hand button hides during active hand play (pot > 0, no handComplete)', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: GameState = {
+        dealerSeat: 1,
+        smallBlindSeat: 3,
+        bigBlindSeat: 5,
+        holeCards: null,
+        pot: 30, // Active hand has pot > 0
+      };
 
-       render(
-         <TableView
-           tableId="table-1"
-           seats={mockSeats}
-           currentSeatIndex={1}
-           onLeave={mockOnLeave}
-           gameState={gameState}
-           onSendMessage={mockSendMessage}
-         />
-       );
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
 
-       const startHandButton = screen.queryByRole('button', {
-         name: /Start Hand/i,
-       });
-       expect(startHandButton).not.toBeInTheDocument();
-     });
+      const startHandButton = screen.queryByRole('button', {
+        name: /Start Hand/i,
+      });
+      expect(startHandButton).not.toBeInTheDocument();
+    });
 
-     it('Start Hand button shows even when showdown overlay is dismissed', () => {
-       const mockOnLeave = vi.fn();
-       const mockSendMessage = vi.fn();
-       const gameState: GameState = {
-         dealerSeat: 1,
-         smallBlindSeat: 3,
-         bigBlindSeat: 5,
-         holeCards: null,
-         pot: 50,
-         showdown: {
-           winnerSeats: [1],
-           winningHand: 'Pair of Aces',
-           potAmount: 100,
-           amountsWon: { 1: 100 },
-         },
-         handComplete: {
-           message: 'Hand complete',
-         },
-       };
+    it('Start Hand button shows even when showdown overlay is dismissed', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: GameState = {
+        dealerSeat: 1,
+        smallBlindSeat: 3,
+        bigBlindSeat: 5,
+        holeCards: null,
+        pot: 50,
+        showdown: {
+          winnerSeats: [1],
+          winningHand: 'Pair of Aces',
+          potAmount: 100,
+          amountsWon: { 1: 100 },
+        },
+        handComplete: {
+          message: 'Hand complete',
+        },
+      };
 
-       const { container } = render(
-         <TableView
-           tableId="table-1"
-           seats={mockSeats}
-           currentSeatIndex={1}
-           onLeave={mockOnLeave}
-           gameState={gameState}
-           onSendMessage={mockSendMessage}
-         />
-       );
+      const { container } = render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
 
-       // Close the showdown overlay
-       const closeButton = container.querySelector('.showdown-close-button');
-       if (closeButton instanceof HTMLElement) {
-         fireEvent.click(closeButton);
-       }
+      // Close the showdown overlay
+      const closeButton = container.querySelector('.showdown-close-button');
+      if (closeButton instanceof HTMLElement) {
+        fireEvent.click(closeButton);
+      }
 
-       // Button should still be visible even after overlay is closed
-       const startHandButton = screen.getByRole('button', {
-         name: /Start Hand/i,
-       });
-       expect(startHandButton).toBeInTheDocument();
-     });
+      // Button should still be visible even after overlay is closed
+      const startHandButton = screen.getByRole('button', {
+        name: /Start Hand/i,
+      });
+      expect(startHandButton).toBeInTheDocument();
+    });
 
-     it('should not render Start Hand button when player is not seated', () => {
-       const mockOnLeave = vi.fn();
-       const mockSendMessage = vi.fn();
-       const gameState: GameState = {
-         dealerSeat: null,
-         smallBlindSeat: null,
-         bigBlindSeat: null,
-         holeCards: null,
-         pot: 0,
-       };
+    it('should not render Start Hand button when player is not seated', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: GameState = {
+        dealerSeat: null,
+        smallBlindSeat: null,
+        bigBlindSeat: null,
+        holeCards: null,
+        pot: 0,
+      };
 
-       render(
-         <TableView
-           tableId="table-1"
-           seats={mockSeats}
-           currentSeatIndex={null}
-           onLeave={mockOnLeave}
-           gameState={gameState}
-           onSendMessage={mockSendMessage}
-         />
-       );
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={null}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
 
-       const startHandButton = screen.queryByRole('button', {
-         name: /Start Hand/i,
-       });
-       expect(startHandButton).not.toBeInTheDocument();
-     });
+      const startHandButton = screen.queryByRole('button', {
+        name: /Start Hand/i,
+      });
+      expect(startHandButton).not.toBeInTheDocument();
+    });
 
     it('should send start_hand message when button is clicked', () => {
       const mockOnLeave = vi.fn();
@@ -2268,19 +2268,19 @@ describe('Phase 5: Street Indicator', () => {
     { index: 5, playerName: null, status: 'empty' },
   ];
 
-   interface ExtendedGameState extends GameState {
-     boardCards?: string[];
-     street?: string;
-     showdown?: {
-       winnerSeats: number[];
-       winningHand: string;
-       potAmount: number;
-       amountsWon: Record<number, number>;
-     };
-     handComplete?: {
-       message: string;
-     };
-   }
+  interface ExtendedGameState extends GameState {
+    boardCards?: string[];
+    street?: string;
+    showdown?: {
+      winnerSeats: number[];
+      winningHand: string;
+      potAmount: number;
+      amountsWon: Record<number, number>;
+    };
+    handComplete?: {
+      message: string;
+    };
+  }
 
   describe('TestTableView_StreetIndicator', () => {
     it('should display Preflop street indicator', () => {
@@ -2437,39 +2437,39 @@ describe('Phase 5: Street Indicator', () => {
 
   describe('Phase 6: Showdown & Settlement - TableView Display', () => {
     describe('TestTableView_ShowdownDisplay', () => {
-       it('should display showdown overlay with single winner', () => {
-         const mockOnLeave = vi.fn();
-         const gameState: ExtendedGameState = {
-           dealerSeat: 0,
-           smallBlindSeat: 1,
-           bigBlindSeat: 2,
-           holeCards: null,
-           pot: 300,
-           boardCards: ['As', 'Kh', 'Qd', 'Jc', 'Ts'],
-           street: 'river',
-           showdown: {
-             winnerSeats: [1],
-             winningHand: 'Pair of Aces',
-             potAmount: 300,
-             amountsWon: { 1: 300 },
-           },
-         };
+      it('should display showdown overlay with single winner', () => {
+        const mockOnLeave = vi.fn();
+        const gameState: ExtendedGameState = {
+          dealerSeat: 0,
+          smallBlindSeat: 1,
+          bigBlindSeat: 2,
+          holeCards: null,
+          pot: 300,
+          boardCards: ['As', 'Kh', 'Qd', 'Jc', 'Ts'],
+          street: 'river',
+          showdown: {
+            winnerSeats: [1],
+            winningHand: 'Pair of Aces',
+            potAmount: 300,
+            amountsWon: { 1: 300 },
+          },
+        };
 
-         render(
-           <TableView
-             tableId="table-1"
-             seats={mockSeats}
-             currentSeatIndex={0}
-             onLeave={mockOnLeave}
-             gameState={gameState}
-           />
-         );
+        render(
+          <TableView
+            tableId="table-1"
+            seats={mockSeats}
+            currentSeatIndex={0}
+            onLeave={mockOnLeave}
+            gameState={gameState}
+          />
+        );
 
-         // Should display showdown overlay
-         expect(screen.getByText(/Pair of Aces/i)).toBeInTheDocument();
-         // Check for the showdown overlay by looking for the winners text
-         expect(screen.getByText(/Winners:/i)).toBeInTheDocument();
-       });
+        // Should display showdown overlay
+        expect(screen.getByText(/Pair of Aces/i)).toBeInTheDocument();
+        // Check for the showdown overlay by looking for the winners text
+        expect(screen.getByText(/Winners:/i)).toBeInTheDocument();
+      });
 
       it('should display showdown overlay with multiple winners (split pot)', () => {
         const mockOnLeave = vi.fn();
@@ -2503,41 +2503,41 @@ describe('Phase 5: Street Indicator', () => {
         expect(screen.getByText(/Pair of Kings/i)).toBeInTheDocument();
       });
 
-       it('should highlight winner seats with gold border', () => {
-         const mockOnLeave = vi.fn();
-         const gameState: ExtendedGameState = {
-           dealerSeat: 0,
-           smallBlindSeat: 1,
-           bigBlindSeat: 2,
-           holeCards: null,
-           pot: 300,
-           boardCards: ['As', 'Kh', 'Qd', 'Jc', 'Ts'],
-           street: 'river',
-           showdown: {
-             winnerSeats: [1],
-             winningHand: 'Pair of Aces',
-             potAmount: 300,
-             amountsWon: { 1: 300 },
-           },
-         };
+      it('should highlight winner seats with gold border', () => {
+        const mockOnLeave = vi.fn();
+        const gameState: ExtendedGameState = {
+          dealerSeat: 0,
+          smallBlindSeat: 1,
+          bigBlindSeat: 2,
+          holeCards: null,
+          pot: 300,
+          boardCards: ['As', 'Kh', 'Qd', 'Jc', 'Ts'],
+          street: 'river',
+          showdown: {
+            winnerSeats: [1],
+            winningHand: 'Pair of Aces',
+            potAmount: 300,
+            amountsWon: { 1: 300 },
+          },
+        };
 
-         const { container } = render(
-           <TableView
-             tableId="table-1"
-             seats={mockSeats}
-             currentSeatIndex={0}
-             onLeave={mockOnLeave}
-             gameState={gameState}
-           />
-         );
+        const { container } = render(
+          <TableView
+            tableId="table-1"
+            seats={mockSeats}
+            currentSeatIndex={0}
+            onLeave={mockOnLeave}
+            gameState={gameState}
+          />
+        );
 
-         // Find winner seat element (seat 1 - Bob)
-         const seatElements = container.querySelectorAll('.seat');
-         const winnerSeat = Array.from(seatElements).find((seat) =>
-           seat.textContent?.includes('Bob')
-         );
+        // Find winner seat element (seat 1 - Bob)
+        const seatElements = container.querySelectorAll('.seat');
+        const winnerSeat = Array.from(seatElements).find((seat) =>
+          seat.textContent?.includes('Bob')
+        );
 
-         expect(winnerSeat).toHaveClass('winner-seat');
+        expect(winnerSeat).toHaveClass('winner-seat');
       });
 
       it('should display hand complete message', () => {
