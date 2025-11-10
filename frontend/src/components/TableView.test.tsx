@@ -1563,6 +1563,52 @@ describe('Action Bar Tests - Phase 5', () => {
       const callButton = screen.getByRole('button', { name: /Call 20/i });
       expect(callButton).toBeInTheDocument();
     });
+
+    it('should cap call button amount to player stack when callAmount exceeds stack', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      
+      // Scenario: Player A (seat 0) bets 1000 all-in, Player B (seat 1) has only 900 stack
+      // Backend sends uncapped callAmount (1000), frontend should display min(1000, 900) = 900
+      const seatsWithStacks: SeatInfo[] = [
+        { index: 0, playerName: 'Alice', status: 'occupied', stack: 0 }, // went all-in
+        { index: 1, playerName: 'Bob', status: 'occupied', stack: 900 }, // has 900 remaining
+        { index: 2, playerName: null, status: 'empty' },
+        { index: 3, playerName: null, status: 'empty' },
+        { index: 4, playerName: null, status: 'empty' },
+        { index: 5, playerName: null, status: 'empty' },
+      ];
+      
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 0,
+        bigBlindSeat: 1,
+        holeCards: ['As', 'Kh'],
+        pot: 1000,
+        currentActor: 1, // Bob's turn
+        validActions: ['fold', 'call'],
+        callAmount: 1000, // Backend sends uncapped amount
+        playerBets: {
+          0: 1000, // Alice bet 1000
+          1: 0, // Bob hasn't bet yet
+        },
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={seatsWithStacks}
+          currentSeatIndex={1} // Bob is the current player
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      // Should display "Call 900" (capped to Bob's stack), not "Call 1000"
+      const callButton = screen.getByRole('button', { name: /Call 900/i });
+      expect(callButton).toBeInTheDocument();
+    });
   });
 
   describe('TestTableView_CheckVsCall', () => {

@@ -330,9 +330,21 @@ export function TableView({
           {gameState.callAmount === 0 ? (
             <button onClick={() => handleAction('check')}>Check</button>
           ) : (
-            <button onClick={() => handleAction('call')}>
-              Call {gameState.callAmount}
-            </button>
+            <>
+              {(() => {
+                // Cap call amount to player's available stack
+                const currentPlayerStack = seats[currentSeatIndex]?.stack ?? 0;
+                const effectiveCallAmount = Math.min(
+                  gameState.callAmount,
+                  currentPlayerStack
+                );
+                return (
+                  <button onClick={() => handleAction('call')}>
+                    Call {effectiveCallAmount}
+                  </button>
+                );
+              })()}
+            </>
           )}
 
           {/* Raise Controls */}
