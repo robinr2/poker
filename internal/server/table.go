@@ -1552,6 +1552,10 @@ func (h *Hand) IsBettingRoundComplete(seats [6]Seat) bool {
 	// Check if all active (non-folded) players have matched the current bet
 	for _, seatNum := range activePlayers {
 		if !h.FoldedPlayers[seatNum] {
+			// Skip all-in players (stack = 0) - they cannot match higher bets
+			if seats[seatNum].Stack == 0 {
+				continue
+			}
 			playerBet := h.PlayerBets[seatNum]
 			if playerBet != h.CurrentBet {
 				// This player hasn't matched the current bet

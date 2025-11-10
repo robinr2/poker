@@ -3411,6 +3411,299 @@ func TestIsBettingRoundComplete_AllFoldedButOne(t *testing.T) {
 	}
 }
 
+// ============================================================================
+// All-In Betting Loop Tests (Phase 1)
+// ============================================================================
+// These tests expose the bug where IsBettingRoundComplete() doesn't account
+// for all-in players (stack = 0). All-in players cannot match higher bets and
+// should be skipped from the bet matching check.
+
+// TestIsBettingRoundComplete_TwoPlayerBothAllInUnequalStacks tests 2 players
+// with unequal stacks both going all-in. SB has 900, BB has 1000.
+// Both are all-in (stack = 0), betting round should complete.
+// CURRENTLY FAILS: PlayerBets[SB]=900 != PlayerBets[BB]=1000, so returns false
+func TestIsBettingRoundComplete_TwoPlayerBothAllInUnequalStacks(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up 2 active players: SB with 900 stack, BB with 1000 stack
+	tokenSB, tokenBB := "player-sb", "player-bb"
+	table.Seats[0].Token = &tokenSB
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 0 // SB is all-in
+	table.Seats[1].Token = &tokenBB
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 0 // BB is all-in
+
+	// Initialize hand with all-in action state
+	table.CurrentHand = &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 0,
+		BigBlindSeat:   1,
+		Pot:            1900, // Will be swept
+		CurrentBet:     1000, // BB's all-in amount
+		Street:         "preflop",
+		FoldedPlayers:  make(map[int]bool),
+		ActedPlayers:   make(map[int]bool),
+		PlayerBets:     make(map[int]int),
+	}
+
+	// Both players have acted
+	table.CurrentHand.ActedPlayers[0] = true
+	table.CurrentHand.ActedPlayers[1] = true
+
+	// Bets: SB bet all 900, BB bet all 1000
+	// Note: Unequal stacks mean unequal bets, but both are all-in
+	table.CurrentHand.PlayerBets[0] = 900  // SB's all-in amount
+	table.CurrentHand.PlayerBets[1] = 1000 // BB's all-in amount
+
+	// Round SHOULD be complete (both all-in)
+	// CURRENTLY FAILS: returns false because 900 != 1000
+	if !table.CurrentHand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected betting round to be complete when both players are all-in with unequal stacks")
+	}
+}
+
+// TestIsBettingRoundComplete_TwoPlayerOneAllInOneMatched tests 2 players
+// where one is all-in and the other has matched their bet.
+// Player 0 (active, 500 stack): bet 500 (all-in)
+// Player 1 (active, 1000 stack): bet 500 (matched)
+func TestIsBettingRoundComplete_TwoPlayerOneAllInOneMatched(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up 2 active players
+	tokenA, tokenB := "player-a", "player-b"
+	table.Seats[0].Token = &tokenA
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 0 // All-in
+	table.Seats[1].Token = &tokenB
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 500 // Has chips left
+
+	// Initialize hand
+	table.CurrentHand = &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 0,
+		BigBlindSeat:   1,
+		Pot:            0,
+		CurrentBet:     500,
+		Street:         "preflop",
+		FoldedPlayers:  make(map[int]bool),
+		ActedPlayers:   make(map[int]bool),
+		PlayerBets:     make(map[int]int),
+	}
+
+	// Both players have acted
+	table.CurrentHand.ActedPlayers[0] = true
+	table.CurrentHand.ActedPlayers[1] = true
+
+	// Player 0 is all-in with 500
+	table.CurrentHand.PlayerBets[0] = 500
+	// Player 1 matched 500
+	table.CurrentHand.PlayerBets[1] = 500
+
+	// Round SHOULD be complete (all-in player + matched player)
+	if !table.CurrentHand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected betting round to be complete when all-in player is matched by active player")
+	}
+}
+
+// TestIsBettingRoundComplete_ThreePlayerTwoAllInOneActive tests 3 players
+// with 2 all-in (different stacks: 500, 700) and 1 active (matched bet of 700).
+func TestIsBettingRoundComplete_ThreePlayerTwoAllInOneActive(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up 3 active players
+	token1, token2, token3 := "player-1", "player-2", "player-3"
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 0 // All-in with 500
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 0 // All-in with 700
+	table.Seats[2].Token = &token3
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1300 // Has chips left, matched highest bet
+
+	// Initialize hand
+	table.CurrentHand = &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            0,
+		CurrentBet:     700, // Highest all-in amount
+		Street:         "preflop",
+		FoldedPlayers:  make(map[int]bool),
+		ActedPlayers:   make(map[int]bool),
+		PlayerBets:     make(map[int]int),
+	}
+
+	// All players have acted
+	table.CurrentHand.ActedPlayers[0] = true
+	table.CurrentHand.ActedPlayers[1] = true
+	table.CurrentHand.ActedPlayers[2] = true
+
+	// Bets: Player 0 all-in 500, Player 1 all-in 700, Player 2 matched 700
+	table.CurrentHand.PlayerBets[0] = 500
+	table.CurrentHand.PlayerBets[1] = 700
+	table.CurrentHand.PlayerBets[2] = 700
+
+	// Round SHOULD be complete (2 all-in, 1 active matched highest)
+	// CURRENTLY FAILS: returns false because Player 0 has 500 != 700
+	if !table.CurrentHand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected betting round to be complete with 2 all-in players and 1 matched player")
+	}
+}
+
+// TestIsBettingRoundComplete_ThreePlayerAllDifferentStacks tests 3 players
+// all all-in with different stacks (500, 700, 1000).
+func TestIsBettingRoundComplete_ThreePlayerAllDifferentStacks(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up 3 active players, all all-in with different stacks
+	token1, token2, token3 := "player-1", "player-2", "player-3"
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 0 // All-in
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 0 // All-in
+	table.Seats[2].Token = &token3
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 0 // All-in
+
+	// Initialize hand
+	table.CurrentHand = &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            0,
+		CurrentBet:     1000, // Highest all-in amount
+		Street:         "preflop",
+		FoldedPlayers:  make(map[int]bool),
+		ActedPlayers:   make(map[int]bool),
+		PlayerBets:     make(map[int]int),
+	}
+
+	// All players have acted
+	table.CurrentHand.ActedPlayers[0] = true
+	table.CurrentHand.ActedPlayers[1] = true
+	table.CurrentHand.ActedPlayers[2] = true
+
+	// Bets: Different stacks all-in
+	table.CurrentHand.PlayerBets[0] = 500
+	table.CurrentHand.PlayerBets[1] = 700
+	table.CurrentHand.PlayerBets[2] = 1000
+
+	// Round SHOULD be complete (all players all-in)
+	// CURRENTLY FAILS: returns false because bets don't all equal 1000
+	if !table.CurrentHand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected betting round to be complete when all players are all-in with different stacks")
+	}
+}
+
+// TestIsBettingRoundComplete_MultiPlayerSomeAllInSomeFolded tests 5 players:
+// 2 all-in (300, 500), 2 folded, 1 active with 500 matched.
+func TestIsBettingRoundComplete_MultiPlayerSomeAllInSomeFolded(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up 5 active players
+	tokens := []string{"p1", "p2", "p3", "p4", "p5"}
+	for i := 0; i < 5; i++ {
+		token := tokens[i]
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		if i == 0 || i == 1 {
+			table.Seats[i].Stack = 0 // Players 0, 1 are all-in
+		} else if i == 4 {
+			table.Seats[i].Stack = 1000 // Player 4 has chips left
+		} else {
+			table.Seats[i].Stack = 1000 // Other active players
+		}
+	}
+
+	// Initialize hand
+	table.CurrentHand = &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            0,
+		CurrentBet:     500, // Highest bet (Player 1's all-in)
+		Street:         "preflop",
+		FoldedPlayers:  make(map[int]bool),
+		ActedPlayers:   make(map[int]bool),
+		PlayerBets:     make(map[int]int),
+	}
+
+	// Players have acted
+	table.CurrentHand.ActedPlayers[0] = true
+	table.CurrentHand.ActedPlayers[1] = true
+	table.CurrentHand.ActedPlayers[2] = true
+	table.CurrentHand.ActedPlayers[3] = true
+	table.CurrentHand.ActedPlayers[4] = true
+
+	// Players 2, 3 have folded
+	table.CurrentHand.FoldedPlayers[2] = true
+	table.CurrentHand.FoldedPlayers[3] = true
+
+	// Bets: P0 all-in 300, P1 all-in 500, P2 folded (no bet), P3 folded (no bet), P4 matched 500
+	table.CurrentHand.PlayerBets[0] = 300
+	table.CurrentHand.PlayerBets[1] = 500
+	table.CurrentHand.PlayerBets[2] = 0 // Folded
+	table.CurrentHand.PlayerBets[3] = 0 // Folded
+	table.CurrentHand.PlayerBets[4] = 500
+
+	// Round SHOULD be complete (2 all-in, 2 folded, 1 active matched)
+	// CURRENTLY FAILS: Player 0 has 300 != 500
+	if !table.CurrentHand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected betting round to be complete with multiple all-in and folded players")
+	}
+}
+
+// TestIsBettingRoundComplete_AllPlayersAllIn tests all remaining players all-in.
+func TestIsBettingRoundComplete_AllPlayersAllIn(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up 4 active players, all all-in
+	tokens := []string{"p1", "p2", "p3", "p4"}
+	for i := 0; i < 4; i++ {
+		token := tokens[i]
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 0 // All all-in
+	}
+
+	// Initialize hand
+	table.CurrentHand = &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            0,
+		CurrentBet:     1000,
+		Street:         "preflop",
+		FoldedPlayers:  make(map[int]bool),
+		ActedPlayers:   make(map[int]bool),
+		PlayerBets:     make(map[int]int),
+	}
+
+	// All players have acted
+	table.CurrentHand.ActedPlayers[0] = true
+	table.CurrentHand.ActedPlayers[1] = true
+	table.CurrentHand.ActedPlayers[2] = true
+	table.CurrentHand.ActedPlayers[3] = true
+
+	// Bets: All different amounts (all-in with different stacks)
+	table.CurrentHand.PlayerBets[0] = 250
+	table.CurrentHand.PlayerBets[1] = 500
+	table.CurrentHand.PlayerBets[2] = 750
+	table.CurrentHand.PlayerBets[3] = 1000
+
+	// Round SHOULD be complete (all players all-in)
+	// CURRENTLY FAILS: Bets don't all match
+	if !table.CurrentHand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected betting round to be complete when all players are all-in")
+	}
+}
+
 // TestAdvanceAction moves to next active player and handles wrap-around
 func TestAdvanceAction(t *testing.T) {
 	table := NewTable("table-1", "Test Table", nil)
