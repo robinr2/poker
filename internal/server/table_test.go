@@ -8546,3 +8546,221 @@ func TestFullHandPotAccounting_PreflopToRiver(t *testing.T) {
 		t.Errorf("Phase 3: Expected Pot=250 at showdown, got %d", table.CurrentHand.Pot)
 	}
 }
+
+// TestGetValidActions_AllInPlayerZeroStackPreflop verifies that an all-in player (stack=0) receives no valid actions on preflop
+func TestGetValidActions_AllInPlayerZeroStackPreflop(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players
+	for i := 0; i < 2; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize action state for preflop
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+	table.CurrentHand.PlayerBets[0] = 100
+	table.CurrentHand.CurrentBet = 100
+
+	// Player 0 is all-in (stack = 0)
+	validActions := table.CurrentHand.GetValidActions(0, 0, table.Seats)
+
+	// Should return empty slice for all-in player
+	if len(validActions) != 0 {
+		t.Errorf("expected empty actions for all-in player (stack=0) preflop, got %v", validActions)
+	}
+}
+
+// TestGetValidActions_AllInPlayerZeroStackFlop verifies that an all-in player (stack=0) receives no valid actions on flop
+func TestGetValidActions_AllInPlayerZeroStackFlop(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players
+	for i := 0; i < 2; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Advance to flop
+	table.CurrentHand.Street = "flop"
+
+	// Initialize action state for flop
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+	table.CurrentHand.PlayerBets[0] = 50
+	table.CurrentHand.CurrentBet = 50
+
+	// Player 0 is all-in (stack = 0)
+	validActions := table.CurrentHand.GetValidActions(0, 0, table.Seats)
+
+	// Should return empty slice for all-in player
+	if len(validActions) != 0 {
+		t.Errorf("expected empty actions for all-in player (stack=0) on flop, got %v", validActions)
+	}
+}
+
+// TestGetValidActions_AllInPlayerZeroStackTurn verifies that an all-in player (stack=0) receives no valid actions on turn
+func TestGetValidActions_AllInPlayerZeroStackTurn(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players
+	for i := 0; i < 2; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Advance to turn
+	table.CurrentHand.Street = "turn"
+
+	// Initialize action state for turn
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+	table.CurrentHand.PlayerBets[0] = 75
+	table.CurrentHand.CurrentBet = 75
+
+	// Player 0 is all-in (stack = 0)
+	validActions := table.CurrentHand.GetValidActions(0, 0, table.Seats)
+
+	// Should return empty slice for all-in player
+	if len(validActions) != 0 {
+		t.Errorf("expected empty actions for all-in player (stack=0) on turn, got %v", validActions)
+	}
+}
+
+// TestGetValidActions_AllInPlayerZeroStackRiver verifies that an all-in player (stack=0) receives no valid actions on river
+func TestGetValidActions_AllInPlayerZeroStackRiver(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players
+	for i := 0; i < 2; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Advance to river
+	table.CurrentHand.Street = "river"
+
+	// Initialize action state for river
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+	table.CurrentHand.PlayerBets[0] = 100
+	table.CurrentHand.CurrentBet = 100
+
+	// Player 0 is all-in (stack = 0)
+	validActions := table.CurrentHand.GetValidActions(0, 0, table.Seats)
+
+	// Should return empty slice for all-in player
+	if len(validActions) != 0 {
+		t.Errorf("expected empty actions for all-in player (stack=0) on river, got %v", validActions)
+	}
+}
+
+// TestGetValidActions_AllInPlayerWithCallAmount verifies that even with call amount > 0, stack=0 returns empty
+func TestGetValidActions_AllInPlayerWithCallAmount(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players
+	for i := 0; i < 2; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize action state
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+	// Player 0 is behind: bet 50 but current bet is 100
+	table.CurrentHand.PlayerBets[0] = 50
+	table.CurrentHand.CurrentBet = 100
+	table.CurrentHand.LastRaise = 50
+
+	// Player 0 is all-in (stack = 0), but still needs to call to continue
+	// Verify that GetValidActions returns empty despite callAmount > 0
+	validActions := table.CurrentHand.GetValidActions(0, 0, table.Seats)
+
+	// Should return empty slice for all-in player, even with call amount > 0
+	if len(validActions) != 0 {
+		t.Errorf("expected empty actions for all-in player (stack=0) even with call amount > 0, got %v", validActions)
+	}
+}
+
+// TestGetValidActions_AllInPlayerWithRaise verifies that even with raise available, stack=0 returns empty
+func TestGetValidActions_AllInPlayerWithRaise(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players
+	for i := 0; i < 2; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize action state - player has matched bet and could potentially raise
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+	table.CurrentHand.PlayerBets[0] = 100
+	table.CurrentHand.CurrentBet = 100
+	table.CurrentHand.LastRaise = 50
+
+	// Player 0 is all-in (stack = 0)
+	// They have matched the current bet, so they could check/fold, but not with zero stack
+	validActions := table.CurrentHand.GetValidActions(0, 0, table.Seats)
+
+	// Should return empty slice for all-in player, even though they've matched the current bet
+	if len(validActions) != 0 {
+		t.Errorf("expected empty actions for all-in player (stack=0) even after matching bet, got %v", validActions)
+	}
+}

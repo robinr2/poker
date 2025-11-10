@@ -1150,6 +1150,11 @@ func (h *Hand) GetCallAmount(seatIndex int) int {
 // - Player is behind (callAmount > 0) AND
 // - Player has enough chips to call + raise minimum amount
 func (h *Hand) GetValidActions(seatIndex int, playerStack int, seats [6]Seat) []string {
+	// All-in players (stack = 0) have no valid actions
+	if playerStack == 0 {
+		return []string{}
+	}
+
 	callAmount := h.GetCallAmount(seatIndex)
 
 	if callAmount > 0 {
