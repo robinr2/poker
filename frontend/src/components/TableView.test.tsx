@@ -9,7 +9,10 @@ interface GameState {
   smallBlindSeat: number | null;
   bigBlindSeat: number | null;
   holeCards: [string, string] | null;
-  pot: number;
+  pot: number | undefined;
+  handComplete?: {
+    message: string;
+  };
 }
 
 interface SeatInfo {
@@ -812,10 +815,163 @@ describe('TableView', () => {
       const sentMessage = mockSendMessage.mock.calls[0][0];
       expect(typeof sentMessage).toBe('string');
       expect(sentMessage).toContain('start_hand');
-    });
-  });
+     });
 
-  describe('TestTableViewPhase4CardRendering', () => {
+      it('Start Hand button hides immediately after clicking (optimistic)', () => {
+        const mockOnLeave = vi.fn();
+        const mockSendMessage = vi.fn();
+
+        // Simulate a hand in progress (pot > 0)
+        const activeHandGameState: GameState = {
+          dealerSeat: 1,
+          smallBlindSeat: 3,
+          bigBlindSeat: 5,
+          holeCards: ['As', 'Kh'],
+          pot: 50, // Active hand
+        };
+
+        const { rerender } = render(
+          <TableView
+            tableId="table-1"
+            seats={mockSeats}
+            currentSeatIndex={1}
+            onLeave={mockOnLeave}
+            gameState={activeHandGameState}
+            onSendMessage={mockSendMessage}
+          />
+        );
+
+        // Button should be hidden during active hand (pot > 0, no handComplete)
+        let activeHandButton = screen.queryByRole('button', {
+          name: /Start Hand/i,
+        });
+        expect(activeHandButton).not.toBeInTheDocument();
+
+        // After clicking start_hand, optimistic update happens:
+        // - handComplete is deleted
+        // - street is deleted
+        // - boardCards = []
+        // - pot STAYS at 50 (not reset to 0 in optimistic update anymore)
+        // This is the KEY FIX: we no longer set pot = 0, so pot > 0 means button stays hidden
+        const optimisticGameState: GameState = {
+          dealerSeat: 1,
+          smallBlindSeat: 3,
+          bigBlindSeat: 5,
+          holeCards: ['As', 'Kh'],
+          pot: 50, // pot stays the same - this is the fix!
+        };
+
+        rerender(
+          <TableView
+            tableId="table-1"
+            seats={mockSeats}
+            currentSeatIndex={1}
+            onLeave={mockOnLeave}
+            gameState={optimisticGameState}
+            onSendMessage={mockSendMessage}
+          />
+        );
+
+        // Button should STILL be hidden because pot > 0 (even though handComplete is gone)
+        // Before the fix, setting pot=0 would make it visible
+        // After the fix, pot stays at its value, so button stays hidden
+        const buttonAfterClick = screen.queryByRole('button', {
+          name: /Start Hand/i,
+        });
+        expect(buttonAfterClick).not.toBeInTheDocument();
+      });
+
+     it('Start Hand button remains hidden while pot is greater than 0 (active hand)', () => {
+       const mockOnLeave = vi.fn();
+       const mockSendMessage = vi.fn();
+       const gameState: GameState = {
+         dealerSeat: 1,
+         smallBlindSeat: 3,
+         bigBlindSeat: 5,
+         holeCards: null,
+         pot: 50, // Active hand with pot > 0
+       };
+
+       render(
+         <TableView
+           tableId="table-1"
+           seats={mockSeats}
+           currentSeatIndex={1}
+           onLeave={mockOnLeave}
+           gameState={gameState}
+           onSendMessage={mockSendMessage}
+         />
+       );
+
+       // Button should not be visible when pot > 0 and no handComplete
+       const startHandButton = screen.queryByRole('button', {
+         name: /Start Hand/i,
+       });
+       expect(startHandButton).not.toBeInTheDocument();
+     });
+
+     it('Start Hand button shows again only when handComplete is set', () => {
+       const mockOnLeave = vi.fn();
+       const mockSendMessage = vi.fn();
+
+       // Start with state where pot is > 0 (hand in progress)
+       const activeHandGameState: GameState = {
+         dealerSeat: 1,
+         smallBlindSeat: 3,
+         bigBlindSeat: 5,
+         holeCards: null,
+         pot: 50,
+       };
+
+       const { rerender } = render(
+         <TableView
+           tableId="table-1"
+           seats={mockSeats}
+           currentSeatIndex={1}
+           onLeave={mockOnLeave}
+           gameState={activeHandGameState}
+           onSendMessage={mockSendMessage}
+         />
+       );
+
+       // Button should not be visible during active hand
+       let startHandButton = screen.queryByRole('button', {
+         name: /Start Hand/i,
+       });
+       expect(startHandButton).not.toBeInTheDocument();
+
+       // Update to show handComplete (hand finished)
+       const completedHandGameState: GameState = {
+         dealerSeat: 1,
+         smallBlindSeat: 3,
+         bigBlindSeat: 5,
+         holeCards: null,
+         pot: 50,
+         handComplete: {
+           message: 'Hand complete',
+         },
+       };
+
+       rerender(
+         <TableView
+           tableId="table-1"
+           seats={mockSeats}
+           currentSeatIndex={1}
+           onLeave={mockOnLeave}
+           gameState={completedHandGameState}
+           onSendMessage={mockSendMessage}
+         />
+       );
+
+       // Button should be visible again when handComplete is set
+       startHandButton = screen.getByRole('button', {
+         name: /Start Hand/i,
+       });
+       expect(startHandButton).toBeInTheDocument();
+     });
+   });
+
+   describe('TestTableViewPhase4CardRendering', () => {
     it('renders card backs based on cardCount', () => {
       const mockOnLeave = vi.fn();
       const gameState: GameState = {

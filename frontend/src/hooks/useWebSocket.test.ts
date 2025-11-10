@@ -1906,14 +1906,15 @@ describe('Phase 3: Remove Auto-Clear and Show Start Hand Button After Showdown',
         expect(result.current.gameState.pot).toBe(150);
       });
 
-      // Now send start_hand action
-      act(() => {
-        result.current.sendAction('start_hand');
-      });
+       // Now send start_hand action
+       act(() => {
+         result.current.sendAction('start_hand');
+       });
 
-      // After sending start_hand, pot should be reset to 0
-      expect(result.current.gameState.pot).toBe(0);
-    });
+       // After sending start_hand, pot should remain at its previous value (150)
+       // The optimistic update no longer sets pot = 0
+       expect(result.current.gameState.pot).toBe(150);
+     });
 
     it('start_hand optimistic update clears all hand state (pot, boardCards, showdown, handComplete)', async () => {
       mockServiceInstance.getStatus.mockReturnValue('connected');
@@ -2003,17 +2004,19 @@ describe('Phase 3: Remove Auto-Clear and Show Start Hand Button After Showdown',
         expect(result.current.gameState.handComplete).toBeDefined();
       });
 
-      // Now send start_hand action
-      act(() => {
-        result.current.sendAction('start_hand');
-      });
+       // Now send start_hand action
+       act(() => {
+         result.current.sendAction('start_hand');
+       });
 
-      // All state should be cleared
-      expect(result.current.gameState.pot).toBe(0);
-      expect(result.current.gameState.boardCards).toEqual([]);
-      expect(result.current.gameState.showdown).toBeUndefined();
-      expect(result.current.gameState.handComplete).toBeUndefined();
-    });
+       // After sending start_hand, pot should remain at its previous value (300)
+       // The optimistic update no longer sets pot = 0
+       // But boardCards, showdown, and handComplete should be cleared
+       expect(result.current.gameState.pot).toBe(300);
+       expect(result.current.gameState.boardCards).toEqual([]);
+       expect(result.current.gameState.showdown).toBeUndefined();
+       expect(result.current.gameState.handComplete).toBeUndefined();
+     });
   });
 });
 

@@ -604,18 +604,17 @@ export function useWebSocket(
           });
           serviceRef.current.send(message);
 
-           // Clear showdown and handComplete state when starting a new hand
-           if (action === 'start_hand') {
-             setGameState((prev) => {
-               const updated = { ...prev };
-               delete updated.showdown;
-               delete updated.handComplete;
-               delete updated.street;
-               updated.boardCards = [];
-               updated.pot = 0;
-               return updated;
-             });
-           }
+            // Clear showdown and handComplete state when starting a new hand
+            if (action === 'start_hand') {
+              setGameState((prev) => {
+                const updated = { ...prev };
+                delete updated.showdown;
+                delete updated.handComplete;
+                delete updated.street;
+                updated.boardCards = [];
+                return updated;
+              });
+            }
         } catch (error) {
           console.error('Failed to send action:', error);
         }
