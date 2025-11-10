@@ -1181,35 +1181,19 @@ func (h *Hand) GetMinRaise() int {
 	return h.CurrentBet + h.LastRaise
 }
 
-// GetMaxRaise returns the maximum valid raise amount to prevent side pots
-// Returns the minimum of:
-// - Player's remaining stack
-// - Smallest opponent's stack (to prevent side pots)
-// This prevents creating side pots by ensuring the largest raise doesn't exceed
-// what all other players can match
+// GetMaxRaise returns the maximum valid raise amount for a player
+// Returns the player's remaining stack, allowing players to always bet their full stack
+// This enables proper multi-player poker where:
+// - A whale can overbet shorter stacks
+// - Multiple all-ins can occur in the same hand
+// - Side pots are handled during pot distribution at showdown (not prevented at raise time)
 func (t *Table) GetMaxRaise(seatIndex int, seats [6]Seat) int {
 	playerStack := seats[seatIndex].Stack
 
-	// Find smallest opponent stack among active players
-	smallestOpponentStack := -1
-	for i := 0; i < 6; i++ {
-		if i != seatIndex && seats[i].Status == "active" {
-			if smallestOpponentStack == -1 || seats[i].Stack < smallestOpponentStack {
-				smallestOpponentStack = seats[i].Stack
-			}
-		}
-	}
-
-	// If no opponents found (shouldn't happen in valid game), return player's stack
-	if smallestOpponentStack == -1 {
-		return playerStack
-	}
-
-	// Return minimum of player's stack and smallest opponent's stack
-	if playerStack < smallestOpponentStack {
-		return playerStack
-	}
-	return smallestOpponentStack
+	// Players can ALWAYS bet their full stack, regardless of opponent stacks
+	// This allows proper multi-player poker where a whale can overbet shorter stacks
+	// and multiple all-ins can happen in the same hand
+	return playerStack
 }
 
 // ValidateRaise checks if a raise amount is valid
@@ -1217,7 +1201,7 @@ func (t *Table) GetMaxRaise(seatIndex int, seats [6]Seat) int {
 // Rules:
 // - If raiseAmount equals playerStack (all-in): always valid, return nil
 // - If raiseAmount < GetMinRaise(): return error "raise amount below minimum"
-// - If raiseAmount > GetMaxRaise(): return error "raise would create side pot"
+// - If raiseAmount > playerStack: return error "raise exceeds player stack"
 // - Otherwise: return nil
 func (h *Hand) ValidateRaise(seatIndex, raiseAmount, playerStack int, seats [6]Seat) error {
 	// Check if this is all-in (raiseAmount equals playerStack)
@@ -1232,36 +1216,9 @@ func (h *Hand) ValidateRaise(seatIndex, raiseAmount, playerStack int, seats [6]S
 		return fmt.Errorf("raise amount below minimum")
 	}
 
-	// Check maximum raise (prevent side pots)
-	// We need to get a Table reference to call GetMaxRaise, but we only have Hand
-	// We'll need to refactor this - let me check the calling pattern
-	// Actually, ValidateRaise should work with the hand's context
-	// We need the table to call GetMaxRaise, so let's make this work differently
-
-	// For now, let's compute max raise inline here
-	// Find smallest opponent stack among active players
-	smallestOpponentStack := -1
-	for i := 0; i < 6; i++ {
-		if i != seatIndex && seats[i].Status == "active" {
-			if smallestOpponentStack == -1 || seats[i].Stack < smallestOpponentStack {
-				smallestOpponentStack = seats[i].Stack
-			}
-		}
-	}
-
-	// If no opponents, no side pot check needed
-	if smallestOpponentStack == -1 {
-		return nil
-	}
-
-	// Maximum allowed raise is the minimum of player's stack and smallest opponent's stack
-	maxRaise := playerStack
-	if smallestOpponentStack < playerStack {
-		maxRaise = smallestOpponentStack
-	}
-
-	if raiseAmount > maxRaise {
-		return fmt.Errorf("raise would create side pot")
+	// Check that raise doesn't exceed player's stack
+	if raiseAmount > playerStack {
+		return fmt.Errorf("raise exceeds player stack")
 	}
 
 	return nil

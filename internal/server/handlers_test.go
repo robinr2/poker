@@ -2275,14 +2275,15 @@ func TestBroadcastActionRequest_MinMaxCalculation(t *testing.T) {
 		var payload ActionRequestPayload
 		json.Unmarshal(wsMsg.Payload, &payload)
 
-		// With BB=20 and opponent stack after posting BB=20 (1000-20=980), minRaise should be 20 + 20 = 40
-		// maxRaise is min of player's remaining stack (1000-10=990) and opponent's stack (1000-20=980) = 980
+		// With BB=20, minRaise should be 20 + 20 = 40
+		// With new behavior: maxRaise is player's remaining stack after posting SB (1000 - 10 = 990)
+		// Players can now bet their full remaining stack regardless of opponent stacks
 		if payload.MinRaise != 40 {
 			t.Errorf("multi-player: expected minRaise=40, got %d", payload.MinRaise)
 		}
-		// maxRaise should be opponent's remaining stack after posting BB (1000 - 20 = 980)
-		if payload.MaxRaise != 980 {
-			t.Errorf("multi-player: expected maxRaise=980, got %d", payload.MaxRaise)
+		// maxRaise should be player's remaining stack (1000 - 10 SB = 990)
+		if payload.MaxRaise != 990 {
+			t.Errorf("multi-player: expected maxRaise=990, got %d", payload.MaxRaise)
 		}
 	default:
 		t.Error("client1 did not receive action_request message")
@@ -2346,10 +2347,11 @@ func TestBroadcastActionRequest_MinMaxCalculation(t *testing.T) {
 		var payload ActionRequestPayload
 		json.Unmarshal(wsMsg.Payload, &payload)
 
-		// Heads-up scenario:
+		// Heads-up scenario with new behavior:
 		// Dealer (seat 1) posts SB: 1200 - 10 = 1190
 		// Non-dealer (seat 0, our player) posts BB: 800 - 20 = 780
-		// Player at seat 0 is acting, so GetMaxRaise(0) = min(780, 1190) = 780
+		// Player at seat 0 is acting with remaining stack of 780
+		// With new behavior: maxRaise is player's remaining stack (780) - not limited by opponent's stack
 		if payload.MaxRaise != 780 {
 			t.Errorf("heads-up: expected maxRaise=780, got %d", payload.MaxRaise)
 		}

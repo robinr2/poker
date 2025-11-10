@@ -3899,12 +3899,13 @@ func TestGetMinRaise_PostflopFirstAction(t *testing.T) {
 
 // ============ PHASE 2: MAX-RAISE AND SIDE POT PREVENTION TESTS ============
 
-// TestGetMaxRaise_LimitedByPlayerStack verifies max raise equals minimum of player and smallest opponent stack
+// TestGetMaxRaise_LimitedByPlayerStack verifies max raise equals player's own stack (new behavior)
+// This test now validates that players can bet their full stacks regardless of opponent stacks
 func TestGetMaxRaise_LimitedByPlayerStack(t *testing.T) {
 	table := NewTable("table-1", "Table 1", nil)
 
 	// Set up 3 active players: seat 0 (1000), seat 1 (1000), seat 2 (1000)
-	// All equal stacks - max raise should be limited by player's own stack
+	// All equal stacks - max raise should be player's own stack
 	for i := 0; i < 3; i++ {
 		token := "player-" + string(rune('0'+i))
 		table.Seats[i].Token = &token
@@ -3912,29 +3913,31 @@ func TestGetMaxRaise_LimitedByPlayerStack(t *testing.T) {
 		table.Seats[i].Stack = 1000
 	}
 
-	// GetMaxRaise for seat 0: min(1000 player, 1000 smallest opponent) = 1000
+	// GetMaxRaise for seat 0: returns player's stack 1000 (not limited by opponent's 1000)
 	maxRaise := table.GetMaxRaise(0, table.Seats)
 	if maxRaise != 1000 {
-		t.Errorf("GetMaxRaise(seat 0) = %d, want 1000 (when all equal)", maxRaise)
+		t.Errorf("GetMaxRaise(seat 0) = %d, want 1000 (player's stack)", maxRaise)
 	}
 
 	// Now set seat 2 to 500 (smaller than seat 0)
 	table.Seats[2].Stack = 500
 
-	// GetMaxRaise for seat 0: min(1000 player, 500 smallest opponent) = 500
+	// GetMaxRaise for seat 0: still returns player's stack 1000 (NOT limited to opponent's 500)
+	// This is the key difference - player can overbет the short stack
 	maxRaise = table.GetMaxRaise(0, table.Seats)
-	if maxRaise != 500 {
-		t.Errorf("GetMaxRaise(seat 0) = %d, want 500 (limited by opponent)", maxRaise)
+	if maxRaise != 1000 {
+		t.Errorf("GetMaxRaise(seat 0) = %d, want 1000 (player's full stack, not limited by short opponent)", maxRaise)
 	}
 
-	// GetMaxRaise for seat 1: min(1000 player, 500 smallest opponent) = 500
+	// GetMaxRaise for seat 1: returns player's stack 1000 (NOT limited to opponent's 500)
 	maxRaise = table.GetMaxRaise(1, table.Seats)
-	if maxRaise != 500 {
-		t.Errorf("GetMaxRaise(seat 1) = %d, want 500 (limited by opponent)", maxRaise)
+	if maxRaise != 1000 {
+		t.Errorf("GetMaxRaise(seat 1) = %d, want 1000 (player's full stack, not limited by short opponent)", maxRaise)
 	}
 }
 
-// TestGetMaxRaise_LimitedByOpponentStack verifies max raise limited to smallest opponent stack
+// TestGetMaxRaise_LimitedByOpponentStack verifies max raise equals player's own stack (new behavior)
+// Previously this was limited by opponent stacks, but now players can bet their full stacks
 func TestGetMaxRaise_LimitedByOpponentStack(t *testing.T) {
 	table := NewTable("table-1", "Table 1", nil)
 
@@ -3947,29 +3950,27 @@ func TestGetMaxRaise_LimitedByOpponentStack(t *testing.T) {
 		table.Seats[i].Stack = stacks[i]
 	}
 
-	// Seat 0 player has 1000, but smallest opponent has 300
-	// Max raise should be limited to 300 to prevent side pots
+	// Seat 0 player has 1000, can now raise full amount (not limited to opponent's 300)
 	maxRaise := table.GetMaxRaise(0, table.Seats)
-	if maxRaise != 300 {
-		t.Errorf("GetMaxRaise(seat 0) = %d, want 300 (smallest opponent stack)", maxRaise)
+	if maxRaise != 1000 {
+		t.Errorf("GetMaxRaise(seat 0) = %d, want 1000 (player's full stack)", maxRaise)
 	}
 
-	// Seat 1 player has 500, but smallest opponent (seat 2) has 300
-	// Max raise should be limited to 300
+	// Seat 1 player has 500, can raise full amount (not limited to opponent's 300)
 	maxRaise = table.GetMaxRaise(1, table.Seats)
-	if maxRaise != 300 {
-		t.Errorf("GetMaxRaise(seat 1) = %d, want 300 (smallest opponent stack)", maxRaise)
+	if maxRaise != 500 {
+		t.Errorf("GetMaxRaise(seat 1) = %d, want 500 (player's full stack)", maxRaise)
 	}
 
-	// Seat 2 player has 300 (smallest), opponents have 1000 and 500
-	// Max raise should be seat 2's own stack (300), which is smaller than opponent stacks
+	// Seat 2 player has 300, can raise full amount
 	maxRaise = table.GetMaxRaise(2, table.Seats)
 	if maxRaise != 300 {
-		t.Errorf("GetMaxRaise(seat 2) = %d, want 300 (player's own stack, smallest)", maxRaise)
+		t.Errorf("GetMaxRaise(seat 2) = %d, want 300 (player's full stack)", maxRaise)
 	}
 }
 
-// TestGetMaxRaise_HeadsUp verifies heads-up allows full player stack
+// TestGetMaxRaise_HeadsUp verifies heads-up allows full player stack (new behavior)
+// Previously limited by opponent's stack, now players can bet their full stacks
 func TestGetMaxRaise_HeadsUp(t *testing.T) {
 	table := NewTable("table-1", "Table 1", nil)
 
@@ -3984,23 +3985,21 @@ func TestGetMaxRaise_HeadsUp(t *testing.T) {
 	table.Seats[3].Status = "active"
 	table.Seats[3].Stack = 800
 
-	// In heads-up, seat 0 can raise up to 1000 (limited by opponent's 800 to prevent side pot)
-	// Wait, that's not right. In heads-up with unequal stacks:
-	// Seat 0 (1000) vs Seat 3 (800): to avoid side pots, seat 0 can only raise 800
-	// This is the same rule as multi-player: limited to smallest opponent stack
+	// In heads-up, seat 0 can now raise full 1000 (not limited to opponent's 800)
 	maxRaise := table.GetMaxRaise(0, table.Seats)
-	if maxRaise != 800 {
-		t.Errorf("GetMaxRaise(seat 0 heads-up) = %d, want 800 (opponent's stack)", maxRaise)
+	if maxRaise != 1000 {
+		t.Errorf("GetMaxRaise(seat 0 heads-up) = %d, want 1000 (player's full stack)", maxRaise)
 	}
 
-	// Seat 3 (800 stack) can raise up to 800 (their full stack or opponent's smaller)
+	// Seat 3 (800 stack) can raise their full 800
 	maxRaise = table.GetMaxRaise(3, table.Seats)
 	if maxRaise != 800 {
-		t.Errorf("GetMaxRaise(seat 3 heads-up) = %d, want 800 (their own or opponent's)", maxRaise)
+		t.Errorf("GetMaxRaise(seat 3 heads-up) = %d, want 800 (player's full stack)", maxRaise)
 	}
 }
 
-// TestGetMaxRaise_MultiPlayer verifies multi-player correctly limits to smallest stack
+// TestGetMaxRaise_MultiPlayer verifies multi-player allows full player stacks (new behavior)
+// Previously limited to smallest opponent stack, now players can bet their full stacks
 func TestGetMaxRaise_MultiPlayer(t *testing.T) {
 	table := NewTable("table-1", "Table 1", nil)
 
@@ -4013,28 +4012,28 @@ func TestGetMaxRaise_MultiPlayer(t *testing.T) {
 		table.Seats[i].Stack = stacks[i]
 	}
 
-	// Seat 0 (1000): should be limited to smallest opponent (300)
+	// Seat 0 (1000): can now raise full 1000 (not limited to smallest opponent 300)
 	maxRaise := table.GetMaxRaise(0, table.Seats)
-	if maxRaise != 300 {
-		t.Errorf("GetMaxRaise(seat 0, 4-player) = %d, want 300", maxRaise)
+	if maxRaise != 1000 {
+		t.Errorf("GetMaxRaise(seat 0, 4-player) = %d, want 1000", maxRaise)
 	}
 
-	// Seat 1 (600): should be limited to smallest opponent (300)
+	// Seat 1 (600): can raise full 600 (not limited to smallest opponent 300)
 	maxRaise = table.GetMaxRaise(1, table.Seats)
-	if maxRaise != 300 {
-		t.Errorf("GetMaxRaise(seat 1, 4-player) = %d, want 300", maxRaise)
+	if maxRaise != 600 {
+		t.Errorf("GetMaxRaise(seat 1, 4-player) = %d, want 600", maxRaise)
 	}
 
-	// Seat 2 (300): should be limited by its own stack (300)
+	// Seat 2 (300): can raise full 300
 	maxRaise = table.GetMaxRaise(2, table.Seats)
 	if maxRaise != 300 {
 		t.Errorf("GetMaxRaise(seat 2, 4-player) = %d, want 300", maxRaise)
 	}
 
-	// Seat 3 (800): should be limited to smallest opponent (300)
+	// Seat 3 (800): can raise full 800 (not limited to smallest opponent 300)
 	maxRaise = table.GetMaxRaise(3, table.Seats)
-	if maxRaise != 300 {
-		t.Errorf("GetMaxRaise(seat 3, 4-player) = %d, want 300", maxRaise)
+	if maxRaise != 800 {
+		t.Errorf("GetMaxRaise(seat 3, 4-player) = %d, want 800", maxRaise)
 	}
 }
 
@@ -4057,7 +4056,9 @@ func TestValidateRaise_BelowMinimum(t *testing.T) {
 	}
 }
 
-// TestValidateRaise_AboveMaximum verifies error with message "raise would create side pot"
+// TestValidateRaise_AboveMaximum verifies error when raise exceeds player's stack (new behavior)
+// Previously checked against opponent stacks for side pot prevention
+// Now players can bet full stacks, so error only if exceeding player's own stack
 func TestValidateRaise_AboveMaximum(t *testing.T) {
 	table := NewTable("table-1", "Table 1", nil)
 
@@ -4075,14 +4076,19 @@ func TestValidateRaise_AboveMaximum(t *testing.T) {
 		LastRaise:  20, // Min raise = 40
 	}
 
-	// Seat 0 tries to raise 500, but max allowed is 300 (smallest opponent)
-	// This should error with side pot message
+	// Seat 0 tries to raise 500 (below their 1000), should be valid
 	err := hand.ValidateRaise(0, 500, 1000, table.Seats)
-	if err == nil {
-		t.Fatal("expected error for raise above maximum, got nil")
+	if err != nil {
+		t.Fatalf("expected no error for 500 raise with 1000 stack, got %v", err)
 	}
 
-	expectedMsg := "raise would create side pot"
+	// Seat 0 tries to raise 1100 (exceeds their 1000 stack), should error
+	err = hand.ValidateRaise(0, 1100, 1000, table.Seats)
+	if err == nil {
+		t.Fatal("expected error for raise exceeding player stack, got nil")
+	}
+
+	expectedMsg := "raise exceeds player stack"
 	if err.Error() != expectedMsg {
 		t.Errorf("expected error '%s', got '%s'", expectedMsg, err.Error())
 	}
@@ -4157,7 +4163,8 @@ func TestValidateRaise_AllInBelowMin(t *testing.T) {
 	}
 }
 
-// TestValidateRaise_HeadsUp verifies validation works correctly in heads-up
+// TestValidateRaise_HeadsUp verifies validation works correctly in heads-up (new behavior)
+// Players can now bet their full stacks, not limited by opponent stacks
 func TestValidateRaise_HeadsUp(t *testing.T) {
 	table := NewTable("table-1", "Table 1", nil)
 
@@ -4177,27 +4184,27 @@ func TestValidateRaise_HeadsUp(t *testing.T) {
 		LastRaise:  20, // Min raise = 40
 	}
 
-	// In heads-up, seat 0 (1000) can raise up to 800 (opponent's stack)
+	// In heads-up, seat 0 (1000 stack) can raise up to 1000 (their full stack)
 	// Raise of 40 (minimum) should be valid
 	err := hand.ValidateRaise(0, 40, 1000, table.Seats)
 	if err != nil {
 		t.Errorf("expected no error for valid raise in heads-up, got %v", err)
 	}
 
-	// Raise of 800 (at max) should be valid
-	err = hand.ValidateRaise(0, 800, 1000, table.Seats)
+	// Raise of 1000 (at max for their stack) should be valid (all-in)
+	err = hand.ValidateRaise(0, 1000, 1000, table.Seats)
 	if err != nil {
 		t.Errorf("expected no error for max raise in heads-up, got %v", err)
 	}
 
-	// Raise of 900 (exceeds max of 800) should error
-	err = hand.ValidateRaise(0, 900, 1000, table.Seats)
+	// Raise of 1100 (exceeds their stack of 1000) should error
+	err = hand.ValidateRaise(0, 1100, 1000, table.Seats)
 	if err == nil {
-		t.Fatal("expected error for raise exceeding max in heads-up, got nil")
+		t.Fatal("expected error for raise exceeding stack in heads-up, got nil")
 	}
 
-	if err.Error() != "raise would create side pot" {
-		t.Errorf("expected error 'raise would create side pot', got '%s'", err.Error())
+	if err.Error() != "raise exceeds player stack" {
+		t.Errorf("expected error 'raise exceeds player stack', got '%s'", err.Error())
 	}
 }
 
@@ -6855,5 +6862,318 @@ func TestShowdown_AllInWinnerNotKicked(t *testing.T) {
 	// Verify hand is cleared
 	if table.CurrentHand != nil {
 		t.Error("expected CurrentHand to be nil after HandleShowdown")
+	}
+}
+
+// ============================================================================
+// PHASE 1: Fix Raise Validation Logic - Multi-Player Support
+// Tests that verify players can ALWAYS bet their full stack regardless of
+// opponent stack sizes. These tests replace the old tests that incorrectly
+// limited maxRaise based on opponent stacks.
+// ============================================================================
+
+// TestGetMaxRaise_2P_SB_AllIn_BugFix verifies the core bug fix:
+// 2 players, SB (990 remaining after posting SB) can go all-in
+// even though BB (980 remaining) has less chips
+func TestGetMaxRaise_2P_SB_AllIn_BugFix(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Setup: A=1000, B=1000, post blinds (A=990 SB, B=980 BB)
+	tokenA := "player-a"
+	tokenB := "player-b"
+	table.Seats[0].Token = &tokenA
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 990 // After posting SB (1000 - 10)
+
+	table.Seats[1].Token = &tokenB
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 980 // After posting BB (1000 - 20)
+
+	// A (SB) should be able to raise to 990 (their full stack)
+	maxRaise := table.GetMaxRaise(0, table.Seats)
+	if maxRaise != 990 {
+		t.Errorf("TestGetMaxRaise_2P_SB_AllIn_BugFix: Player A should be able to bet full stack 990, got %d", maxRaise)
+	}
+
+	// B (BB) should be able to raise to 980 (their full stack)
+	maxRaise = table.GetMaxRaise(1, table.Seats)
+	if maxRaise != 980 {
+		t.Errorf("TestGetMaxRaise_2P_SB_AllIn_BugFix: Player B should be able to bet full stack 980, got %d", maxRaise)
+	}
+}
+
+// TestGetMaxRaise_2P_Both_Equal_Stacks verifies both can go all-in with equal stacks
+func TestGetMaxRaise_2P_Both_Equal_Stacks(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Setup: Both 1000 chips
+	tokenA := "player-a"
+	tokenB := "player-b"
+	table.Seats[0].Token = &tokenA
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &tokenB
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	// Both can go all-in for 1000
+	maxRaise := table.GetMaxRaise(0, table.Seats)
+	if maxRaise != 1000 {
+		t.Errorf("TestGetMaxRaise_2P_Both_Equal_Stacks: Player A should get 1000, got %d", maxRaise)
+	}
+
+	maxRaise = table.GetMaxRaise(1, table.Seats)
+	if maxRaise != 1000 {
+		t.Errorf("TestGetMaxRaise_2P_Both_Equal_Stacks: Player B should get 1000, got %d", maxRaise)
+	}
+}
+
+// TestGetMaxRaise_2P_Short_Stack_Can_AllIn verifies short stack player can go all-in
+func TestGetMaxRaise_2P_Short_Stack_Can_AllIn(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Setup: A=500, B=1000
+	tokenA := "player-a"
+	tokenB := "player-b"
+	table.Seats[0].Token = &tokenA
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 490 // After posting SB (500 - 10)
+
+	table.Seats[1].Token = &tokenB
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	// A (short stack) should be able to go all-in for 490
+	maxRaise := table.GetMaxRaise(0, table.Seats)
+	if maxRaise != 490 {
+		t.Errorf("TestGetMaxRaise_2P_Short_Stack_Can_AllIn: Player A should get 490, got %d", maxRaise)
+	}
+
+	// B should be able to go all-in for 1000
+	maxRaise = table.GetMaxRaise(1, table.Seats)
+	if maxRaise != 1000 {
+		t.Errorf("TestGetMaxRaise_2P_Short_Stack_Can_AllIn: Player B should get 1000, got %d", maxRaise)
+	}
+}
+
+// TestGetMaxRaise_3P_One_Short_Stack_Can_AllIn verifies short stack in 3-player game
+func TestGetMaxRaise_3P_One_Short_Stack_Can_AllIn(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Setup: A=1000, B=500, C=1000
+	stacks := []int{1000, 490, 1000} // B after posting SB
+	tokens := []string{"player-a", "player-b", "player-c"}
+	for i := 0; i < 3; i++ {
+		table.Seats[i].Token = &tokens[i]
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = stacks[i]
+	}
+
+	// B (SB with 490) should be able to go all-in for 490
+	maxRaise := table.GetMaxRaise(1, table.Seats)
+	if maxRaise != 490 {
+		t.Errorf("TestGetMaxRaise_3P_One_Short_Stack_Can_AllIn: Player B should get 490, got %d", maxRaise)
+	}
+
+	// A should be able to go all-in for 1000
+	maxRaise = table.GetMaxRaise(0, table.Seats)
+	if maxRaise != 1000 {
+		t.Errorf("TestGetMaxRaise_3P_One_Short_Stack_Can_AllIn: Player A should get 1000, got %d", maxRaise)
+	}
+
+	// C should be able to go all-in for 1000
+	maxRaise = table.GetMaxRaise(2, table.Seats)
+	if maxRaise != 1000 {
+		t.Errorf("TestGetMaxRaise_3P_One_Short_Stack_Can_AllIn: Player C should get 1000, got %d", maxRaise)
+	}
+}
+
+// TestGetMaxRaise_3P_Multiple_Different_Stacks verifies all can bet their stacks
+func TestGetMaxRaise_3P_Multiple_Different_Stacks(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Setup: A=2000, B=1000, C=500
+	stacks := []int{2000, 1000, 500}
+	tokens := []string{"player-a", "player-b", "player-c"}
+	for i := 0; i < 3; i++ {
+		table.Seats[i].Token = &tokens[i]
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = stacks[i]
+	}
+
+	// Each player can bet their full stack
+	if maxRaise := table.GetMaxRaise(0, table.Seats); maxRaise != 2000 {
+		t.Errorf("Player A should get 2000, got %d", maxRaise)
+	}
+	if maxRaise := table.GetMaxRaise(1, table.Seats); maxRaise != 1000 {
+		t.Errorf("Player B should get 1000, got %d", maxRaise)
+	}
+	if maxRaise := table.GetMaxRaise(2, table.Seats); maxRaise != 500 {
+		t.Errorf("Player C should get 500, got %d", maxRaise)
+	}
+}
+
+// TestGetMaxRaise_3P_Whale_Can_Overbet_All verifies whale can go all-in for 5000
+func TestGetMaxRaise_3P_Whale_Can_Overbet_All(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Setup: A=5000 (whale), B=1000, C=1000
+	stacks := []int{5000, 1000, 1000}
+	tokens := []string{"whale", "player-b", "player-c"}
+	for i := 0; i < 3; i++ {
+		table.Seats[i].Token = &tokens[i]
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = stacks[i]
+	}
+
+	// Whale should be able to bet full 5000
+	maxRaise := table.GetMaxRaise(0, table.Seats)
+	if maxRaise != 5000 {
+		t.Errorf("TestGetMaxRaise_3P_Whale_Can_Overbet_All: Whale should get 5000, got %d", maxRaise)
+	}
+}
+
+// TestGetMaxRaise_4P_Multiple_AllIns_Same_Hand verifies multiple players can go all-in
+func TestGetMaxRaise_4P_Multiple_AllIns_Same_Hand(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Setup: 4 players with [1000, 800, 600, 1000]
+	stacks := []int{1000, 800, 600, 1000}
+	for i := 0; i < 4; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = stacks[i]
+	}
+
+	// All players can bet their full stacks
+	for i := 0; i < 4; i++ {
+		if maxRaise := table.GetMaxRaise(i, table.Seats); maxRaise != stacks[i] {
+			t.Errorf("Player %d should get %d, got %d", i, stacks[i], maxRaise)
+		}
+	}
+}
+
+// TestGetMaxRaise_4P_Shortest_Stack_All_Can_Bet_Full verifies all can bet full stacks
+func TestGetMaxRaise_4P_Shortest_Stack_All_Can_Bet_Full(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Setup: Stacks [1000, 800, 600, 1200]
+	stacks := []int{1000, 800, 600, 1200}
+	for i := 0; i < 4; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = stacks[i]
+	}
+
+	// All players can bet their full stacks (no opponent stack limit)
+	for i := 0; i < 4; i++ {
+		if maxRaise := table.GetMaxRaise(i, table.Seats); maxRaise != stacks[i] {
+			t.Errorf("Player %d should get %d, got %d", i, stacks[i], maxRaise)
+		}
+	}
+}
+
+// TestGetMaxRaise_5P_Multiple_Callers_Different_Stacks verifies 5-player game
+func TestGetMaxRaise_5P_Multiple_Callers_Different_Stacks(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Setup: 5 players with various stacks
+	stacks := []int{2000, 1500, 1000, 500, 750}
+	for i := 0; i < 5; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = stacks[i]
+	}
+
+	// All players can bet their full stacks
+	for i := 0; i < 5; i++ {
+		if maxRaise := table.GetMaxRaise(i, table.Seats); maxRaise != stacks[i] {
+			t.Errorf("Player %d should get %d, got %d", i, stacks[i], maxRaise)
+		}
+	}
+}
+
+// TestGetMaxRaise_6P_Whale_Overbets_Everyone verifies 6-player with whale
+func TestGetMaxRaise_6P_Whale_Overbets_Everyone(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Setup: Stacks [10000, 1000, 1000, 800, 600, 400]
+	stacks := []int{10000, 1000, 1000, 800, 600, 400}
+	for i := 0; i < 6; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = stacks[i]
+	}
+
+	// Whale can bet full 10000
+	if maxRaise := table.GetMaxRaise(0, table.Seats); maxRaise != 10000 {
+		t.Errorf("Whale should get 10000, got %d", maxRaise)
+	}
+
+	// All other players can bet their full stacks
+	for i := 1; i < 6; i++ {
+		if maxRaise := table.GetMaxRaise(i, table.Seats); maxRaise != stacks[i] {
+			t.Errorf("Player %d should get %d, got %d", i, stacks[i], maxRaise)
+		}
+	}
+}
+
+// TestValidateRaise_AllIn_Always_Valid verifies all-in is always valid
+// (test for ValidateRaise function)
+func TestValidateRaise_AllIn_Always_Valid(t *testing.T) {
+	hand := &Hand{
+		CurrentBet: 20,
+		LastRaise:  20,
+		PlayerBets: make(map[int]int),
+	}
+
+	// Setup: 2 players
+	seats := [6]Seat{
+		{Index: 0, Status: "active", Stack: 990},
+		{Index: 1, Status: "active", Stack: 980},
+	}
+
+	// Player 0 going all-in for 990 should be valid
+	err := hand.ValidateRaise(0, 990, 990, seats)
+	if err != nil {
+		t.Errorf("TestValidateRaise_AllIn_Always_Valid: All-in for 990 should be valid, got error: %v", err)
+	}
+
+	// Player 1 going all-in for 980 should be valid
+	err = hand.ValidateRaise(1, 980, 980, seats)
+	if err != nil {
+		t.Errorf("TestValidateRaise_AllIn_Always_Valid: All-in for 980 should be valid, got error: %v", err)
+	}
+}
+
+// TestValidateRaise_Short_Stack_Can_Raise_Full verifies short stack can raise full
+func TestValidateRaise_Short_Stack_Can_Raise_Full(t *testing.T) {
+	hand := &Hand{
+		CurrentBet: 20,
+		LastRaise:  20,
+		PlayerBets: make(map[int]int),
+	}
+
+	// Setup: A=490 (short), B=1000 (big)
+	seats := [6]Seat{
+		{Index: 0, Status: "active", Stack: 490},
+		{Index: 1, Status: "active", Stack: 1000},
+	}
+
+	// Short stack player should be able to raise to 490 (their full stack)
+	err := hand.ValidateRaise(0, 490, 490, seats)
+	if err != nil {
+		t.Errorf("TestValidateRaise_Short_Stack_Can_Raise_Full: Should allow 490, got error: %v", err)
+	}
+
+	// Big stack player should be able to raise to 1000 (their full stack)
+	err = hand.ValidateRaise(1, 1000, 1000, seats)
+	if err != nil {
+		t.Errorf("TestValidateRaise_Short_Stack_Can_Raise_Full: Should allow 1000, got error: %v", err)
 	}
 }
