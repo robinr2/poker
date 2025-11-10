@@ -1083,10 +1083,10 @@ func (h *Hand) GetFirstActor(seats [6]Seat) int {
 // - If no seat is found after fromSeat, wraps around to find the first seat
 // - Returns nil if all other active players have folded (only one player left)
 func (h *Hand) GetNextActiveSeat(fromSeat int, seats [6]Seat) *int {
-	// Collect all active (not folded) seats
+	// Collect all active (not folded) seats that still have chips (Stack > 0)
 	activeSeatsList := []int{}
 	for i := 0; i < 6; i++ {
-		if seats[i].Status == "active" && !h.FoldedPlayers[i] {
+		if seats[i].Status == "active" && !h.FoldedPlayers[i] && seats[i].Stack > 0 {
 			activeSeatsList = append(activeSeatsList, i)
 		}
 	}

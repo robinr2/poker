@@ -3712,10 +3712,13 @@ func TestAdvanceAction(t *testing.T) {
 	token1, token2, token3 := "player1", "player2", "player3"
 	table.Seats[0].Token = &token1
 	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
 	table.Seats[1].Token = &token2
 	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
 	table.Seats[2].Token = &token3
 	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
 
 	// Initialize hand with action state
 	table.CurrentHand = &Hand{
@@ -3785,10 +3788,13 @@ func TestAdvanceAction_WithFoldedPlayers(t *testing.T) {
 	token1, token2, token3 := "player1", "player2", "player3"
 	table.Seats[0].Token = &token1
 	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
 	table.Seats[1].Token = &token2
 	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
 	table.Seats[2].Token = &token3
 	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
 
 	// Initialize hand with action state
 	table.CurrentHand = &Hand{
@@ -8763,4 +8769,280 @@ func TestGetValidActions_AllInPlayerWithRaise(t *testing.T) {
 	if len(validActions) != 0 {
 		t.Errorf("expected empty actions for all-in player (stack=0) even after matching bet, got %v", validActions)
 	}
+}
+
+// TestGetNextActiveSeat_AllInScenarios tests GetNextActiveSeat() skips all-in players (stack=0)
+// These 7 subtests verify the fix handles various multi-player scenarios with all-in players
+func TestGetNextActiveSeat_AllInScenarios(t *testing.T) {
+
+	// Subtest 1: two_players_one_allin - Skip all-in, return active player
+	t.Run("two_players_one_allin", func(t *testing.T) {
+		table := NewTable("table-1", "Table 1", nil)
+
+		// Set up 2 active players (seats 0, 1)
+		token0 := "player-0"
+		token1 := "player-1"
+		table.Seats[0].Token = &token0
+		table.Seats[0].Status = "active"
+		table.Seats[0].Stack = 1000 // Active
+		table.Seats[1].Token = &token1
+		table.Seats[1].Status = "active"
+		table.Seats[1].Stack = 0 // All-in
+
+		// Start hand
+		err := table.StartHand()
+		if err != nil {
+			t.Fatalf("expected no error starting hand, got %v", err)
+		}
+
+		// Initialize folded players map
+		if table.CurrentHand.FoldedPlayers == nil {
+			table.CurrentHand.FoldedPlayers = make(map[int]bool)
+		}
+
+		// From seat 1 (all-in), should skip to seat 0 (active) - but since only 1 active, return nil
+		next := table.CurrentHand.GetNextActiveSeat(1, table.Seats)
+		if next != nil {
+			t.Errorf("expected nil when only one non-all-in player remains, got %v", next)
+		}
+
+		// From seat 0 (active), should skip seat 1 (all-in) - but only 1 active so return nil
+		next = table.CurrentHand.GetNextActiveSeat(0, table.Seats)
+		if next != nil {
+			t.Errorf("expected nil when only one non-all-in player remains, got %v", next)
+		}
+	})
+
+	// Subtest 2: two_players_both_allin - Both all-in returns nil
+	t.Run("two_players_both_allin", func(t *testing.T) {
+		table := NewTable("table-1", "Table 1", nil)
+
+		// Set up 2 active players, both all-in
+		token0 := "player-0"
+		token1 := "player-1"
+		table.Seats[0].Token = &token0
+		table.Seats[0].Status = "active"
+		table.Seats[0].Stack = 0 // All-in
+		table.Seats[1].Token = &token1
+		table.Seats[1].Status = "active"
+		table.Seats[1].Stack = 0 // All-in
+
+		// Start hand
+		err := table.StartHand()
+		if err != nil {
+			t.Fatalf("expected no error starting hand, got %v", err)
+		}
+
+		// Initialize folded players map
+		if table.CurrentHand.FoldedPlayers == nil {
+			table.CurrentHand.FoldedPlayers = make(map[int]bool)
+		}
+
+		// From seat 0, both all-in so no active players -> nil
+		next := table.CurrentHand.GetNextActiveSeat(0, table.Seats)
+		if next != nil {
+			t.Errorf("expected nil when all players are all-in, got %v", next)
+		}
+
+		// From seat 1, both all-in so no active players -> nil
+		next = table.CurrentHand.GetNextActiveSeat(1, table.Seats)
+		if next != nil {
+			t.Errorf("expected nil when all players are all-in, got %v", next)
+		}
+	})
+
+	// Subtest 3: three_players_one_allin - Skip all-in in 3-player
+	t.Run("three_players_one_allin", func(t *testing.T) {
+		table := NewTable("table-1", "Table 1", nil)
+
+		// Set up 3 active players (seats 0, 1, 2)
+		for i := 0; i < 3; i++ {
+			token := "player-" + string(rune('0'+i))
+			table.Seats[i].Token = &token
+			table.Seats[i].Status = "active"
+			if i == 1 {
+				table.Seats[i].Stack = 0 // Seat 1 is all-in
+			} else {
+				table.Seats[i].Stack = 1000 // Others active
+			}
+		}
+
+		// Start hand
+		err := table.StartHand()
+		if err != nil {
+			t.Fatalf("expected no error starting hand, got %v", err)
+		}
+
+		// Initialize folded players map
+		if table.CurrentHand.FoldedPlayers == nil {
+			table.CurrentHand.FoldedPlayers = make(map[int]bool)
+		}
+
+		// From seat 0, should skip all-in seat 1 and go to seat 2
+		next := table.CurrentHand.GetNextActiveSeat(0, table.Seats)
+		if next == nil || *next != 2 {
+			t.Errorf("expected next active seat after 0 (skipping all-in 1) to be 2, got %v", next)
+		}
+
+		// From seat 2, should skip all-in seat 1 and go to seat 0
+		next = table.CurrentHand.GetNextActiveSeat(2, table.Seats)
+		if next == nil || *next != 0 {
+			t.Errorf("expected next active seat after 2 (wrapping and skipping all-in 1) to be 0, got %v", next)
+		}
+	})
+
+	// Subtest 4: three_players_two_allin - Skip both all-in, return active
+	t.Run("three_players_two_allin", func(t *testing.T) {
+		table := NewTable("table-1", "Table 1", nil)
+
+		// Set up 3 active players (seats 0, 1, 2)
+		for i := 0; i < 3; i++ {
+			token := "player-" + string(rune('0'+i))
+			table.Seats[i].Token = &token
+			table.Seats[i].Status = "active"
+			if i == 1 || i == 2 {
+				table.Seats[i].Stack = 0 // Seats 1 and 2 are all-in
+			} else {
+				table.Seats[i].Stack = 1000 // Only seat 0 active
+			}
+		}
+
+		// Start hand
+		err := table.StartHand()
+		if err != nil {
+			t.Fatalf("expected no error starting hand, got %v", err)
+		}
+
+		// Initialize folded players map
+		if table.CurrentHand.FoldedPlayers == nil {
+			table.CurrentHand.FoldedPlayers = make(map[int]bool)
+		}
+
+		// From seat 0, only one non-all-in player -> nil
+		next := table.CurrentHand.GetNextActiveSeat(0, table.Seats)
+		if next != nil {
+			t.Errorf("expected nil when only one non-all-in player remains, got %v", next)
+		}
+	})
+
+	// Subtest 5: four_players_mixed_allin_folded - Skip all-in and folded
+	t.Run("four_players_mixed_allin_folded", func(t *testing.T) {
+		table := NewTable("table-1", "Table 1", nil)
+
+		// Set up 4 active players (seats 0, 1, 2, 3)
+		for i := 0; i < 4; i++ {
+			token := "player-" + string(rune('0'+i))
+			table.Seats[i].Token = &token
+			table.Seats[i].Status = "active"
+			if i == 1 {
+				table.Seats[i].Stack = 0 // Seat 1 is all-in
+			} else {
+				table.Seats[i].Stack = 1000 // Others active
+			}
+		}
+
+		// Start hand
+		err := table.StartHand()
+		if err != nil {
+			t.Fatalf("expected no error starting hand, got %v", err)
+		}
+
+		// Initialize folded players map
+		if table.CurrentHand.FoldedPlayers == nil {
+			table.CurrentHand.FoldedPlayers = make(map[int]bool)
+		}
+
+		// Mark seat 3 as folded
+		table.CurrentHand.FoldedPlayers[3] = true
+
+		// From seat 0, skip all-in 1 and folded 3, go to seat 2
+		next := table.CurrentHand.GetNextActiveSeat(0, table.Seats)
+		if next == nil || *next != 2 {
+			t.Errorf("expected next active seat after 0 (skipping all-in 1 and folded 3) to be 2, got %v", next)
+		}
+
+		// From seat 2, skip all-in 1 and folded 3, wrap to seat 0
+		next = table.CurrentHand.GetNextActiveSeat(2, table.Seats)
+		if next == nil || *next != 0 {
+			t.Errorf("expected next active seat after 2 (skipping all-in 1, folded 3, wrapping) to be 0, got %v", next)
+		}
+	})
+
+	// Subtest 6: all_folded_except_allin - Return nil when only all-in remains
+	t.Run("all_folded_except_allin", func(t *testing.T) {
+		table := NewTable("table-1", "Table 1", nil)
+
+		// Set up 4 active players (seats 0, 1, 2, 3)
+		for i := 0; i < 4; i++ {
+			token := "player-" + string(rune('0'+i))
+			table.Seats[i].Token = &token
+			table.Seats[i].Status = "active"
+			table.Seats[i].Stack = 1000
+		}
+
+		// Start hand
+		err := table.StartHand()
+		if err != nil {
+			t.Fatalf("expected no error starting hand, got %v", err)
+		}
+
+		// Initialize folded players map
+		if table.CurrentHand.FoldedPlayers == nil {
+			table.CurrentHand.FoldedPlayers = make(map[int]bool)
+		}
+
+		// Mark seats 0, 1, 2 as folded and seat 3 as all-in (stack = 0)
+		table.CurrentHand.FoldedPlayers[0] = true
+		table.CurrentHand.FoldedPlayers[1] = true
+		table.CurrentHand.FoldedPlayers[2] = true
+		table.Seats[3].Stack = 0 // Only all-in player left
+
+		// From seat 3 (all-in), all others folded -> nil
+		next := table.CurrentHand.GetNextActiveSeat(3, table.Seats)
+		if next != nil {
+			t.Errorf("expected nil when only all-in player remains (others folded), got %v", next)
+		}
+	})
+
+	// Subtest 7: no_allin_normal_rotation - Control test (no all-in players)
+	t.Run("no_allin_normal_rotation", func(t *testing.T) {
+		table := NewTable("table-1", "Table 1", nil)
+
+		// Set up 3 active players (seats 0, 1, 2), none all-in
+		for i := 0; i < 3; i++ {
+			token := "player-" + string(rune('0'+i))
+			table.Seats[i].Token = &token
+			table.Seats[i].Status = "active"
+			table.Seats[i].Stack = 1000 // All have stacks
+		}
+
+		// Start hand
+		err := table.StartHand()
+		if err != nil {
+			t.Fatalf("expected no error starting hand, got %v", err)
+		}
+
+		// Initialize folded players map
+		if table.CurrentHand.FoldedPlayers == nil {
+			table.CurrentHand.FoldedPlayers = make(map[int]bool)
+		}
+
+		// From seat 0, next should be 1
+		next := table.CurrentHand.GetNextActiveSeat(0, table.Seats)
+		if next == nil || *next != 1 {
+			t.Errorf("expected next active seat after 0 to be 1, got %v", next)
+		}
+
+		// From seat 1, next should be 2
+		next = table.CurrentHand.GetNextActiveSeat(1, table.Seats)
+		if next == nil || *next != 2 {
+			t.Errorf("expected next active seat after 1 to be 2, got %v", next)
+		}
+
+		// From seat 2, should wrap to 0
+		next = table.CurrentHand.GetNextActiveSeat(2, table.Seats)
+		if next == nil || *next != 0 {
+			t.Errorf("expected next active seat after 2 (wrapping) to be 0, got %v", next)
+		}
+	})
 }
