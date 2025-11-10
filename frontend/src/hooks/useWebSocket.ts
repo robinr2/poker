@@ -306,6 +306,7 @@ export function useWebSocket(
              updated.playerBets = {}; // Clear player bets for new hand
              updated.boardCards = []; // Clear board cards for new hand
              updated.street = undefined; // Clear street for new hand
+             updated.foldedPlayers = []; // Clear folded players for new hand
              delete updated.showdown; // Clear showdown state so button hides for all players
              delete updated.handComplete; // Clear handComplete state so button hides for all players
              return updated;

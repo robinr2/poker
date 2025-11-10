@@ -2355,5 +2355,57 @@ describe('Phase 3: Clear Board Cards on Hand Started Message (Backend Confirmati
         expect(result.current.gameState.pot).toBe(150);
       });
     });
+
+    it('hand_started clears foldedPlayers from previous hand', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      // Set up initial game state with some folded players
+      const actionResultMessage = JSON.stringify({
+        type: 'action_result',
+        payload: {
+          seatIndex: 1,
+          action: 'fold',
+          amountActed: 0,
+          newStack: 1000,
+          pot: 30,
+          nextActor: 2,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(actionResultMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.foldedPlayers).toContain(1);
+      });
+
+      // Now send hand_started message for new hand
+      const handStartedMessage = JSON.stringify({
+        type: 'hand_started',
+        payload: {
+          dealerSeat: 1,
+          smallBlindSeat: 2,
+          bigBlindSeat: 0,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(handStartedMessage));
+      });
+
+      await waitFor(() => {
+        // foldedPlayers should be cleared for new hand
+        expect(result.current.gameState.foldedPlayers).toEqual([]);
+        // Dealer/blind seats should be updated
+        expect(result.current.gameState.dealerSeat).toBe(1);
+        expect(result.current.gameState.smallBlindSeat).toBe(2);
+        expect(result.current.gameState.bigBlindSeat).toBe(0);
+      });
+    });
   });
 });
