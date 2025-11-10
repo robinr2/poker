@@ -254,8 +254,7 @@ export function TableView({
 
         {/* Game Info Section */}
         {gameState &&
-          !showStartHandButton &&
-          !gameState.handComplete && (
+          !showStartHandButton && (
             <div className="game-info">
               {gameState.street && (
                 <div className="street-indicator">
@@ -267,10 +266,9 @@ export function TableView({
             </div>
           )}
 
-        {/* Board Cards Display - only show when hand is active */}
+        {/* Board Cards Display - show during hand and after completion until new hand starts */}
         {gameState &&
-          !showStartHandButton &&
-          !gameState.handComplete && (
+          !showStartHandButton && (
           <div className="board-cards">
             {Array.from({ length: 5 }).map((_, idx) => {
               const card = gameState?.boardCards?.[idx];
