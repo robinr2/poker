@@ -1464,12 +1464,20 @@ func (h *Hand) AdvanceStreet() {
 	}
 
 	// Reset betting state for new street
+	// Preserve LastRaise from preflop (big blind) for postflop minimum raise calculation
+	lastRaiseBeforeReset := h.LastRaise
 	h.CurrentBet = 0
-	h.LastRaise = 0
 	h.PlayerBets = make(map[int]int)
 	h.ActedPlayers = make(map[int]bool)
 	h.CurrentActor = nil
 	h.BigBlindHasOption = false
+
+	// On postflop streets, preserve the big blind as minimum raise increment
+	if h.Street != "preflop" {
+		h.LastRaise = lastRaiseBeforeReset
+	} else {
+		h.LastRaise = 0
+	}
 }
 
 // AdvanceToNextStreet advances the hand to the next street by dealing board cards and resetting betting state

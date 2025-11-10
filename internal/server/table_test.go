@@ -3781,7 +3781,7 @@ func TestNewHand_InitializesLastRaise(t *testing.T) {
 }
 
 // TestAdvanceStreet_ResetsLastRaise verifies LastRaise is reset when advancing to next street
-// After advancing from preflop to flop, LastRaise should reset to 0
+// After advancing from preflop to flop, LastRaise is preserved for postflop minimum raise calculation
 func TestAdvanceStreet_ResetsLastRaise(t *testing.T) {
 	hand := &Hand{
 		DealerSeat:     0,
@@ -3804,12 +3804,96 @@ func TestAdvanceStreet_ResetsLastRaise(t *testing.T) {
 		t.Errorf("Street = %s, want flop", hand.Street)
 	}
 
-	if hand.LastRaise != 0 {
-		t.Errorf("LastRaise = %d, want 0 after street advance", hand.LastRaise)
+	// LastRaise is now preserved on postflop streets (flop, turn, river) for minimum raise calculation
+	if hand.LastRaise != 50 {
+		t.Errorf("LastRaise = %d, want 50 after street advance (preserved for postflop)", hand.LastRaise)
 	}
 
 	if hand.CurrentBet != 0 {
 		t.Errorf("CurrentBet = %d, want 0 after street advance", hand.CurrentBet)
+	}
+}
+
+// TestAdvanceStreet_PreservesMinimumRaisePostflop verifies LastRaise equals 20 (big blind) after advancing to postflop streets
+// This ensures the minimum raise increment on postflop streets is based on the big blind
+func TestAdvanceStreet_PreservesMinimumRaisePostflop(t *testing.T) {
+	// Test advancing from preflop to flop with LastRaise set to big blind (20)
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            100,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+		Street:         "preflop",
+		CurrentBet:     20,
+		PlayerBets:     make(map[int]int),
+		FoldedPlayers:  make(map[int]bool),
+		ActedPlayers:   make(map[int]bool),
+		LastRaise:      20, // Big blind
+	}
+
+	hand.AdvanceStreet()
+
+	if hand.Street != "flop" {
+		t.Errorf("Street = %s, want flop", hand.Street)
+	}
+
+	// After advancing to flop, LastRaise should be preserved as 20 (big blind) for min-raise calculation
+	if hand.LastRaise != 20 {
+		t.Errorf("LastRaise = %d, want 20 (big blind) after advancing to flop", hand.LastRaise)
+	}
+
+	// Test advancing from flop to turn
+	hand.Street = "flop"
+	hand.AdvanceStreet()
+
+	if hand.Street != "turn" {
+		t.Errorf("Street = %s, want turn", hand.Street)
+	}
+
+	// LastRaise should still be 20 on turn
+	if hand.LastRaise != 20 {
+		t.Errorf("LastRaise = %d, want 20 (big blind) after advancing to turn", hand.LastRaise)
+	}
+
+	// Test advancing from turn to river
+	hand.Street = "turn"
+	hand.AdvanceStreet()
+
+	if hand.Street != "river" {
+		t.Errorf("Street = %s, want river", hand.Street)
+	}
+
+	// LastRaise should still be 20 on river
+	if hand.LastRaise != 20 {
+		t.Errorf("LastRaise = %d, want 20 (big blind) after advancing to river", hand.LastRaise)
+	}
+}
+
+// TestGetMinRaise_PostflopFirstAction verifies minimum raise is 40 (2x BB) when no raises yet postflop
+// With CurrentBet = 0 (no bets yet) and LastRaise = 20 (big blind), min-raise should be 20 + 0 = 20... wait
+// Actually, if someone bets 30, then CurrentBet = 30, and min-raise = 30 + 20 = 50
+func TestGetMinRaise_PostflopFirstAction(t *testing.T) {
+	hand := &Hand{
+		Street:     "flop",
+		CurrentBet: 0,  // No bets on this street yet
+		LastRaise:  20, // Big blind preserved from preflop
+	}
+
+	// First action: no bet yet, so min-raise should just be the preserved big blind
+	minRaise := hand.GetMinRaise()
+	if minRaise != 20 {
+		t.Errorf("GetMinRaise() on flop with no bets = %d, want 20", minRaise)
+	}
+
+	// After first bet of 30, CurrentBet becomes 30
+	hand.CurrentBet = 30
+
+	// Min-raise should now be 30 (current bet) + 20 (big blind) = 50
+	minRaise = hand.GetMinRaise()
+	if minRaise != 50 {
+		t.Errorf("GetMinRaise() after 30 bet with BB increment = %d, want 50", minRaise)
 	}
 }
 
