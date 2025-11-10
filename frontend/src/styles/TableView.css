@@ -583,6 +583,20 @@
   }
 }
 
+/* Folded Player Styling - Phase 4 */
+.seat.folded {
+  opacity: 0.5;
+  color: #9ca3af;
+}
+
+.seat.folded .seat-player {
+  color: #9ca3af;
+}
+
+.seat.folded .stack {
+  color: #9ca3af;
+}
+
 /* Phase 6: Showdown & Settlement */
 
 /* Winner Seat Styling - Gold border with glow animation */

@@ -1523,7 +1523,7 @@ describe('Phase 1: Clear Street Label on Hand Start', () => {
 
       // Now send start_hand action
       act(() => {
-        result.current.sendAction('start_hand');
+        result.current.sendStartHand();
       });
 
       // After sending start_hand, street should be cleared (undefined)
@@ -1739,7 +1739,7 @@ describe('Phase 3: Remove Auto-Clear and Show Start Hand Button After Showdown',
 
       // Now send start_hand action
       act(() => {
-        result.current.sendAction('start_hand');
+        result.current.sendStartHand();
       });
 
       // After sending start_hand, local state should be cleared
@@ -1750,8 +1750,8 @@ describe('Phase 3: Remove Auto-Clear and Show Start Hand Button After Showdown',
       // Verify the message was sent to the server
       expect(mockServiceInstance.send).toHaveBeenCalledWith(
         JSON.stringify({
-          type: 'player_action',
-          payload: { seatIndex: 1, action: 'start_hand' },
+          type: 'start_hand',
+          payload: {},
         })
       );
     });
@@ -1802,7 +1802,7 @@ describe('Phase 3: Remove Auto-Clear and Show Start Hand Button After Showdown',
 
       // Now send start_hand action
       act(() => {
-        result.current.sendAction('start_hand');
+        result.current.sendStartHand();
       });
 
       // After sending start_hand, boardCards should be cleared to empty array
@@ -1855,7 +1855,7 @@ describe('Phase 3: Remove Auto-Clear and Show Start Hand Button After Showdown',
 
       // Now send start_hand action
       act(() => {
-        result.current.sendAction('start_hand');
+        result.current.sendStartHand();
       });
 
       // boardCards should be an empty array, not undefined
@@ -1908,7 +1908,7 @@ describe('Phase 3: Remove Auto-Clear and Show Start Hand Button After Showdown',
 
        // Now send start_hand action
        act(() => {
-         result.current.sendAction('start_hand');
+         result.current.sendStartHand();
        });
 
        // After sending start_hand, pot should remain at its previous value (150)
@@ -2006,7 +2006,7 @@ describe('Phase 3: Remove Auto-Clear and Show Start Hand Button After Showdown',
 
        // Now send start_hand action
        act(() => {
-         result.current.sendAction('start_hand');
+         result.current.sendStartHand();
        });
 
        // After sending start_hand, pot should remain at its previous value (300)

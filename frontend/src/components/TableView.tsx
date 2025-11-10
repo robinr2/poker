@@ -43,6 +43,7 @@ interface TableViewProps {
   gameState?: GameState;
   onSendMessage?: (message: string) => void;
   sendAction?: (action: string, amount?: number) => void;
+  sendStartHand?: () => void;
 }
 
 // Helper function to convert card string format to display format
@@ -86,8 +87,12 @@ export function TableView({
   onLeave,
   gameState,
   onSendMessage,
-  sendAction,
+  sendAction, // TODO: Use sendAction for player actions to enable optimistic updates
+  sendStartHand,
 }: TableViewProps) {
+  // Suppress unused warning for sendAction - will be used in future optimistic updates
+  void sendAction;
+  
   const [raiseAmount, setRaiseAmount] = useState<string>('');
   const [showShowdown, setShowShowdown] = useState<boolean>(true);
 
@@ -122,9 +127,10 @@ export function TableView({
     currentSeatIndex !== null ? (seats[currentSeatIndex]?.stack ?? 0) : 0;
 
   const handleStartHand = () => {
-    if (sendAction) {
-      sendAction('start_hand');
+    if (sendStartHand) {
+      sendStartHand();
     } else if (onSendMessage) {
+      // Fallback for backward compatibility
       const message = JSON.stringify({
         type: 'start_hand',
         payload: {},
@@ -177,11 +183,11 @@ export function TableView({
       <h1>Table: {tableId}</h1>
       <div className="table-container">
         <div className="seats-grid">
-          {seats.map((seat) => (
-            <div
-              key={seat.index}
-              className={`seat ${seat.index === currentSeatIndex ? 'own-seat' : ''} ${gameState?.currentActor === seat.index ? 'turn-active' : ''} ${gameState?.showdown?.winnerSeats.includes(seat.index) ? 'winner-seat' : ''}`}
-            >
+           {seats.map((seat) => (
+             <div
+               key={seat.index}
+               className={`seat ${seat.index === currentSeatIndex ? 'own-seat' : ''} ${gameState?.currentActor === seat.index ? 'turn-active' : ''} ${gameState?.showdown?.winnerSeats.includes(seat.index) ? 'winner-seat' : ''} ${gameState?.foldedPlayers?.includes(seat.index) ? 'folded' : ''}`}
+             >
               {/* Dealer Button */}
               {gameState?.dealerSeat === seat.index && (
                 <span className="dealer-badge">D</span>

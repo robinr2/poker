@@ -842,7 +842,7 @@ describe('TableView', () => {
         );
 
         // Button should be hidden during active hand (pot > 0, no handComplete)
-        let activeHandButton = screen.queryByRole('button', {
+        const activeHandButton = screen.queryByRole('button', {
           name: /Start Hand/i,
         });
         expect(activeHandButton).not.toBeInTheDocument();
@@ -971,8 +971,63 @@ describe('TableView', () => {
      });
    });
 
+   describe('TestTableViewPhase4FoldedPlayers', () => {
+     it('should apply folded class to folded players', () => {
+       const mockOnLeave = vi.fn();
+       const gameState: ExtendedGameState = {
+         dealerSeat: 0,
+         smallBlindSeat: 1,
+         bigBlindSeat: 2,
+         holeCards: null,
+         pot: 50,
+         foldedPlayers: [1, 2], // Seats 1 and 2 have folded
+       };
+
+       render(
+         <TableView
+           tableId="table-1"
+           seats={mockSeats}
+           currentSeatIndex={0}
+           onLeave={mockOnLeave}
+           gameState={gameState}
+         />
+       );
+
+       const seatContainers = document.querySelectorAll('.seat');
+       expect(seatContainers[1].classList.contains('folded')).toBe(true);
+       expect(seatContainers[2].classList.contains('folded')).toBe(true);
+     });
+
+     it('should not apply folded class to active players', () => {
+       const mockOnLeave = vi.fn();
+       const gameState: ExtendedGameState = {
+         dealerSeat: 0,
+         smallBlindSeat: 1,
+         bigBlindSeat: 2,
+         holeCards: null,
+         pot: 50,
+         foldedPlayers: [1], // Only seat 1 folded
+       };
+
+       render(
+         <TableView
+           tableId="table-1"
+           seats={mockSeats}
+           currentSeatIndex={0}
+           onLeave={mockOnLeave}
+           gameState={gameState}
+         />
+       );
+
+       const seatContainers = document.querySelectorAll('.seat');
+       expect(seatContainers[0].classList.contains('folded')).toBe(false);
+       expect(seatContainers[1].classList.contains('folded')).toBe(true);
+       expect(seatContainers[2].classList.contains('folded')).toBe(false);
+     });
+   });
+
    describe('TestTableViewPhase4CardRendering', () => {
-    it('renders card backs based on cardCount', () => {
+     it('renders card backs based on cardCount', () => {
       const mockOnLeave = vi.fn();
       const gameState: GameState = {
         dealerSeat: 1,
@@ -2767,7 +2822,7 @@ describe('Phase 5: Street Indicator', () => {
 
       it('should display "Start Hand" button when showdown exists', () => {
         const mockOnLeave = vi.fn();
-        const mockSendAction = vi.fn();
+        const mockSendStartHand = vi.fn();
         const gameState: ExtendedGameState = {
           dealerSeat: 0,
           smallBlindSeat: 1,
@@ -2794,7 +2849,7 @@ describe('Phase 5: Street Indicator', () => {
             currentSeatIndex={0}
             onLeave={mockOnLeave}
             gameState={gameState}
-            sendAction={mockSendAction}
+            sendStartHand={mockSendStartHand}
           />
         );
 
@@ -2807,7 +2862,7 @@ describe('Phase 5: Street Indicator', () => {
 
         // Button should be visible and clickable during showdown
         fireEvent.click(startHandButton);
-        expect(mockSendAction).toHaveBeenCalledWith('start_hand');
+        expect(mockSendStartHand).toHaveBeenCalled();
       });
     });
   });

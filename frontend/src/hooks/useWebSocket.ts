@@ -111,6 +111,7 @@ interface UseWebSocketReturn {
   status: ConnectionStatus;
   sendMessage: (message: string) => void;
   sendAction?: (action: string, amount?: number) => void;
+  sendStartHand: () => void;
   lastMessage: string | null;
   lobbyState: TableInfo[];
   lastSeatMessage: SeatMessage | null;
@@ -297,15 +298,18 @@ export function useWebSocket(
               ? (JSON.parse(message.payload) as HandStartedPayload)
               : (message.payload as HandStartedPayload);
           console.log('[useWebSocket] hand_started payload:', payload);
-           setGameState((prev) => ({
-             ...prev,
-             dealerSeat: payload.dealerSeat,
-             smallBlindSeat: payload.smallBlindSeat,
-             bigBlindSeat: payload.bigBlindSeat,
-             playerBets: {}, // Clear player bets for new hand
-             boardCards: [], // Clear board cards for new hand
-             street: undefined, // Clear street for new hand
-           }));
+           setGameState((prev) => {
+             const updated = { ...prev };
+             updated.dealerSeat = payload.dealerSeat;
+             updated.smallBlindSeat = payload.smallBlindSeat;
+             updated.bigBlindSeat = payload.bigBlindSeat;
+             updated.playerBets = {}; // Clear player bets for new hand
+             updated.boardCards = []; // Clear board cards for new hand
+             updated.street = undefined; // Clear street for new hand
+             delete updated.showdown; // Clear showdown state so button hides for all players
+             delete updated.handComplete; // Clear handComplete state so button hides for all players
+             return updated;
+           });
           console.log(
             '[useWebSocket] gameState updated with dealer:',
             payload.dealerSeat,
@@ -603,18 +607,6 @@ export function useWebSocket(
             payload: payload,
           });
           serviceRef.current.send(message);
-
-            // Clear showdown and handComplete state when starting a new hand
-            if (action === 'start_hand') {
-              setGameState((prev) => {
-                const updated = { ...prev };
-                delete updated.showdown;
-                delete updated.handComplete;
-                delete updated.street;
-                updated.boardCards = [];
-                return updated;
-              });
-            }
         } catch (error) {
           console.error('Failed to send action:', error);
         }
@@ -623,10 +615,36 @@ export function useWebSocket(
     [playerSeatIndex]
   );
 
+  // Memoize sendStartHand to send start_hand message with optimistic updates
+  const sendStartHand = useCallback(() => {
+    if (serviceRef.current) {
+      try {
+        const message = JSON.stringify({
+          type: 'start_hand',
+          payload: {},
+        });
+        serviceRef.current.send(message);
+
+        // Optimistic update: Clear showdown and handComplete state when starting a new hand
+        setGameState((prev) => {
+          const updated = { ...prev };
+          delete updated.showdown;
+          delete updated.handComplete;
+          delete updated.street;
+          updated.boardCards = [];
+          return updated;
+        });
+      } catch (error) {
+        console.error('Failed to send start_hand:', error);
+      }
+    }
+  }, []);
+
   return {
     status,
     sendMessage,
     sendAction,
+    sendStartHand,
     lastMessage,
     lobbyState,
     lastSeatMessage,

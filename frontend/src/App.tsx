@@ -72,6 +72,8 @@ function App() {
   const {
     status,
     sendMessage,
+    sendAction,
+    sendStartHand,
     lobbyState,
     lastSeatMessage,
     tableState,
@@ -222,6 +224,8 @@ function App() {
             onLeave={handleLeaveTable}
             gameState={gameState}
             onSendMessage={sendMessage}
+            sendAction={sendAction}
+            sendStartHand={sendStartHand}
           />
         )}
       </main>
