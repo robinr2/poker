@@ -303,7 +303,7 @@ func (s *Server) BroadcastActionRequest(tableID string, seatIndex int, validActi
 	table.mu.RLock()
 	if table.CurrentHand != nil {
 		minRaise = table.CurrentHand.GetMinRaise()
-		maxRaise = table.GetMaxRaise(seatIndex, table.Seats)
+		maxRaise = table.GetMaxRaise(seatIndex, table.CurrentHand)
 	}
 	table.mu.RUnlock()
 

@@ -2211,9 +2211,9 @@ describe('Phase 4: Board Card Display', () => {
     it('should not render board cards container when hand is not active (pot is 0)', () => {
       const mockOnLeave = vi.fn();
       const gameState: ExtendedGameState = {
-        dealerSeat: 0,
-        smallBlindSeat: 1,
-        bigBlindSeat: 2,
+        dealerSeat: null, // No dealer = no hand active
+        smallBlindSeat: null,
+        bigBlindSeat: null,
         holeCards: null,
         pot: 0,
         boardCards: [],
@@ -2239,7 +2239,7 @@ describe('Phase 4: Board Card Display', () => {
         dealerSeat: 0,
         smallBlindSeat: 1,
         bigBlindSeat: 2,
-        holeCards: null,
+        holeCards: ['As', 'Kh'], // Hand is active with hole cards
         pot: 50,
         boardCards: [],
       };
@@ -2258,15 +2258,15 @@ describe('Phase 4: Board Card Display', () => {
       expect(boardContainer).toBeInTheDocument();
     });
 
-    it('should display empty board slots preflop when hand is active', () => {
+    it('should display card back placeholders preflop when hand is active', () => {
       const mockOnLeave = vi.fn();
       const gameState: ExtendedGameState = {
         dealerSeat: 0,
         smallBlindSeat: 1,
         bigBlindSeat: 2,
-        holeCards: null,
+        holeCards: ['As', 'Kh'], // Hand is active with hole cards
         pot: 30,
-        boardCards: [],
+        boardCards: [], // No board cards dealt yet (preflop)
       };
 
       const { container } = render(
@@ -2282,9 +2282,10 @@ describe('Phase 4: Board Card Display', () => {
       const boardSlots = container.querySelectorAll('.board-card');
       expect(boardSlots.length).toBe(5);
 
-      // All should be empty slots
+      // All should be card-back placeholders during preflop
       boardSlots.forEach((slot) => {
-        expect(slot.className).toContain('empty');
+        expect(slot.className).toContain('card-back');
+        expect(slot.textContent).toBe('🂠');
       });
     });
 
@@ -3383,10 +3384,144 @@ describe('Phase 5: Street Indicator', () => {
         expect(startHandButton).toBeInTheDocument();
         expect(startHandButton).not.toBeDisabled();
 
-        // Button should be visible and clickable during showdown
-        fireEvent.click(startHandButton);
-        expect(mockSendStartHand).toHaveBeenCalled();
-      });
+         // Button should be visible and clickable during showdown
+         fireEvent.click(startHandButton);
+         expect(mockSendStartHand).toHaveBeenCalled();
+       });
+     });
+   });
+});
+
+// Phase 4: All-In Button Fix Tests
+describe('Phase 4: All-In Button Fix - maxRaise Integration', () => {
+  const mockSeats: SeatInfo[] = [
+    { index: 0, playerName: 'Alice', status: 'occupied', stack: 1000 },
+    { index: 1, playerName: 'Bob', status: 'occupied', stack: 980 }, // Bob's current stack
+    { index: 2, playerName: 'Charlie', status: 'occupied', stack: 1000 },
+  ];
+
+  interface ExtendedGameState extends GameState {
+    currentActor?: number | null;
+    validActions?: string[] | null;
+    callAmount?: number | null;
+    minRaise?: number;
+    maxRaise?: number;
+  }
+
+  describe('TestPhase4_AllInUsesMaxRaise', () => {
+    it('test_handleAllIn_usesMaxRaise: All-in button should set raiseAmount to maxRaise from gameState', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      
+      // Scenario: Bob's stack is 980, but maxRaise is 1000 (because Alice had already bet 20)
+      // The all-in button should use maxRaise (1000), not playerStack (980)
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 1,
+        validActions: ['fold', 'call', 'raise'],
+        callAmount: 20,
+        minRaise: 40,
+        maxRaise: 1000, // maxRaise > playerStack (showing total commitment possible)
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      const allInButton = screen.getByRole('button', { name: /All-in/i });
+      expect(allInButton).toBeInTheDocument();
+
+      fireEvent.click(allInButton);
+
+      // All-in should use maxRaise from gameState (1000), not playerStack (980)
+      const raiseInput = screen.getByDisplayValue('1000') as HTMLInputElement;
+      expect(raiseInput).toBeInTheDocument();
+      expect(raiseInput.value).toBe('1000');
+    });
+
+    it('test_handleAllIn_withPostedBlind: Player with posted SB should go all-in for total commitment', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      
+      // Scenario: Bob posted SB of 10, now has 970 stack remaining
+      // But maxRaise is 990 (which is 10 already posted + 980 available)
+      // However, if Alice raised, maxRaise might be higher
+      // The all-in button should use maxRaise which accounts for the blind already posted
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1, // Bob is SB
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 1, // Bob's turn
+        validActions: ['fold', 'call', 'raise'],
+        callAmount: 20, // BB is 20, Bob already posted 10
+        minRaise: 40,
+        maxRaise: 990, // 10 (already posted) + 980 (remaining) = 990
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      const allInButton = screen.getByRole('button', { name: /All-in/i });
+      fireEvent.click(allInButton);
+
+      // All-in should use maxRaise which accounts for the blind already posted
+      const raiseInput = screen.getByDisplayValue('990') as HTMLInputElement;
+      expect(raiseInput).toBeInTheDocument();
+      expect(raiseInput.value).toBe('990');
+    });
+
+    it('test_handleAllIn_disabled_whenNoMaxRaise: All-in button disabled when maxRaise unavailable', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      
+      // Edge case: gameState exists but maxRaise is undefined/0
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 30,
+        currentActor: 1,
+        validActions: ['fold', 'call'], // raise not available
+        callAmount: 20,
+        // maxRaise is undefined
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      // All-in button should not be visible when raise is not available
+      const allInButton = screen.queryByRole('button', { name: /All-in/i });
+      expect(allInButton).not.toBeInTheDocument();
     });
   });
 });

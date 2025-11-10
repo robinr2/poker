@@ -185,6 +185,13 @@ func (t *Table) HandleShowdown() {
 					t.Server.logger.Info("early winner (all folded)", "tableID", t.ID, "winner", i)
 				}
 
+				// CRITICAL: Sweep any remaining PlayerBets into Pot before calculating winner payout
+				// This handles early winner case where ShowDown is called mid-betting before AdvanceStreet()
+				for _, bet := range t.CurrentHand.PlayerBets {
+					t.CurrentHand.Pot += bet
+				}
+				t.CurrentHand.PlayerBets = make(map[int]int)
+
 				// Capture pot amount before clearing hand
 				potAmount := t.CurrentHand.Pot
 
@@ -250,6 +257,13 @@ func (t *Table) HandleShowdown() {
 			t.Server.logger.Info("showdown tie", "tableID", t.ID, "winners", winners, "rank", winningRank.Rank)
 		}
 	}
+
+	// CRITICAL: Sweep any remaining PlayerBets into Pot before distribution
+	// This handles showdown case where Player Bets may not have been advanced to Pot yet
+	for _, bet := range t.CurrentHand.PlayerBets {
+		t.CurrentHand.Pot += bet
+	}
+	t.CurrentHand.PlayerBets = make(map[int]int)
 
 	// Distribute the pot to winners
 	distribution := t.DistributePot(winners, t.CurrentHand.Pot)
@@ -777,9 +791,7 @@ func (t *Table) StartHand() error {
 		t.Seats[bbSeat].Stack -= bigBlind
 	}
 
-	hand.Pot = sbPosted + bbPosted
-
-	// Update PlayerBets to track blinds posted
+	// Update PlayerBets to track blinds posted (Pot will be filled when street advances)
 	hand.PlayerBets[sbSeat] = sbPosted
 	hand.PlayerBets[bbSeat] = bbPosted
 
@@ -1181,19 +1193,32 @@ func (h *Hand) GetMinRaise() int {
 	return h.CurrentBet + h.LastRaise
 }
 
-// GetMaxRaise returns the maximum valid raise amount for a player
-// Returns the player's remaining stack, allowing players to always bet their full stack
-// This enables proper multi-player poker where:
-// - A whale can overbet shorter stacks
-// - Multiple all-ins can occur in the same hand
-// - Side pots are handled during pot distribution at showdown (not prevented at raise time)
-func (t *Table) GetMaxRaise(seatIndex int, seats [6]Seat) int {
-	playerStack := seats[seatIndex].Stack
+// GetMaxRaise returns the maximum total chips a player can commit
+// Returns the sum of what they've already bet plus their remaining stack
+// This fixes pot accounting by showing total commitment ability
+// Examples:
+// - Player posted SB=10, has 990 remaining: returns 1000 (10+990)
+// - Player called 50, has 950 remaining: returns 1000 (50+950)
+// - Player hasn't bet yet, has 1000 stack: returns 1000 (0+1000)
+func (t *Table) GetMaxRaise(seatIndex int, hand *Hand) int {
+	if hand == nil {
+		// Fallback if no hand - shouldn't happen in normal flow
+		return 0
+	}
 
-	// Players can ALWAYS bet their full stack, regardless of opponent stacks
-	// This allows proper multi-player poker where a whale can overbet shorter stacks
-	// and multiple all-ins can happen in the same hand
-	return playerStack
+	// Initialize PlayerBets if needed
+	if hand.PlayerBets == nil {
+		hand.PlayerBets = make(map[int]int)
+	}
+
+	// Get what player has already bet this round
+	playerBet := hand.PlayerBets[seatIndex]
+
+	// Get player's remaining stack
+	playerStack := t.Seats[seatIndex].Stack
+
+	// Return total commitment ability: already bet + remaining stack
+	return playerBet + playerStack
 }
 
 // ValidateRaise checks if a raise amount is valid
@@ -1310,10 +1335,7 @@ func (h *Hand) ProcessAction(seatIndex int, action string, playerStack int, amou
 			chipsToBet = playerStack
 		}
 
-		// Update pot
-		h.Pot += chipsToBet
-
-		// Update player's bet for this round
+		// Update player's bet for this round (Pot will be filled when street advances)
 		h.PlayerBets[seatIndex] += chipsToBet
 
 		// Mark player as acted
@@ -1360,10 +1382,7 @@ func (h *Hand) ProcessAction(seatIndex int, action string, playerStack int, amou
 		// Update LastRaise (increment from previous bet)
 		h.LastRaise = raiseAmount - previousBet
 
-		// Update pot with chips moved
-		h.Pot += chipsToBet
-
-		// Update player's total bet for this round
+		// Update player's total bet for this round (Pot will be filled when street advances)
 		h.PlayerBets[seatIndex] = raiseAmount
 
 		// Mark player as acted
@@ -1415,10 +1434,7 @@ func (h *Hand) ProcessActionWithSeats(seatIndex int, action string, playerStack 
 			chipsToBet = maxOpponentCoverage
 		}
 
-		// Update pot
-		h.Pot += chipsToBet
-
-		// Update player's bet for this round
+		// Update player's bet for this round (Pot will be filled when street advances)
 		h.PlayerBets[seatIndex] += chipsToBet
 
 		// Mark player as acted
@@ -1467,9 +1483,6 @@ func (h *Hand) ProcessActionWithSeats(seatIndex int, action string, playerStack 
 
 		// Update LastRaise (increment from previous bet)
 		h.LastRaise = raiseAmount - previousBet
-
-		// Update pot with chips moved
-		h.Pot += chipsToBet
 
 		// Update player's total bet for this round
 		h.PlayerBets[seatIndex] = raiseAmount
@@ -1572,6 +1585,8 @@ func (h *Hand) AdvanceAction(seats [6]Seat) (*int, error) {
 
 // AdvanceStreet moves the hand to the next street and resets betting state
 // Streets: preflop -> flop -> turn -> river
+// CRITICAL: Sweeps all PlayerBets into Pot before resetting betting state
+// This ensures blinds and all bets accumulate properly across streets
 // Resets CurrentBet, LastRaise, and ActedPlayers for the new street
 func (h *Hand) AdvanceStreet() {
 	switch h.Street {
@@ -1584,6 +1599,12 @@ func (h *Hand) AdvanceStreet() {
 	case "river":
 		// Hand is over (no advance from river)
 		return
+	}
+
+	// Sweep all PlayerBets into Pot before clearing
+	// This includes blinds on the first sweep (preflop -> flop) and all subsequent street bets
+	for _, bet := range h.PlayerBets {
+		h.Pot += bet
 	}
 
 	// Reset betting state for new street

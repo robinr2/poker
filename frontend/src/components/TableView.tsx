@@ -19,6 +19,7 @@ interface GameState {
   callAmount?: number | null;
   foldedPlayers?: number[];
   roundOver?: boolean | null;
+  handInProgress?: boolean;
   minRaise?: number;
   maxRaise?: number;
   playerBets?: Record<number, number>;
@@ -115,16 +116,13 @@ export function TableView({
   );
 
   // Determine if Start Hand button should be visible
-  // Show when: player is seated AND (first hand with pot=0 OR hand complete)
+  // Show when: player is seated AND (no hand in progress OR hand complete)
   const isSeated = currentSeatIndex !== null && currentSeatIndex !== undefined;
-  const isFirstHand =
-    !gameState || gameState.pot === 0 || gameState.pot === undefined;
+  const hasHoleCards = gameState?.holeCards !== null && gameState?.holeCards !== undefined;
+  const hasDealer = gameState?.dealerSeat !== null && gameState?.dealerSeat !== undefined;
+  const handInProgress = hasHoleCards || hasDealer;
   const isHandComplete = gameState?.handComplete !== undefined;
-  const showStartHandButton = isSeated && (isFirstHand || isHandComplete);
-
-  // Get player's current stack
-  const playerStack =
-    currentSeatIndex !== null ? (seats[currentSeatIndex]?.stack ?? 0) : 0;
+  const showStartHandButton = isSeated && (!handInProgress || isHandComplete);
 
   const handleStartHand = () => {
     if (sendStartHand) {
@@ -174,9 +172,9 @@ export function TableView({
     setRaiseAmount(potSized.toString());
   };
 
-  const handleAllIn = () => {
-    setRaiseAmount(playerStack.toString());
-  };
+   const handleAllIn = () => {
+     setRaiseAmount((gameState?.maxRaise ?? 0).toString());
+   };
 
   return (
     <div className="table-view">
@@ -255,29 +253,34 @@ export function TableView({
         </div>
 
         {/* Game Info Section */}
-        {gameState && gameState.pot > 0 && (
-          <div className="game-info">
-            {gameState.street && (
-              <div className="street-indicator">
-                {gameState.street.charAt(0).toUpperCase() +
-                  gameState.street.slice(1)}
-              </div>
-            )}
-            <div className="pot-display">Pot: {gameState.pot}</div>
-          </div>
-        )}
+        {gameState &&
+          !showStartHandButton &&
+          !gameState.handComplete && (
+            <div className="game-info">
+              {gameState.street && (
+                <div className="street-indicator">
+                  {gameState.street.charAt(0).toUpperCase() +
+                    gameState.street.slice(1)}
+                </div>
+              )}
+              <div className="pot-display">Pot: {gameState.pot}</div>
+            </div>
+          )}
 
         {/* Board Cards Display - only show when hand is active */}
-        {gameState && gameState.pot > 0 && (
+        {gameState &&
+          !showStartHandButton &&
+          !gameState.handComplete && (
           <div className="board-cards">
             {Array.from({ length: 5 }).map((_, idx) => {
               const card = gameState?.boardCards?.[idx];
+              const hasAnyBoardCards = gameState?.boardCards && gameState.boardCards.length > 0;
               return (
                 <div
                   key={idx}
-                  className={`board-card ${card ? 'face-up' : 'empty'} ${card && isRedSuit(card) ? 'red-suit' : card ? 'black-suit' : ''}`}
+                  className={`board-card ${card ? 'face-up' : hasAnyBoardCards ? 'empty' : 'card-back'} ${card && isRedSuit(card) ? 'red-suit' : card ? 'black-suit' : ''}`}
                 >
-                  {card ? formatCardDisplay(card) : ''}
+                  {card ? formatCardDisplay(card) : hasAnyBoardCards ? '' : '🂠'}
                 </div>
               );
             })}

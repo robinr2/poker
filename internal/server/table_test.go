@@ -15,6 +15,16 @@ func seatsToPointers(seats []Seat) []*Seat {
 	return result
 }
 
+// Helper function to create a minimal Hand with no bets (for testing purposes)
+func createEmptyHand() *Hand {
+	return &Hand{
+		Pot:           0,
+		PlayerBets:    make(map[int]int), // Empty - no bets
+		FoldedPlayers: make(map[int]bool),
+		ActedPlayers:  make(map[int]bool),
+	}
+}
+
 // TestNewTable verifies table creation with correct ID, name, and 6 empty seats
 func TestNewTable(t *testing.T) {
 	table := NewTable("table-1", "Table 1", nil)
@@ -1603,9 +1613,17 @@ func TestStartHandPostsBlinds(t *testing.T) {
 		t.Errorf("expected seat 1 stack 980 (1000 - 20 BB), got %d", table.Seats[1].Stack)
 	}
 
-	// Verify pot = 30 (SB 10 + BB 20)
-	if table.CurrentHand.Pot != 30 {
-		t.Errorf("expected pot 30, got %d", table.CurrentHand.Pot)
+	// Verify PlayerBets have blinds (Pot stays 0 during betting)
+	if table.CurrentHand.Pot != 0 {
+		t.Errorf("expected pot 0 during betting, got %d", table.CurrentHand.Pot)
+	}
+
+	if table.CurrentHand.PlayerBets[0] != 10 {
+		t.Errorf("expected seat 0 (SB) PlayerBets 10, got %d", table.CurrentHand.PlayerBets[0])
+	}
+
+	if table.CurrentHand.PlayerBets[1] != 20 {
+		t.Errorf("expected seat 1 (BB) PlayerBets 20, got %d", table.CurrentHand.PlayerBets[1])
 	}
 }
 
@@ -1664,9 +1682,21 @@ func TestStartHandSetsPot(t *testing.T) {
 		t.Fatalf("expected no error starting hand, got %v", err)
 	}
 
-	// Verify pot = SB 10 + BB 20 = 30
-	if table.CurrentHand.Pot != 30 {
-		t.Errorf("expected pot 30, got %d", table.CurrentHand.Pot)
+	// Verify PlayerBets have blinds (Pot stays 0 during betting)
+	if table.CurrentHand.Pot != 0 {
+		t.Errorf("expected pot 0 during betting, got %d", table.CurrentHand.Pot)
+	}
+
+	// In 6-player game: dealer at 0, SB at next active (seat 1), BB at seat 2
+	sbSeat := table.CurrentHand.SmallBlindSeat
+	bbSeat := table.CurrentHand.BigBlindSeat
+
+	if table.CurrentHand.PlayerBets[sbSeat] != 10 {
+		t.Errorf("expected seat %d (SB) PlayerBets 10, got %d", sbSeat, table.CurrentHand.PlayerBets[sbSeat])
+	}
+
+	if table.CurrentHand.PlayerBets[bbSeat] != 20 {
+		t.Errorf("expected seat %d (BB) PlayerBets 20, got %d", bbSeat, table.CurrentHand.PlayerBets[bbSeat])
 	}
 }
 
@@ -1725,9 +1755,18 @@ func TestStartHandAllInBlind(t *testing.T) {
 		t.Errorf("expected seat 2 stack 980 (1000 - 20 BB), got %d", table.Seats[2].Stack)
 	}
 
-	// Verify pot = SB(5 all-in) + BB(20) = 25
-	if table.CurrentHand.Pot != 25 {
-		t.Errorf("expected pot 25 (5 SB all-in + 20 BB), got %d", table.CurrentHand.Pot)
+	// Verify PlayerBets have blinds (Pot stays 0 during betting)
+	if table.CurrentHand.Pot != 0 {
+		t.Errorf("expected pot 0 during betting, got %d", table.CurrentHand.Pot)
+	}
+
+	// SB posted 5 (all-in), BB posted 20
+	if table.CurrentHand.PlayerBets[1] != 5 {
+		t.Errorf("expected seat 1 (SB) PlayerBets 5, got %d", table.CurrentHand.PlayerBets[1])
+	}
+
+	if table.CurrentHand.PlayerBets[2] != 20 {
+		t.Errorf("expected seat 2 (BB) PlayerBets 20, got %d", table.CurrentHand.PlayerBets[2])
 	}
 }
 
@@ -2121,8 +2160,12 @@ func TestHandleShowdown_UpdatesStacks(t *testing.T) {
 	table.CurrentHand.Street = "river"
 	table.CurrentHand.FoldedPlayers[2] = true
 
-	// After StartHand, Pot should be 30 (SB 10 + BB 20)
-	// Stacks: 1000, 990, 980
+	// With new pot accounting: after StartHand, Pot=0 and PlayerBets has blinds
+	// Before showdown, we need to sweep PlayerBets into Pot (simulating street advances)
+	for _, bet := range table.CurrentHand.PlayerBets {
+		table.CurrentHand.Pot += bet
+	}
+	table.CurrentHand.PlayerBets = make(map[int]int)
 
 	// Add board cards (5 cards for river) for proper hand evaluation
 	table.CurrentHand.BoardCards = []Card{
@@ -3111,7 +3154,6 @@ func TestProcessAction_Call(t *testing.T) {
 	// Set up: player has bet 10, current bet is 50, stack is 1000
 	table.CurrentHand.PlayerBets[0] = 10
 	table.CurrentHand.CurrentBet = 50
-	initialPot := table.CurrentHand.Pot
 
 	// Process call action (need to call 40 more)
 	chipsMoved, err := table.CurrentHand.ProcessAction(0, "call", table.Seats[0].Stack)
@@ -3124,10 +3166,9 @@ func TestProcessAction_Call(t *testing.T) {
 		t.Errorf("expected 40 chips moved, got %d", chipsMoved)
 	}
 
-	// Verify pot increased by call amount (40)
-	expectedPot := initialPot + 40
-	if table.CurrentHand.Pot != expectedPot {
-		t.Errorf("expected pot to be %d, got %d", expectedPot, table.CurrentHand.Pot)
+	// Verify Pot stays 0 during betting (chips go to PlayerBets)
+	if table.CurrentHand.Pot != 0 {
+		t.Errorf("expected pot 0 during betting, got %d", table.CurrentHand.Pot)
 	}
 
 	// Verify PlayerBets updated to match current bet
@@ -3174,7 +3215,6 @@ func TestProcessAction_CallPartial(t *testing.T) {
 	table.CurrentHand.PlayerBets[0] = 0
 	table.CurrentHand.CurrentBet = 50
 	playerStack := 30 // Only 30 chips available
-	initialPot := table.CurrentHand.Pot
 
 	// Process call action (go all-in with 30)
 	chipsMoved, err := table.CurrentHand.ProcessAction(0, "call", playerStack)
@@ -3187,10 +3227,9 @@ func TestProcessAction_CallPartial(t *testing.T) {
 		t.Errorf("expected 30 chips moved (all-in), got %d", chipsMoved)
 	}
 
-	// Verify pot increased by available chips (30)
-	expectedPot := initialPot + 30
-	if table.CurrentHand.Pot != expectedPot {
-		t.Errorf("expected pot to be %d, got %d", expectedPot, table.CurrentHand.Pot)
+	// Verify Pot stays 0 during betting (chips go to PlayerBets)
+	if table.CurrentHand.Pot != 0 {
+		t.Errorf("expected pot 0 during betting, got %d", table.CurrentHand.Pot)
 	}
 
 	// Verify PlayerBets updated to 30 (not the full current bet)
@@ -3914,7 +3953,7 @@ func TestGetMaxRaise_LimitedByPlayerStack(t *testing.T) {
 	}
 
 	// GetMaxRaise for seat 0: returns player's stack 1000 (not limited by opponent's 1000)
-	maxRaise := table.GetMaxRaise(0, table.Seats)
+	maxRaise := table.GetMaxRaise(0, createEmptyHand())
 	if maxRaise != 1000 {
 		t.Errorf("GetMaxRaise(seat 0) = %d, want 1000 (player's stack)", maxRaise)
 	}
@@ -3924,13 +3963,13 @@ func TestGetMaxRaise_LimitedByPlayerStack(t *testing.T) {
 
 	// GetMaxRaise for seat 0: still returns player's stack 1000 (NOT limited to opponent's 500)
 	// This is the key difference - player can overbет the short stack
-	maxRaise = table.GetMaxRaise(0, table.Seats)
+	maxRaise = table.GetMaxRaise(0, createEmptyHand())
 	if maxRaise != 1000 {
 		t.Errorf("GetMaxRaise(seat 0) = %d, want 1000 (player's full stack, not limited by short opponent)", maxRaise)
 	}
 
 	// GetMaxRaise for seat 1: returns player's stack 1000 (NOT limited to opponent's 500)
-	maxRaise = table.GetMaxRaise(1, table.Seats)
+	maxRaise = table.GetMaxRaise(1, createEmptyHand())
 	if maxRaise != 1000 {
 		t.Errorf("GetMaxRaise(seat 1) = %d, want 1000 (player's full stack, not limited by short opponent)", maxRaise)
 	}
@@ -3951,19 +3990,19 @@ func TestGetMaxRaise_LimitedByOpponentStack(t *testing.T) {
 	}
 
 	// Seat 0 player has 1000, can now raise full amount (not limited to opponent's 300)
-	maxRaise := table.GetMaxRaise(0, table.Seats)
+	maxRaise := table.GetMaxRaise(0, createEmptyHand())
 	if maxRaise != 1000 {
 		t.Errorf("GetMaxRaise(seat 0) = %d, want 1000 (player's full stack)", maxRaise)
 	}
 
 	// Seat 1 player has 500, can raise full amount (not limited to opponent's 300)
-	maxRaise = table.GetMaxRaise(1, table.Seats)
+	maxRaise = table.GetMaxRaise(1, createEmptyHand())
 	if maxRaise != 500 {
 		t.Errorf("GetMaxRaise(seat 1) = %d, want 500 (player's full stack)", maxRaise)
 	}
 
 	// Seat 2 player has 300, can raise full amount
-	maxRaise = table.GetMaxRaise(2, table.Seats)
+	maxRaise = table.GetMaxRaise(2, createEmptyHand())
 	if maxRaise != 300 {
 		t.Errorf("GetMaxRaise(seat 2) = %d, want 300 (player's full stack)", maxRaise)
 	}
@@ -3986,13 +4025,13 @@ func TestGetMaxRaise_HeadsUp(t *testing.T) {
 	table.Seats[3].Stack = 800
 
 	// In heads-up, seat 0 can now raise full 1000 (not limited to opponent's 800)
-	maxRaise := table.GetMaxRaise(0, table.Seats)
+	maxRaise := table.GetMaxRaise(0, createEmptyHand())
 	if maxRaise != 1000 {
 		t.Errorf("GetMaxRaise(seat 0 heads-up) = %d, want 1000 (player's full stack)", maxRaise)
 	}
 
 	// Seat 3 (800 stack) can raise their full 800
-	maxRaise = table.GetMaxRaise(3, table.Seats)
+	maxRaise = table.GetMaxRaise(3, createEmptyHand())
 	if maxRaise != 800 {
 		t.Errorf("GetMaxRaise(seat 3 heads-up) = %d, want 800 (player's full stack)", maxRaise)
 	}
@@ -4013,25 +4052,25 @@ func TestGetMaxRaise_MultiPlayer(t *testing.T) {
 	}
 
 	// Seat 0 (1000): can now raise full 1000 (not limited to smallest opponent 300)
-	maxRaise := table.GetMaxRaise(0, table.Seats)
+	maxRaise := table.GetMaxRaise(0, createEmptyHand())
 	if maxRaise != 1000 {
 		t.Errorf("GetMaxRaise(seat 0, 4-player) = %d, want 1000", maxRaise)
 	}
 
 	// Seat 1 (600): can raise full 600 (not limited to smallest opponent 300)
-	maxRaise = table.GetMaxRaise(1, table.Seats)
+	maxRaise = table.GetMaxRaise(1, createEmptyHand())
 	if maxRaise != 600 {
 		t.Errorf("GetMaxRaise(seat 1, 4-player) = %d, want 600", maxRaise)
 	}
 
 	// Seat 2 (300): can raise full 300
-	maxRaise = table.GetMaxRaise(2, table.Seats)
+	maxRaise = table.GetMaxRaise(2, createEmptyHand())
 	if maxRaise != 300 {
 		t.Errorf("GetMaxRaise(seat 2, 4-player) = %d, want 300", maxRaise)
 	}
 
 	// Seat 3 (800): can raise full 800 (not limited to smallest opponent 300)
-	maxRaise = table.GetMaxRaise(3, table.Seats)
+	maxRaise = table.GetMaxRaise(3, createEmptyHand())
 	if maxRaise != 800 {
 		t.Errorf("GetMaxRaise(seat 3, 4-player) = %d, want 800", maxRaise)
 	}
@@ -4422,11 +4461,14 @@ func TestProcessAction_RaiseUpdatesBets(t *testing.T) {
 	// Set up betting state: CurrentBet=50, Player 0 hasn't acted
 	table.CurrentHand.CurrentBet = 50
 	table.CurrentHand.LastRaise = 50
-	table.CurrentHand.Pot = 100
+	// During betting, Pot stays at 0 (chips are in PlayerBets)
 	if table.CurrentHand.PlayerBets == nil {
 		table.CurrentHand.PlayerBets = make(map[int]int)
 	}
 	table.CurrentHand.PlayerBets[0] = 0
+	// Manually set some existing PlayerBets from previous actions
+	table.CurrentHand.PlayerBets[1] = 50
+	initialPot := table.CurrentHand.Pot
 
 	// Player 0 raises to 150 (initial bet of 50, raise increment of 100)
 	chipsMoved, err := table.CurrentHand.ProcessAction(0, "raise", 1000, 150)
@@ -4454,9 +4496,9 @@ func TestProcessAction_RaiseUpdatesBets(t *testing.T) {
 		t.Errorf("expected PlayerBets[0]=150, got %d", table.CurrentHand.PlayerBets[0])
 	}
 
-	// Pot should be updated (100 + 150 = 250)
-	if table.CurrentHand.Pot != 250 {
-		t.Errorf("expected Pot=250, got %d", table.CurrentHand.Pot)
+	// Pot should remain unchanged during betting (chips stay in PlayerBets until street advance)
+	if table.CurrentHand.Pot != initialPot {
+		t.Errorf("expected Pot=%d (unchanged during betting), got %d", initialPot, table.CurrentHand.Pot)
 	}
 
 	// ActedPlayers[0] should be marked true
@@ -6275,6 +6317,61 @@ func TestHandleShowdown_EarlyWinner_OpponentBustsOut(t *testing.T) {
 	}
 }
 
+// TestHandleShowdown_EarlyWinner_UnsweptBets verifies that HandleShowdown correctly
+// sweeps unswept PlayerBets into Pot before calculating winner's new stack.
+// This test replicates the critical bug: preflop SB(10) + raise to 100, BB(20) + fold.
+// Expected: Winner gets 120 total (10 SB + 20 BB + 100 raise)
+// Bug: Previous code read Pot=0 before sweep, so winner got 0
+func TestHandleShowdown_EarlyWinner_UnsweptBets(t *testing.T) {
+	server := &Server{logger: slog.Default()}
+	table := NewTable("table-1", "Test Table", server)
+
+	// Set up initial stacks
+	token0 := "player-0" // SB, will raise and win
+	token1 := "player-1" // BB, will fold and bust
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000 // Initial 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 20 // BB with only 20 (will go all-in with BB and fold)
+
+	// Create a hand with unswept bets (critical bug scenario)
+	// Scenario: SB (player 0) posts 10 as SB, BB (player 1) posts 20 as BB
+	// SB then raises to 100, BB folds immediately (early winner)
+	hand := &Hand{
+		Pot:            30, // SB(10) + BB(20) already in pot from blind posting
+		DealerSeat:     1,
+		SmallBlindSeat: 0,
+		BigBlindSeat:   1,
+		Street:         "preflop",
+		HoleCards: map[int][]Card{
+			0: {Card{Rank: "A", Suit: "s"}, Card{Rank: "K", Suit: "s"}},
+			1: {Card{Rank: "2", Suit: "h"}, Card{Rank: "3", Suit: "h"}},
+		},
+		// Additional bets during preflop: SB raises additional 90 (to 100 total)
+		PlayerBets: map[int]int{
+			0: 90, // SB's additional bet to reach 100 total
+		},
+		FoldedPlayers: map[int]bool{
+			1: true, // BB folded (early winner scenario)
+		},
+	}
+
+	table.CurrentHand = hand
+
+	// Call HandleShowdown - should sweep PlayerBets into Pot before calculating winner stack
+	table.HandleShowdown()
+
+	// CRITICAL VERIFICATION: Winner should get 120 (100 from their bet + 20 from BB)
+	// Expected winner stack: 1000 (initial) + 120 (pot) = 1120
+	expectedWinnerStack := 1000 + 120 // Initial 1000 + pot of 120
+	if table.Seats[0].Stack != expectedWinnerStack {
+		t.Errorf("expected winner stack %d, got %d", expectedWinnerStack, table.Seats[0].Stack)
+	}
+}
+
 // TestHandleBustOutsWithNotificationsLocked_SinglePlayerBusted
 // Verifies that a single player with stack 0 is identified, cleared, and token is returned
 func TestHandleBustOutsWithNotificationsLocked_SinglePlayerBusted(t *testing.T) {
@@ -6471,8 +6568,10 @@ func TestShowdown_AllInPlayerBustsOut(t *testing.T) {
 	// and have player 0 call. We'll update the hand state to reflect this.
 
 	// Set player 1's remaining stack to 0 (they went all-in with 10 on preflop)
+	// With new pot accounting, bets stay in PlayerBets until AdvanceStreet or HandleShowdown
+	table.CurrentHand.PlayerBets[0] = 30 // Player 0 bet total of 30 (SB 10 + call 20)
 	table.CurrentHand.PlayerBets[1] = 30 // Player 1 bet total of 30 (all-in)
-	table.CurrentHand.Pot = 30 + 30      // Player 0 matched: 30 into pot = 60 total pot
+	table.CurrentHand.Pot = 0            // Pot is 0 during betting; will be swept to 60 at showdown
 
 	// Now update stacks to reflect the all-in
 	table.Seats[0].Stack = 1000 - 10 - 20 // After SB (10) and calling the all-in (20), has 970
@@ -6507,7 +6606,13 @@ func TestShowdown_AllInPlayerBustsOut(t *testing.T) {
 
 	// Get initial state before showdown
 	initialToken0Stack := table.Seats[0].Stack
-	initialPot := table.CurrentHand.Pot
+
+	// With new pot accounting, calculate total pot from PlayerBets
+	totalPlayerBets := 0
+	for _, bet := range table.CurrentHand.PlayerBets {
+		totalPlayerBets += bet
+	}
+	initialPot := table.CurrentHand.Pot + totalPlayerBets
 
 	// Call HandleShowdown
 	table.HandleShowdown()
@@ -6584,7 +6689,7 @@ func TestShowdown_MultiplePlayersBustOut(t *testing.T) {
 	table.CurrentHand.PlayerBets[0] = 60 // Player 0 bet 60
 	table.CurrentHand.PlayerBets[1] = 30 // Player 1 all-in with 30
 	table.CurrentHand.PlayerBets[2] = 30 // Player 2 all-in with 30
-	table.CurrentHand.Pot = 120          // Total pot
+	table.CurrentHand.Pot = 0            // With new pot accounting, pot is 0 during betting
 
 	// Update stacks to reflect all-in
 	table.Seats[0].Stack = 1000 - 10 - 60 // 930 (after SB + call)
@@ -6628,7 +6733,13 @@ func TestShowdown_MultiplePlayersBustOut(t *testing.T) {
 
 	// Get initial state
 	initialStack0 := table.Seats[0].Stack
-	initialPot := table.CurrentHand.Pot
+
+	// With new pot accounting, calculate total pot from PlayerBets
+	totalPlayerBets := 0
+	for _, bet := range table.CurrentHand.PlayerBets {
+		totalPlayerBets += bet
+	}
+	initialPot := table.CurrentHand.Pot + totalPlayerBets
 
 	// Call HandleShowdown
 	table.HandleShowdown()
@@ -6787,7 +6898,7 @@ func TestShowdown_AllInWinnerNotKicked(t *testing.T) {
 
 	table.CurrentHand.PlayerBets[0] = 30 // Player 0 all-in with 30 total
 	table.CurrentHand.PlayerBets[1] = 30 // Player 1 all-in with 30 total
-	table.CurrentHand.Pot = 60           // Total pot
+	table.CurrentHand.Pot = 0            // With new pot accounting, pot is 0 during betting
 
 	// Update stacks to reflect all-in
 	table.Seats[0].Stack = 0 // Player 0 all-in
@@ -6820,8 +6931,12 @@ func TestShowdown_AllInWinnerNotKicked(t *testing.T) {
 	// Manually set street to river (showdown state)
 	table.CurrentHand.Street = "river"
 
-	// Get initial pot
-	initialPot := table.CurrentHand.Pot
+	// Get initial pot - calculate from PlayerBets with new accounting
+	totalPlayerBets := 0
+	for _, bet := range table.CurrentHand.PlayerBets {
+		totalPlayerBets += bet
+	}
+	initialPot := table.CurrentHand.Pot + totalPlayerBets
 
 	// Call HandleShowdown
 	table.HandleShowdown()
@@ -6890,13 +7005,13 @@ func TestGetMaxRaise_2P_SB_AllIn_BugFix(t *testing.T) {
 	table.Seats[1].Stack = 980 // After posting BB (1000 - 20)
 
 	// A (SB) should be able to raise to 990 (their full stack)
-	maxRaise := table.GetMaxRaise(0, table.Seats)
+	maxRaise := table.GetMaxRaise(0, createEmptyHand())
 	if maxRaise != 990 {
 		t.Errorf("TestGetMaxRaise_2P_SB_AllIn_BugFix: Player A should be able to bet full stack 990, got %d", maxRaise)
 	}
 
 	// B (BB) should be able to raise to 980 (their full stack)
-	maxRaise = table.GetMaxRaise(1, table.Seats)
+	maxRaise = table.GetMaxRaise(1, createEmptyHand())
 	if maxRaise != 980 {
 		t.Errorf("TestGetMaxRaise_2P_SB_AllIn_BugFix: Player B should be able to bet full stack 980, got %d", maxRaise)
 	}
@@ -6918,12 +7033,12 @@ func TestGetMaxRaise_2P_Both_Equal_Stacks(t *testing.T) {
 	table.Seats[1].Stack = 1000
 
 	// Both can go all-in for 1000
-	maxRaise := table.GetMaxRaise(0, table.Seats)
+	maxRaise := table.GetMaxRaise(0, createEmptyHand())
 	if maxRaise != 1000 {
 		t.Errorf("TestGetMaxRaise_2P_Both_Equal_Stacks: Player A should get 1000, got %d", maxRaise)
 	}
 
-	maxRaise = table.GetMaxRaise(1, table.Seats)
+	maxRaise = table.GetMaxRaise(1, createEmptyHand())
 	if maxRaise != 1000 {
 		t.Errorf("TestGetMaxRaise_2P_Both_Equal_Stacks: Player B should get 1000, got %d", maxRaise)
 	}
@@ -6945,13 +7060,13 @@ func TestGetMaxRaise_2P_Short_Stack_Can_AllIn(t *testing.T) {
 	table.Seats[1].Stack = 1000
 
 	// A (short stack) should be able to go all-in for 490
-	maxRaise := table.GetMaxRaise(0, table.Seats)
+	maxRaise := table.GetMaxRaise(0, createEmptyHand())
 	if maxRaise != 490 {
 		t.Errorf("TestGetMaxRaise_2P_Short_Stack_Can_AllIn: Player A should get 490, got %d", maxRaise)
 	}
 
 	// B should be able to go all-in for 1000
-	maxRaise = table.GetMaxRaise(1, table.Seats)
+	maxRaise = table.GetMaxRaise(1, createEmptyHand())
 	if maxRaise != 1000 {
 		t.Errorf("TestGetMaxRaise_2P_Short_Stack_Can_AllIn: Player B should get 1000, got %d", maxRaise)
 	}
@@ -6971,19 +7086,19 @@ func TestGetMaxRaise_3P_One_Short_Stack_Can_AllIn(t *testing.T) {
 	}
 
 	// B (SB with 490) should be able to go all-in for 490
-	maxRaise := table.GetMaxRaise(1, table.Seats)
+	maxRaise := table.GetMaxRaise(1, createEmptyHand())
 	if maxRaise != 490 {
 		t.Errorf("TestGetMaxRaise_3P_One_Short_Stack_Can_AllIn: Player B should get 490, got %d", maxRaise)
 	}
 
 	// A should be able to go all-in for 1000
-	maxRaise = table.GetMaxRaise(0, table.Seats)
+	maxRaise = table.GetMaxRaise(0, createEmptyHand())
 	if maxRaise != 1000 {
 		t.Errorf("TestGetMaxRaise_3P_One_Short_Stack_Can_AllIn: Player A should get 1000, got %d", maxRaise)
 	}
 
 	// C should be able to go all-in for 1000
-	maxRaise = table.GetMaxRaise(2, table.Seats)
+	maxRaise = table.GetMaxRaise(2, createEmptyHand())
 	if maxRaise != 1000 {
 		t.Errorf("TestGetMaxRaise_3P_One_Short_Stack_Can_AllIn: Player C should get 1000, got %d", maxRaise)
 	}
@@ -7003,13 +7118,13 @@ func TestGetMaxRaise_3P_Multiple_Different_Stacks(t *testing.T) {
 	}
 
 	// Each player can bet their full stack
-	if maxRaise := table.GetMaxRaise(0, table.Seats); maxRaise != 2000 {
+	if maxRaise := table.GetMaxRaise(0, createEmptyHand()); maxRaise != 2000 {
 		t.Errorf("Player A should get 2000, got %d", maxRaise)
 	}
-	if maxRaise := table.GetMaxRaise(1, table.Seats); maxRaise != 1000 {
+	if maxRaise := table.GetMaxRaise(1, createEmptyHand()); maxRaise != 1000 {
 		t.Errorf("Player B should get 1000, got %d", maxRaise)
 	}
-	if maxRaise := table.GetMaxRaise(2, table.Seats); maxRaise != 500 {
+	if maxRaise := table.GetMaxRaise(2, createEmptyHand()); maxRaise != 500 {
 		t.Errorf("Player C should get 500, got %d", maxRaise)
 	}
 }
@@ -7028,7 +7143,7 @@ func TestGetMaxRaise_3P_Whale_Can_Overbet_All(t *testing.T) {
 	}
 
 	// Whale should be able to bet full 5000
-	maxRaise := table.GetMaxRaise(0, table.Seats)
+	maxRaise := table.GetMaxRaise(0, createEmptyHand())
 	if maxRaise != 5000 {
 		t.Errorf("TestGetMaxRaise_3P_Whale_Can_Overbet_All: Whale should get 5000, got %d", maxRaise)
 	}
@@ -7049,7 +7164,7 @@ func TestGetMaxRaise_4P_Multiple_AllIns_Same_Hand(t *testing.T) {
 
 	// All players can bet their full stacks
 	for i := 0; i < 4; i++ {
-		if maxRaise := table.GetMaxRaise(i, table.Seats); maxRaise != stacks[i] {
+		if maxRaise := table.GetMaxRaise(i, createEmptyHand()); maxRaise != stacks[i] {
 			t.Errorf("Player %d should get %d, got %d", i, stacks[i], maxRaise)
 		}
 	}
@@ -7070,7 +7185,7 @@ func TestGetMaxRaise_4P_Shortest_Stack_All_Can_Bet_Full(t *testing.T) {
 
 	// All players can bet their full stacks (no opponent stack limit)
 	for i := 0; i < 4; i++ {
-		if maxRaise := table.GetMaxRaise(i, table.Seats); maxRaise != stacks[i] {
+		if maxRaise := table.GetMaxRaise(i, createEmptyHand()); maxRaise != stacks[i] {
 			t.Errorf("Player %d should get %d, got %d", i, stacks[i], maxRaise)
 		}
 	}
@@ -7091,7 +7206,7 @@ func TestGetMaxRaise_5P_Multiple_Callers_Different_Stacks(t *testing.T) {
 
 	// All players can bet their full stacks
 	for i := 0; i < 5; i++ {
-		if maxRaise := table.GetMaxRaise(i, table.Seats); maxRaise != stacks[i] {
+		if maxRaise := table.GetMaxRaise(i, createEmptyHand()); maxRaise != stacks[i] {
 			t.Errorf("Player %d should get %d, got %d", i, stacks[i], maxRaise)
 		}
 	}
@@ -7111,13 +7226,13 @@ func TestGetMaxRaise_6P_Whale_Overbets_Everyone(t *testing.T) {
 	}
 
 	// Whale can bet full 10000
-	if maxRaise := table.GetMaxRaise(0, table.Seats); maxRaise != 10000 {
+	if maxRaise := table.GetMaxRaise(0, createEmptyHand()); maxRaise != 10000 {
 		t.Errorf("Whale should get 10000, got %d", maxRaise)
 	}
 
 	// All other players can bet their full stacks
 	for i := 1; i < 6; i++ {
-		if maxRaise := table.GetMaxRaise(i, table.Seats); maxRaise != stacks[i] {
+		if maxRaise := table.GetMaxRaise(i, createEmptyHand()); maxRaise != stacks[i] {
 			t.Errorf("Player %d should get %d, got %d", i, stacks[i], maxRaise)
 		}
 	}
@@ -7220,9 +7335,13 @@ func TestSidePots_2P_EffectiveAllIn(t *testing.T) {
 	if table.Seats[1].Stack < 0 {
 		t.Errorf("Player 1 stack should be non-negative, got %d", table.Seats[1].Stack)
 	}
-	// Pot should contain contributions from both players
-	if table.CurrentHand.Pot <= 0 {
-		t.Errorf("Pot should be positive, got %d", table.CurrentHand.Pot)
+	// With new pot accounting, bets stay in PlayerBets until AdvanceStreet
+	totalPlayerBets := 0
+	for _, bet := range table.CurrentHand.PlayerBets {
+		totalPlayerBets += bet
+	}
+	if totalPlayerBets <= 0 {
+		t.Errorf("Total player bets should be positive, got %d", totalPlayerBets)
 	}
 }
 
@@ -7269,9 +7388,13 @@ func TestSidePots_2P_BothAllIn(t *testing.T) {
 	if table.Seats[1].Stack != 0 {
 		t.Errorf("Player 1 stack should be 0, got %d", table.Seats[1].Stack)
 	}
-	// Pot should contain contributions from both players
-	if table.CurrentHand.Pot <= 0 {
-		t.Errorf("Pot should be positive, got %d", table.CurrentHand.Pot)
+	// With new pot accounting, bets stay in PlayerBets until AdvanceStreet
+	totalPlayerBets := 0
+	for _, bet := range table.CurrentHand.PlayerBets {
+		totalPlayerBets += bet
+	}
+	if totalPlayerBets <= 0 {
+		t.Errorf("Total player bets should be positive, got %d", totalPlayerBets)
 	}
 }
 
@@ -7334,9 +7457,13 @@ func TestSidePots_3P_OneAllInCreatesSidePot(t *testing.T) {
 	if table.Seats[1].Stack != 0 {
 		t.Errorf("Player 1 stack should be 0, got %d", table.Seats[1].Stack)
 	}
-	// Pot should be positive
-	if table.CurrentHand.Pot <= 0 {
-		t.Errorf("Pot should be positive, got %d", table.CurrentHand.Pot)
+	// With new pot accounting, bets stay in PlayerBets until AdvanceStreet
+	totalPlayerBets := 0
+	for _, bet := range table.CurrentHand.PlayerBets {
+		totalPlayerBets += bet
+	}
+	if totalPlayerBets <= 0 {
+		t.Errorf("Total player bets should be positive, got %d", totalPlayerBets)
 	}
 }
 
@@ -7382,9 +7509,13 @@ func TestSidePots_3P_AllDifferentStacks(t *testing.T) {
 			t.Errorf("Player %d stack should be 0, got %d", i, table.Seats[i].Stack)
 		}
 	}
-	// Pot should be positive
-	if table.CurrentHand.Pot <= 0 {
-		t.Errorf("Pot should be positive, got %d", table.CurrentHand.Pot)
+	// With new pot accounting, bets stay in PlayerBets until AdvanceStreet
+	totalPlayerBets := 0
+	for _, bet := range table.CurrentHand.PlayerBets {
+		totalPlayerBets += bet
+	}
+	if totalPlayerBets <= 0 {
+		t.Errorf("Total player bets should be positive, got %d", totalPlayerBets)
 	}
 }
 
@@ -7430,9 +7561,13 @@ func TestSidePots_3P_ShortestWinsMainPotOnly(t *testing.T) {
 			t.Errorf("Player %d stack should be 0, got %d", i, table.Seats[i].Stack)
 		}
 	}
-	// Pot should be positive (main + side pots)
-	if table.CurrentHand.Pot <= 0 {
-		t.Errorf("Pot should be positive, got %d", table.CurrentHand.Pot)
+	// With new pot accounting, bets stay in PlayerBets until AdvanceStreet
+	totalPlayerBets := 0
+	for _, bet := range table.CurrentHand.PlayerBets {
+		totalPlayerBets += bet
+	}
+	if totalPlayerBets <= 0 {
+		t.Errorf("Total player bets should be positive, got %d", totalPlayerBets)
 	}
 }
 
@@ -7474,9 +7609,13 @@ func TestSidePots_4P_MultipleAllIns(t *testing.T) {
 			t.Errorf("Player %d stack should be 0, got %d", i, table.Seats[i].Stack)
 		}
 	}
-	// Pot should be positive
-	if table.CurrentHand.Pot <= 0 {
-		t.Errorf("Pot should be positive, got %d", table.CurrentHand.Pot)
+	// With new pot accounting, bets stay in PlayerBets until AdvanceStreet
+	totalPlayerBets := 0
+	for _, bet := range table.CurrentHand.PlayerBets {
+		totalPlayerBets += bet
+	}
+	if totalPlayerBets <= 0 {
+		t.Errorf("Total player bets should be positive, got %d", totalPlayerBets)
 	}
 }
 
@@ -7532,9 +7671,13 @@ func TestSidePots_6P_WhaleExcessReturned(t *testing.T) {
 	if table.Seats[0].Stack < 0 {
 		t.Errorf("Whale stack should be non-negative, got %d", table.Seats[0].Stack)
 	}
-	// Pot should be positive
-	if table.CurrentHand.Pot <= 0 {
-		t.Errorf("Pot should be positive, got %d", table.CurrentHand.Pot)
+	// With new pot accounting, bets stay in PlayerBets until AdvanceStreet
+	totalPlayerBets := 0
+	for _, bet := range table.CurrentHand.PlayerBets {
+		totalPlayerBets += bet
+	}
+	if totalPlayerBets <= 0 {
+		t.Errorf("Total player bets should be positive, got %d", totalPlayerBets)
 	}
 }
 
@@ -7576,8 +7719,537 @@ func TestSidePots_6P_MultipleSidePots(t *testing.T) {
 			t.Errorf("Player %d stack should be 0, got %d", i, table.Seats[i].Stack)
 		}
 	}
-	// Pot should be positive (main + multiple side pots)
-	if table.CurrentHand.Pot <= 0 {
-		t.Errorf("Pot should be positive, got %d", table.CurrentHand.Pot)
+	// With new pot accounting, bets stay in PlayerBets until AdvanceStreet
+	totalPlayerBets := 0
+	for _, bet := range table.CurrentHand.PlayerBets {
+		totalPlayerBets += bet
+	}
+	if totalPlayerBets <= 0 {
+		t.Errorf("Total player bets should be positive, got %d", totalPlayerBets)
+	}
+}
+
+// === PHASE 2 TESTS: Pot Accounting - Remove Immediate Additions ===
+
+// TestStartHand_NoPotUpdate verifies Pot stays 0 after blinds posted, only PlayerBets updated
+func TestStartHand_NoPotUpdate(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	tokenA := "token-a"
+	tokenB := "token-b"
+
+	table.Seats[0].Token = &tokenA
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &tokenB
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	// Start hand with SB=10, BB=20
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// After StartHand, Pot should be 0 (not included immediately)
+	if table.CurrentHand.Pot != 0 {
+		t.Errorf("Phase 2: expected Pot=0 after StartHand, got %d", table.CurrentHand.Pot)
+	}
+
+	// But PlayerBets should have the blind amounts
+	sbSeatIndex := table.CurrentHand.SmallBlindSeat
+	bbSeatIndex := table.CurrentHand.BigBlindSeat
+
+	sbBet := table.CurrentHand.PlayerBets[sbSeatIndex]
+	bbBet := table.CurrentHand.PlayerBets[bbSeatIndex]
+
+	if sbBet != 10 {
+		t.Errorf("Phase 2: expected SB PlayerBet=10, got %d", sbBet)
+	}
+
+	if bbBet != 20 {
+		t.Errorf("Phase 2: expected BB PlayerBet=20, got %d", bbBet)
+	}
+}
+
+// TestProcessAction_Call_NoPotUpdate verifies calling updates PlayerBets but NOT Pot
+func TestProcessAction_Call_NoPotUpdate(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	tokenA := "token-a"
+	tokenB := "token-b"
+
+	table.Seats[0].Token = &tokenA
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &tokenB
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	potAfterBlinds := table.CurrentHand.Pot
+
+	// Process call action from SB (to match BB of 20)
+	sbSeatIndex := table.CurrentHand.SmallBlindSeat
+	sbStack := table.Seats[sbSeatIndex].Stack
+	chipsMoved, err := table.CurrentHand.ProcessAction(sbSeatIndex, "call", sbStack)
+	if err != nil {
+		t.Fatalf("failed to process call: %v", err)
+	}
+
+	// Pot should NOT change from call (still 0)
+	if table.CurrentHand.Pot != potAfterBlinds {
+		t.Errorf("Phase 2: expected Pot unchanged after call (was %d), got %d", potAfterBlinds, table.CurrentHand.Pot)
+	}
+
+	// PlayerBets should be updated
+	expectedBet := 20 // SB called BB (10 + 10 = 20)
+	if table.CurrentHand.PlayerBets[sbSeatIndex] != expectedBet {
+		t.Errorf("Phase 2: expected PlayerBets[SB]=%d after call, got %d", expectedBet, table.CurrentHand.PlayerBets[sbSeatIndex])
+	}
+
+	if chipsMoved != 10 {
+		t.Errorf("Phase 2: expected chips moved=10, got %d", chipsMoved)
+	}
+}
+
+// TestProcessAction_Raise_NoPotUpdate verifies raising updates PlayerBets but NOT Pot
+func TestProcessAction_Raise_NoPotUpdate(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	tokenA := "token-a"
+	tokenB := "token-b"
+
+	table.Seats[0].Token = &tokenA
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &tokenB
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	potAfterBlinds := table.CurrentHand.Pot
+
+	// Process raise action from UTG (seat 0, who is dealer in heads-up)
+	// Raise to 100
+	utgSeatIndex := 0
+	utgStack := table.Seats[utgSeatIndex].Stack
+	chipsMoved, err := table.CurrentHand.ProcessAction(utgSeatIndex, "raise", utgStack, 100)
+	if err != nil {
+		t.Fatalf("failed to process raise: %v", err)
+	}
+
+	// Pot should NOT change from raise (still 0)
+	if table.CurrentHand.Pot != potAfterBlinds {
+		t.Errorf("Phase 2: expected Pot unchanged after raise (was %d), got %d", potAfterBlinds, table.CurrentHand.Pot)
+	}
+
+	// PlayerBets should be updated to raise amount
+	if table.CurrentHand.PlayerBets[utgSeatIndex] != 100 {
+		t.Errorf("Phase 2: expected PlayerBets[UTG]=100 after raise, got %d", table.CurrentHand.PlayerBets[utgSeatIndex])
+	}
+
+	// chips moved should be 90 (100 raise - 10 already bet as SB)
+	// In heads-up: dealer is SB, so seat 0 posts 10, seat 1 posts 20
+	if chipsMoved != 90 {
+		t.Errorf("Phase 2: expected chips moved=90 (raise 100 - existing SB 10), got %d", chipsMoved)
+	}
+}
+
+// TestProcessActionWithSeats_Call_NoPotUpdate verifies ProcessActionWithSeats also doesn't update Pot on call
+func TestProcessActionWithSeats_Call_NoPotUpdate(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	tokenA := "token-a"
+	tokenB := "token-b"
+
+	table.Seats[0].Token = &tokenA
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &tokenB
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	potAfterBlinds := table.CurrentHand.Pot
+
+	// Process call action from SB using ProcessActionWithSeats
+	sbSeatIndex := table.CurrentHand.SmallBlindSeat
+	sbStack := table.Seats[sbSeatIndex].Stack
+	chipsMoved, err := table.CurrentHand.ProcessActionWithSeats(sbSeatIndex, "call", sbStack, table.Seats)
+	if err != nil {
+		t.Fatalf("failed to process call with seats: %v", err)
+	}
+
+	// Pot should NOT change
+	if table.CurrentHand.Pot != potAfterBlinds {
+		t.Errorf("Phase 2: expected Pot unchanged after ProcessActionWithSeats call (was %d), got %d", potAfterBlinds, table.CurrentHand.Pot)
+	}
+
+	// PlayerBets should be updated
+	expectedBet := 20 // SB called BB (10 + 10 = 20)
+	if table.CurrentHand.PlayerBets[sbSeatIndex] != expectedBet {
+		t.Errorf("Phase 2: expected PlayerBets[SB]=%d after call, got %d", expectedBet, table.CurrentHand.PlayerBets[sbSeatIndex])
+	}
+
+	if chipsMoved != 10 {
+		t.Errorf("Phase 2: expected chips moved=10, got %d", chipsMoved)
+	}
+}
+
+// TestPotRemainsZero_DuringBettingRound verifies Pot stays 0 throughout entire preflop betting round
+func TestPotRemainsZero_DuringBettingRound(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	tokenA := "token-a"
+	tokenB := "token-b"
+
+	table.Seats[0].Token = &tokenA
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &tokenB
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Pot should be 0 right after blinds
+	if table.CurrentHand.Pot != 0 {
+		t.Errorf("Phase 2: expected Pot=0 after StartHand, got %d", table.CurrentHand.Pot)
+	}
+
+	// SB calls
+	sbSeatIndex := table.CurrentHand.SmallBlindSeat
+	sbStack := table.Seats[sbSeatIndex].Stack
+	table.CurrentHand.ProcessAction(sbSeatIndex, "call", sbStack)
+
+	if table.CurrentHand.Pot != 0 {
+		t.Errorf("Phase 2: expected Pot=0 after SB calls, got %d", table.CurrentHand.Pot)
+	}
+
+	// BB checks
+	bbSeatIndex := table.CurrentHand.BigBlindSeat
+	bbStack := table.Seats[bbSeatIndex].Stack
+	table.CurrentHand.ProcessAction(bbSeatIndex, "check", bbStack)
+
+	if table.CurrentHand.Pot != 0 {
+		t.Errorf("Phase 2: expected Pot=0 after BB checks, got %d", table.CurrentHand.Pot)
+	}
+
+	// Preflop betting complete, but pot should still be 0 until AdvanceStreet
+	if table.CurrentHand.Pot != 0 {
+		t.Errorf("Phase 2: expected Pot=0 at end of preflop betting round, got %d", table.CurrentHand.Pot)
+	}
+}
+
+// Phase 3 Tests: Pot Sweep at AdvanceStreet
+
+// TestAdvanceStreet_SweepsBetsIntoPot_Preflop verifies blinds + preflop bets are swept to Pot on first advance
+func TestAdvanceStreet_SweepsBetsIntoPot_Preflop(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	tokenA := "token-a"
+	tokenB := "token-b"
+
+	table.Seats[0].Token = &tokenA
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &tokenB
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Verify blinds are in PlayerBets, not Pot
+	sbSeatIndex := table.CurrentHand.SmallBlindSeat
+	bbSeatIndex := table.CurrentHand.BigBlindSeat
+	totalBets := table.CurrentHand.PlayerBets[sbSeatIndex] + table.CurrentHand.PlayerBets[bbSeatIndex]
+
+	if table.CurrentHand.Pot != 0 {
+		t.Errorf("Phase 3: Pot should be 0 after StartHand, got %d", table.CurrentHand.Pot)
+	}
+
+	if totalBets != 30 {
+		t.Errorf("Phase 3: Expected total bets 30 (10 SB + 20 BB), got %d", totalBets)
+	}
+
+	// SB calls
+	sbStack := table.Seats[sbSeatIndex].Stack
+	table.CurrentHand.ProcessAction(sbSeatIndex, "call", sbStack)
+
+	// BB checks
+	bbStack := table.Seats[bbSeatIndex].Stack
+	table.CurrentHand.ProcessAction(bbSeatIndex, "check", bbStack)
+
+	// Before advancing: Pot should still be 0
+	if table.CurrentHand.Pot != 0 {
+		t.Errorf("Phase 3: Pot should be 0 before AdvanceStreet, got %d", table.CurrentHand.Pot)
+	}
+
+	// Advance to flop - this should sweep all bets into Pot
+	table.CurrentHand.AdvanceStreet()
+
+	// After advancing: Pot should contain all preflop bets
+	// Expected: SB 10 + BB 20 + SB call 10 + BB check 0 = 40
+	expectedPot := 40
+	if table.CurrentHand.Pot != expectedPot {
+		t.Errorf("Phase 3: Expected Pot=%d after AdvanceStreet, got %d", expectedPot, table.CurrentHand.Pot)
+	}
+}
+
+// TestAdvanceStreet_ClearsPlayerBets verifies PlayerBets are cleared after sweep
+func TestAdvanceStreet_ClearsPlayerBets(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	tokenA := "token-a"
+	tokenB := "token-b"
+
+	table.Seats[0].Token = &tokenA
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &tokenB
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	sbSeatIndex := table.CurrentHand.SmallBlindSeat
+	bbSeatIndex := table.CurrentHand.BigBlindSeat
+
+	// SB calls
+	sbStack := table.Seats[sbSeatIndex].Stack
+	table.CurrentHand.ProcessAction(sbSeatIndex, "call", sbStack)
+
+	// BB checks
+	bbStack := table.Seats[bbSeatIndex].Stack
+	table.CurrentHand.ProcessAction(bbSeatIndex, "check", bbStack)
+
+	// Verify bets are in PlayerBets before advance
+	if len(table.CurrentHand.PlayerBets) != 2 {
+		t.Errorf("Phase 3: Expected 2 players with bets before AdvanceStreet, got %d", len(table.CurrentHand.PlayerBets))
+	}
+
+	// Advance to flop
+	table.CurrentHand.AdvanceStreet()
+
+	// After advancing: PlayerBets should be empty
+	if len(table.CurrentHand.PlayerBets) != 0 {
+		t.Errorf("Phase 3: Expected PlayerBets to be empty after AdvanceStreet, got %d entries", len(table.CurrentHand.PlayerBets))
+	}
+
+	for seatIndex, bet := range table.CurrentHand.PlayerBets {
+		if bet != 0 {
+			t.Errorf("Phase 3: Expected PlayerBets[%d]=0 after AdvanceStreet, got %d", seatIndex, bet)
+		}
+	}
+}
+
+// TestAdvanceStreet_AccumulatesPot verifies Pot accumulates across multiple streets
+func TestAdvanceStreet_AccumulatesPot(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	tokenA := "token-a"
+	tokenB := "token-b"
+
+	table.Seats[0].Token = &tokenA
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &tokenB
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	sbSeatIndex := table.CurrentHand.SmallBlindSeat
+	bbSeatIndex := table.CurrentHand.BigBlindSeat
+
+	// Preflop: SB calls, BB checks
+	// Note: stack values are updated by StartHand (SB posts 10, BB posts 20)
+	sbStack := table.Seats[sbSeatIndex].Stack
+	table.CurrentHand.ProcessAction(sbSeatIndex, "call", sbStack)
+	table.Seats[sbSeatIndex].Stack -= 10 // Simulate stack update for call
+
+	bbStack := table.Seats[bbSeatIndex].Stack
+	table.CurrentHand.ProcessAction(bbSeatIndex, "check", bbStack)
+
+	// Advance to flop - sweeps preflop bets
+	table.CurrentHand.AdvanceStreet()
+	potAfterFlop := table.CurrentHand.Pot
+	if potAfterFlop != 40 {
+		t.Errorf("Phase 3: Expected Pot=40 after flop, got %d", potAfterFlop)
+	}
+
+	// Flop: both check (no new bets, pot stays same)
+	sbStack = table.Seats[sbSeatIndex].Stack
+	bbStack = table.Seats[bbSeatIndex].Stack
+	table.CurrentHand.ProcessAction(sbSeatIndex, "check", sbStack)
+	table.CurrentHand.ProcessAction(bbSeatIndex, "check", bbStack)
+
+	if table.CurrentHand.Pot != 40 {
+		t.Errorf("Phase 3: Expected Pot=40 after flop checks, got %d", table.CurrentHand.Pot)
+	}
+
+	// Advance to turn - should sweep any new flop bets (none in this case)
+	table.CurrentHand.AdvanceStreet()
+
+	// Pot should stay the same since no one bet on flop
+	if table.CurrentHand.Pot != 40 {
+		t.Errorf("Phase 3: Expected Pot=40 after turn, got %d", table.CurrentHand.Pot)
+	}
+
+	// Turn: SB raises to 100, BB calls
+	sbStack = table.Seats[sbSeatIndex].Stack
+	bbStack = table.Seats[bbSeatIndex].Stack
+	table.CurrentHand.ProcessAction(sbSeatIndex, "raise", sbStack, 100)
+	table.Seats[sbSeatIndex].Stack -= 100 // Simulate stack update for raise
+
+	table.CurrentHand.ProcessAction(bbSeatIndex, "call", bbStack)
+	table.Seats[bbSeatIndex].Stack -= 100 // Simulate stack update for call
+
+	if table.CurrentHand.Pot != 40 {
+		t.Errorf("Phase 3: Expected Pot=40 after turn bets (before advance), got %d", table.CurrentHand.Pot)
+	}
+
+	// Advance to river - should sweep turn bets
+	table.CurrentHand.AdvanceStreet()
+
+	// Pot should now include turn bets: 40 + 100 + 100 = 240
+	expectedPot := 240
+	if table.CurrentHand.Pot != expectedPot {
+		t.Errorf("Phase 3: Expected Pot=%d after river, got %d", expectedPot, table.CurrentHand.Pot)
+	}
+}
+
+// TestFullHandPotAccounting_PreflopToRiver verifies end-to-end pot accounting through entire hand
+func TestFullHandPotAccounting_PreflopToRiver(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	tokenA := "token-a"
+	tokenB := "token-b"
+
+	table.Seats[0].Token = &tokenA
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &tokenB
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	sbSeatIndex := table.CurrentHand.SmallBlindSeat
+	bbSeatIndex := table.CurrentHand.BigBlindSeat
+
+	// Preflop: Small blind posts 10, Big blind posts 20
+	// Then SB raises to 50, BB calls 50
+	sbStack := table.Seats[sbSeatIndex].Stack
+	bbStack := table.Seats[bbSeatIndex].Stack
+
+	table.CurrentHand.ProcessAction(sbSeatIndex, "raise", sbStack, 50)
+	table.Seats[sbSeatIndex].Stack -= 40 // Already posted 10, now raise to 50 (40 more)
+
+	table.CurrentHand.ProcessAction(bbSeatIndex, "call", bbStack)
+	table.Seats[bbSeatIndex].Stack -= 30 // Already posted 20, now call to 50 (30 more)
+
+	// Before advance: Pot should be 0, all bets in PlayerBets
+	if table.CurrentHand.Pot != 0 {
+		t.Errorf("Phase 3: Expected Pot=0 before flop, got %d", table.CurrentHand.Pot)
+	}
+
+	// Advance to flop - sweeps preflop bets
+	table.CurrentHand.AdvanceStreet()
+	// Pot should be: SB bet 50 total (PlayerBets[sb] = 50), BB bet 50 total (PlayerBets[bb] = 50)
+	// So: 50 + 50 = 100
+	expectedAfterFlop := 100
+	if table.CurrentHand.Pot != expectedAfterFlop {
+		t.Errorf("Phase 3: Expected Pot=%d after flop, got %d", expectedAfterFlop, table.CurrentHand.Pot)
+	}
+
+	// Flop: Both check
+	sbStack = table.Seats[sbSeatIndex].Stack
+	bbStack = table.Seats[bbSeatIndex].Stack
+	table.CurrentHand.ProcessAction(sbSeatIndex, "check", sbStack)
+	table.CurrentHand.ProcessAction(bbSeatIndex, "check", bbStack)
+
+	// Before advance: Pot still 100
+	if table.CurrentHand.Pot != 100 {
+		t.Errorf("Phase 3: Expected Pot=100 before turn, got %d", table.CurrentHand.Pot)
+	}
+
+	// Advance to turn
+	table.CurrentHand.AdvanceStreet()
+
+	// Pot should still be 100 (no bets on flop)
+	if table.CurrentHand.Pot != 100 {
+		t.Errorf("Phase 3: Expected Pot=100 after turn, got %d", table.CurrentHand.Pot)
+	}
+
+	// Turn: SB raises to 75, BB calls 75
+	sbStack = table.Seats[sbSeatIndex].Stack
+	bbStack = table.Seats[bbSeatIndex].Stack
+	table.CurrentHand.ProcessAction(sbSeatIndex, "raise", sbStack, 75)
+	table.Seats[sbSeatIndex].Stack -= 75 // Bet 75 on turn
+
+	table.CurrentHand.ProcessAction(bbSeatIndex, "call", bbStack)
+	table.Seats[bbSeatIndex].Stack -= 75 // Call 75 on turn
+
+	// Before advance: Pot still 100
+	if table.CurrentHand.Pot != 100 {
+		t.Errorf("Phase 3: Expected Pot=100 before river, got %d", table.CurrentHand.Pot)
+	}
+
+	// Advance to river - sweeps turn bets
+	table.CurrentHand.AdvanceStreet()
+
+	// Pot should now be: 100 + 75 + 75 = 250
+	expectedAfterRiver := 250
+	if table.CurrentHand.Pot != expectedAfterRiver {
+		t.Errorf("Phase 3: Expected Pot=%d after river, got %d", expectedAfterRiver, table.CurrentHand.Pot)
+	}
+
+	// River: Both check (final action)
+	sbStack = table.Seats[sbSeatIndex].Stack
+	bbStack = table.Seats[bbSeatIndex].Stack
+	table.CurrentHand.ProcessAction(sbSeatIndex, "check", sbStack)
+	table.CurrentHand.ProcessAction(bbSeatIndex, "check", bbStack)
+
+	// Pot should stay at 250 until showdown
+	if table.CurrentHand.Pot != 250 {
+		t.Errorf("Phase 3: Expected Pot=250 at showdown, got %d", table.CurrentHand.Pot)
 	}
 }

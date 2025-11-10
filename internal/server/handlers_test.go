@@ -2276,14 +2276,14 @@ func TestBroadcastActionRequest_MinMaxCalculation(t *testing.T) {
 		json.Unmarshal(wsMsg.Payload, &payload)
 
 		// With BB=20, minRaise should be 20 + 20 = 40
-		// With new behavior: maxRaise is player's remaining stack after posting SB (1000 - 10 = 990)
-		// Players can now bet their full remaining stack regardless of opponent stacks
+		// With Phase 1 fix: maxRaise includes already-posted bets (SB=10) + remaining stack (990) = 1000
+		// This represents total chips player can commit
 		if payload.MinRaise != 40 {
 			t.Errorf("multi-player: expected minRaise=40, got %d", payload.MinRaise)
 		}
-		// maxRaise should be player's remaining stack (1000 - 10 SB = 990)
-		if payload.MaxRaise != 990 {
-			t.Errorf("multi-player: expected maxRaise=990, got %d", payload.MaxRaise)
+		// maxRaise should be total commitment: already posted SB(10) + remaining stack(990) = 1000
+		if payload.MaxRaise != 1000 {
+			t.Errorf("multi-player: expected maxRaise=1000, got %d", payload.MaxRaise)
 		}
 	default:
 		t.Error("client1 did not receive action_request message")
@@ -2347,13 +2347,13 @@ func TestBroadcastActionRequest_MinMaxCalculation(t *testing.T) {
 		var payload ActionRequestPayload
 		json.Unmarshal(wsMsg.Payload, &payload)
 
-		// Heads-up scenario with new behavior:
-		// Dealer (seat 1) posts SB: 1200 - 10 = 1190
-		// Non-dealer (seat 0, our player) posts BB: 800 - 20 = 780
-		// Player at seat 0 is acting with remaining stack of 780
-		// With new behavior: maxRaise is player's remaining stack (780) - not limited by opponent's stack
-		if payload.MaxRaise != 780 {
-			t.Errorf("heads-up: expected maxRaise=780, got %d", payload.MaxRaise)
+		// Heads-up scenario with Phase 1 fix:
+		// Dealer (seat 1) posts SB: 1200 - 10 = 1190 remaining
+		// Non-dealer (seat 0, our player) posts BB: 800 - 20 = 780 remaining
+		// Player at seat 0 is acting:
+		// With Phase 1 fix: maxRaise includes already-posted bets (BB=20) + remaining stack (780) = 800
+		if payload.MaxRaise != 800 {
+			t.Errorf("heads-up: expected maxRaise=800, got %d", payload.MaxRaise)
 		}
 	default:
 		t.Error("client3 did not receive action_request message")
@@ -3479,7 +3479,12 @@ func TestHandlePlayerAction_AllFoldPreflop_EarlyWinner(t *testing.T) {
 	if table.CurrentHand.Street != "preflop" {
 		t.Fatalf("expected hand to be on preflop, got %s", table.CurrentHand.Street)
 	}
-	initialPot := table.CurrentHand.Pot
+	// With new pot accounting: after StartHand, Pot=0 and PlayerBets contains blinds
+	// Calculate total chips in play (sum of PlayerBets which contains the blinds)
+	totalPlayerBets := 0
+	for _, bet := range table.CurrentHand.PlayerBets {
+		totalPlayerBets += bet
+	}
 	table.mu.RUnlock()
 
 	// Player 0 folds
@@ -3518,9 +3523,9 @@ func TestHandlePlayerAction_AllFoldPreflop_EarlyWinner(t *testing.T) {
 	}
 
 	// Player 2 should have received the pot
-	// Player 2 is BB (posted 20), so final stack = 1000 - 20 (BB posted) + initialPot (won)
+	// Player 2 is BB (posted 20), so final stack = 1000 - 20 (BB posted) + totalPlayerBets (won)
 	player2Stack := table.Seats[2].Stack
-	expectedStack := 1000 - 20 + initialPot // Started with 1000, paid 20 for BB, won pot
+	expectedStack := 1000 - 20 + totalPlayerBets
 	if player2Stack != expectedStack {
 		t.Errorf("expected player 2 stack to be %d, got %d", expectedStack, player2Stack)
 	}
@@ -3591,7 +3596,11 @@ func TestHandlePlayerAction_AllFoldFlop_EarlyWinner(t *testing.T) {
 	table.CurrentHand.CurrentActor = newInt(2)
 	table.CurrentHand.ActedPlayers[0] = true
 	table.CurrentHand.ActedPlayers[1] = true
-	initialPot := table.CurrentHand.Pot
+	// Calculate total bets from PlayerBets map (after StartHand, Pot is 0 but bets are in PlayerBets)
+	totalPlayerBets := 0
+	for _, bet := range table.CurrentHand.PlayerBets {
+		totalPlayerBets += bet
+	}
 	boardLengthBefore := len(table.CurrentHand.BoardCards)
 	table.mu.Unlock()
 
@@ -3616,9 +3625,9 @@ func TestHandlePlayerAction_AllFoldFlop_EarlyWinner(t *testing.T) {
 	}
 
 	// Player 2 should have received the pot
-	// Player 2 is BB (posted 20), so final stack = 1000 - 20 (BB posted) + initialPot (won)
+	// Player 2 is BB (posted 20), so final stack = 1000 - 20 (BB posted) + totalPlayerBets (won)
 	player2Stack := table.Seats[2].Stack
-	expectedStack := 1000 - 20 + initialPot
+	expectedStack := 1000 - 20 + totalPlayerBets
 	if player2Stack != expectedStack {
 		t.Errorf("expected player 2 stack to be %d, got %d", expectedStack, player2Stack)
 	}
@@ -3690,7 +3699,11 @@ func TestHandlePlayerAction_AllFoldTurn_EarlyWinner(t *testing.T) {
 	table.CurrentHand.CurrentActor = newInt(2)
 	table.CurrentHand.ActedPlayers[0] = true
 	table.CurrentHand.ActedPlayers[1] = true
-	initialPot := table.CurrentHand.Pot
+	// Calculate total bets from PlayerBets map (after StartHand, Pot is 0 but bets are in PlayerBets)
+	totalPlayerBets := 0
+	for _, bet := range table.CurrentHand.PlayerBets {
+		totalPlayerBets += bet
+	}
 	boardLengthBefore := len(table.CurrentHand.BoardCards)
 	table.mu.Unlock()
 
@@ -3715,9 +3728,9 @@ func TestHandlePlayerAction_AllFoldTurn_EarlyWinner(t *testing.T) {
 	}
 
 	// Player 2 should have received the pot
-	// Player 2 is BB (posted 20), so final stack = 1000 - 20 (BB posted) + initialPot (won)
+	// Player 2 is BB (posted 20), so final stack = 1000 - 20 (BB posted) + totalPlayerBets (won)
 	player2Stack := table.Seats[2].Stack
-	expectedStack := 1000 - 20 + initialPot
+	expectedStack := 1000 - 20 + totalPlayerBets
 	if player2Stack != expectedStack {
 		t.Errorf("expected player 2 stack to be %d, got %d", expectedStack, player2Stack)
 	}
@@ -3790,7 +3803,11 @@ func TestHandlePlayerAction_AllFoldRiver_EarlyWinner(t *testing.T) {
 	table.CurrentHand.CurrentActor = newInt(2)
 	table.CurrentHand.ActedPlayers[0] = true
 	table.CurrentHand.ActedPlayers[1] = true
-	initialPot := table.CurrentHand.Pot
+	// Calculate total bets from PlayerBets map (after StartHand, Pot is 0 but bets are in PlayerBets)
+	totalPlayerBets := 0
+	for _, bet := range table.CurrentHand.PlayerBets {
+		totalPlayerBets += bet
+	}
 	boardLengthBefore := len(table.CurrentHand.BoardCards)
 	table.mu.Unlock()
 
@@ -3815,9 +3832,9 @@ func TestHandlePlayerAction_AllFoldRiver_EarlyWinner(t *testing.T) {
 	}
 
 	// Player 2 should have received the pot
-	// Player 2 is BB (posted 20), so final stack = 1000 - 20 (BB posted) + initialPot (won)
+	// Player 2 is BB (posted 20), so final stack = 1000 - 20 (BB posted) + totalPlayerBets (won)
 	player2Stack := table.Seats[2].Stack
-	expectedStack := 1000 - 20 + initialPot
+	expectedStack := 1000 - 20 + totalPlayerBets
 	if player2Stack != expectedStack {
 		t.Errorf("expected player 2 stack to be %d, got %d", expectedStack, player2Stack)
 	}
