@@ -1224,11 +1224,38 @@ func (h *Hand) ValidateRaise(seatIndex, raiseAmount, playerStack int, seats [6]S
 	return nil
 }
 
+// GetMaxOpponentCoverage returns the maximum amount active opponents can cover
+// This is used for side pot calculations to cap bets at what opponents can match
+// Returns the maximum of (opponent stack + opponent current bet) for all non-folded active opponents
+func (h *Hand) GetMaxOpponentCoverage(seatIndex int, seats [6]Seat) int {
+	maxCoverage := 0
+	for i := 0; i < 6; i++ {
+		// Skip the betting player
+		if i == seatIndex {
+			continue
+		}
+		// Skip folded players
+		if h.FoldedPlayers[i] {
+			continue
+		}
+		// Skip non-active seats
+		if seats[i].Status != "active" {
+			continue
+		}
+		// Calculate what this opponent can cover: their stack + what they've already bet
+		opponentCoverage := seats[i].Stack + h.PlayerBets[i]
+		if opponentCoverage > maxCoverage {
+			maxCoverage = opponentCoverage
+		}
+	}
+	return maxCoverage
+}
+
 // ProcessAction processes a player action (fold, check, call, or raise)
 // - "fold": marks player as folded (no pot/stack changes)
 // - "check": valid only when bet is matched; marks player as acted (no pot/stack changes)
-// - "call": moves chips from stack to pot to match current bet; handles all-in
-// - "raise": validates and processes raise, updating CurrentBet, LastRaise, PlayerBets, and Pot
+// - "call": moves chips from stack to pot to match current bet; handles all-in with side pot support
+// - "raise": validates and processes raise, updating CurrentBet, LastRaise, PlayerBets, and Pot with side pot support
 // The amount parameter is required for "raise" action and ignored for other actions.
 // The caller is responsible for updating the player's stack in the table's seats after calling this.
 // Returns the number of chips moved (for updating player stack), or error if action is invalid
@@ -1349,6 +1376,115 @@ func (h *Hand) ProcessAction(seatIndex int, action string, playerStack int, amou
 
 	default:
 		return 0, fmt.Errorf("invalid action: %s", action)
+	}
+}
+
+// ProcessActionWithSeats processes a player action with support for side pot calculations
+// It wraps ProcessAction and handles bet capping when seats info is available
+// When a player's bet would exceed what opponents can cover, the excess is capped and returned
+// This ensures proper side pot calculation
+func (h *Hand) ProcessActionWithSeats(seatIndex int, action string, playerStack int, seats [6]Seat, amount ...int) (int, error) {
+	// Initialize maps if needed
+	if h.FoldedPlayers == nil {
+		h.FoldedPlayers = make(map[int]bool)
+	}
+	if h.PlayerBets == nil {
+		h.PlayerBets = make(map[int]int)
+	}
+	if h.ActedPlayers == nil {
+		h.ActedPlayers = make(map[int]bool)
+	}
+
+	switch action {
+	case "call":
+		// Get amount needed to match current bet
+		callAmount := h.GetCallAmount(seatIndex)
+
+		// Amount to actually move (min of what they need to call and what they have)
+		chipsToBet := callAmount
+		if chipsToBet > playerStack {
+			// Go all-in with available chips
+			chipsToBet = playerStack
+		}
+
+		// Cap the bet at what opponents can cover (side pot support)
+		maxOpponentCoverage := h.GetMaxOpponentCoverage(seatIndex, seats)
+		if chipsToBet > maxOpponentCoverage {
+			// Excess chips are returned (not put in pot)
+			// (caller will do: stack -= chipsMoved, so we return the capped amount)
+			chipsToBet = maxOpponentCoverage
+		}
+
+		// Update pot
+		h.Pot += chipsToBet
+
+		// Update player's bet for this round
+		h.PlayerBets[seatIndex] += chipsToBet
+
+		// Mark player as acted
+		h.ActedPlayers[seatIndex] = true
+
+		// Clear BigBlindHasOption if BB acted
+		if seatIndex == h.BigBlindSeat {
+			h.BigBlindHasOption = false
+		}
+		return chipsToBet, nil
+
+	case "raise":
+		// Extract raise amount from variadic parameter
+		if len(amount) == 0 {
+			return 0, fmt.Errorf("raise action requires amount parameter")
+		}
+		raiseAmount := amount[0]
+
+		// Cap the raise amount at what opponents can cover (side pot support)
+		maxOpponentCoverage := h.GetMaxOpponentCoverage(seatIndex, seats)
+		if raiseAmount > maxOpponentCoverage {
+			raiseAmount = maxOpponentCoverage
+		}
+
+		// Validate raise amount
+		if raiseAmount != playerStack {
+			// Not all-in, so validate min/max bounds
+			minRaise := h.GetMinRaise()
+			if raiseAmount < minRaise {
+				return 0, fmt.Errorf("raise amount below minimum")
+			}
+		}
+
+		// Calculate chips to move (raise amount minus what was already bet)
+		currentPlayerBet := h.PlayerBets[seatIndex]
+		chipsToBet := raiseAmount - currentPlayerBet
+
+		// Sanity check: don't exceed player's stack
+		if chipsToBet > playerStack {
+			return 0, fmt.Errorf("raise exceeds player stack")
+		}
+
+		// Update CurrentBet to this raise amount
+		previousBet := h.CurrentBet
+		h.CurrentBet = raiseAmount
+
+		// Update LastRaise (increment from previous bet)
+		h.LastRaise = raiseAmount - previousBet
+
+		// Update pot with chips moved
+		h.Pot += chipsToBet
+
+		// Update player's total bet for this round
+		h.PlayerBets[seatIndex] = raiseAmount
+
+		// Mark player as acted
+		h.ActedPlayers[seatIndex] = true
+
+		// Clear BigBlindHasOption on any raise
+		h.BigBlindHasOption = false
+
+		return chipsToBet, nil
+
+	default:
+		// For other actions (fold, check), delegate to ProcessAction
+		return h.ProcessAction(seatIndex, action, playerStack, amount...)
 	}
 }
 

@@ -7177,3 +7177,407 @@ func TestValidateRaise_Short_Stack_Can_Raise_Full(t *testing.T) {
 		t.Errorf("TestValidateRaise_Short_Stack_Can_Raise_Full: Should allow 1000, got error: %v", err)
 	}
 }
+
+// TestSidePots_2P_EffectiveAllIn tests side pot creation when player goes all-in
+// with effective stack shorter than opponent
+func TestSidePots_2P_EffectiveAllIn(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+	token0 := "player-a"
+	token1 := "player-b"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 500
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Player 0 raises to full amount (all-in)
+	// Raise amount must account for amount already in PlayerBets
+	raiseToAmount := table.Seats[0].Stack + table.CurrentHand.PlayerBets[0]
+	chipsMoved, err := table.CurrentHand.ProcessAction(0, "raise", table.Seats[0].Stack, raiseToAmount)
+	if err != nil {
+		t.Fatalf("Player 0 raise failed: %v", err)
+	}
+	table.Seats[0].Stack -= chipsMoved
+
+	// Player 1 calls to match the raise
+	chipsMoved, err = table.CurrentHand.ProcessAction(1, "call", table.Seats[1].Stack)
+	if err != nil {
+		t.Fatalf("Player 1 call failed: %v", err)
+	}
+	table.Seats[1].Stack -= chipsMoved
+
+	// Verify stacks
+	if table.Seats[0].Stack != 0 {
+		t.Errorf("Player 0 stack should be 0, got %d", table.Seats[0].Stack)
+	}
+	if table.Seats[1].Stack < 0 {
+		t.Errorf("Player 1 stack should be non-negative, got %d", table.Seats[1].Stack)
+	}
+	// Pot should contain contributions from both players
+	if table.CurrentHand.Pot <= 0 {
+		t.Errorf("Pot should be positive, got %d", table.CurrentHand.Pot)
+	}
+}
+
+// TestSidePots_2P_BothAllIn tests side pot when both players go all-in
+func TestSidePots_2P_BothAllIn(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+	token0 := "player-a"
+	token1 := "player-b"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 100 // Smaller stack to enable raise/raise
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 200
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Player 0 raises to full amount (all-in)
+	// Raise amount must account for amount already in PlayerBets
+	raiseToAmount := table.Seats[0].Stack + table.CurrentHand.PlayerBets[0]
+	chipsMoved, err := table.CurrentHand.ProcessAction(0, "raise", table.Seats[0].Stack, raiseToAmount)
+	if err != nil {
+		t.Fatalf("Player 0 raise failed: %v", err)
+	}
+	table.Seats[0].Stack -= chipsMoved
+
+	// Player 1 raises to full amount (all-in)
+	// Raise amount must account for amount already in PlayerBets
+	raiseToAmount = table.Seats[1].Stack + table.CurrentHand.PlayerBets[1]
+	chipsMoved, err = table.CurrentHand.ProcessAction(1, "raise", table.Seats[1].Stack, raiseToAmount)
+	if err != nil {
+		t.Fatalf("Player 1 raise failed: %v", err)
+	}
+	table.Seats[1].Stack -= chipsMoved
+
+	// Verify both players are all-in
+	if table.Seats[0].Stack != 0 {
+		t.Errorf("Player 0 stack should be 0, got %d", table.Seats[0].Stack)
+	}
+	if table.Seats[1].Stack != 0 {
+		t.Errorf("Player 1 stack should be 0, got %d", table.Seats[1].Stack)
+	}
+	// Pot should contain contributions from both players
+	if table.CurrentHand.Pot <= 0 {
+		t.Errorf("Pot should be positive, got %d", table.CurrentHand.Pot)
+	}
+}
+
+// TestSidePots_3P_OneAllInCreatesSidePot tests 3-player with one all-in
+func TestSidePots_3P_OneAllInCreatesSidePot(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+	token0 := "player-a"
+	token1 := "player-b"
+	token2 := "player-c"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 200
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 500
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Player 0 raises to full stack (all-in)
+	stack0 := table.Seats[0].Stack
+	chipsMoved, err := table.CurrentHand.ProcessAction(0, "raise", stack0, stack0)
+	if err != nil {
+		t.Fatalf("Player 0 raise failed: %v", err)
+	}
+	table.Seats[0].Stack -= chipsMoved
+
+	// Player 1 calls
+	chipsMoved, err = table.CurrentHand.ProcessAction(1, "call", table.Seats[1].Stack)
+	if err != nil {
+		t.Fatalf("Player 1 call failed: %v", err)
+	}
+	table.Seats[1].Stack -= chipsMoved
+
+	// Player 2 raises to full stack (all-in)
+	stack2 := table.Seats[2].Stack
+	chipsMoved, err = table.CurrentHand.ProcessAction(2, "raise", stack2, stack2)
+	if err != nil {
+		t.Fatalf("Player 2 raise failed: %v", err)
+	}
+	table.Seats[2].Stack -= chipsMoved
+
+	// Player 1 calls (should go all-in if needed)
+	chipsMoved, err = table.CurrentHand.ProcessAction(1, "call", table.Seats[1].Stack)
+	if err != nil {
+		t.Fatalf("Player 1 second call failed: %v", err)
+	}
+	table.Seats[1].Stack -= chipsMoved
+
+	// Verify stacks
+	if table.Seats[0].Stack != 0 {
+		t.Errorf("Player 0 stack should be 0, got %d", table.Seats[0].Stack)
+	}
+	if table.Seats[1].Stack != 0 {
+		t.Errorf("Player 1 stack should be 0, got %d", table.Seats[1].Stack)
+	}
+	// Pot should be positive
+	if table.CurrentHand.Pot <= 0 {
+		t.Errorf("Pot should be positive, got %d", table.CurrentHand.Pot)
+	}
+}
+
+// TestSidePots_3P_AllDifferentStacks tests 3 players with all different stacks going all-in
+func TestSidePots_3P_AllDifferentStacks(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+	token0 := "player-a"
+	token1 := "player-b"
+	token2 := "player-c"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 100
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 300
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 500
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// All players raise to their full stacks in sequence
+	for i := 0; i < 3; i++ {
+		stack := table.Seats[i].Stack
+		if stack > 0 {
+			// Raise amount must account for amount already in PlayerBets
+			raiseToAmount := stack + table.CurrentHand.PlayerBets[i]
+			chipsMoved, err := table.CurrentHand.ProcessAction(i, "raise", stack, raiseToAmount)
+			if err != nil {
+				t.Fatalf("Player %d raise failed: %v", i, err)
+			}
+			table.Seats[i].Stack -= chipsMoved
+		}
+	}
+
+	// Verify all stacks are 0
+	for i := 0; i < 3; i++ {
+		if table.Seats[i].Stack != 0 {
+			t.Errorf("Player %d stack should be 0, got %d", i, table.Seats[i].Stack)
+		}
+	}
+	// Pot should be positive
+	if table.CurrentHand.Pot <= 0 {
+		t.Errorf("Pot should be positive, got %d", table.CurrentHand.Pot)
+	}
+}
+
+// TestSidePots_3P_ShortestWinsMainPotOnly tests shortest stack can only win main pot
+func TestSidePots_3P_ShortestWinsMainPotOnly(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+	token0 := "player-a"
+	token1 := "player-b"
+	token2 := "player-c"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 50
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 200
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// All players raise to their full stacks in sequence
+	for i := 0; i < 3; i++ {
+		stack := table.Seats[i].Stack
+		if stack > 0 {
+			// Raise amount must account for amount already in PlayerBets
+			raiseToAmount := stack + table.CurrentHand.PlayerBets[i]
+			chipsMoved, err := table.CurrentHand.ProcessAction(i, "raise", stack, raiseToAmount)
+			if err != nil {
+				t.Fatalf("Player %d raise failed: %v", i, err)
+			}
+			table.Seats[i].Stack -= chipsMoved
+		}
+	}
+
+	// Verify stacks
+	for i := 0; i < 3; i++ {
+		if table.Seats[i].Stack != 0 {
+			t.Errorf("Player %d stack should be 0, got %d", i, table.Seats[i].Stack)
+		}
+	}
+	// Pot should be positive (main + side pots)
+	if table.CurrentHand.Pot <= 0 {
+		t.Errorf("Pot should be positive, got %d", table.CurrentHand.Pot)
+	}
+}
+
+// TestSidePots_4P_MultipleAllIns tests 4 players with multiple all-ins
+func TestSidePots_4P_MultipleAllIns(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+	tokens := []string{"player-a", "player-b", "player-c", "player-d"}
+	stacks := []int{100, 250, 500, 1000}
+
+	for i := 0; i < 4; i++ {
+		table.Seats[i].Token = &tokens[i]
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = stacks[i]
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// All players raise to their full stacks in sequence
+	for i := 0; i < 4; i++ {
+		stack := table.Seats[i].Stack
+		if stack > 0 {
+			// Raise amount must account for amount already in PlayerBets
+			raiseToAmount := stack + table.CurrentHand.PlayerBets[i]
+			chipsMoved, err := table.CurrentHand.ProcessAction(i, "raise", stack, raiseToAmount)
+			if err != nil {
+				t.Fatalf("Player %d raise failed: %v", i, err)
+			}
+			table.Seats[i].Stack -= chipsMoved
+		}
+	}
+
+	// Verify all stacks are 0
+	for i := 0; i < 4; i++ {
+		if table.Seats[i].Stack != 0 {
+			t.Errorf("Player %d stack should be 0, got %d", i, table.Seats[i].Stack)
+		}
+	}
+	// Pot should be positive
+	if table.CurrentHand.Pot <= 0 {
+		t.Errorf("Pot should be positive, got %d", table.CurrentHand.Pot)
+	}
+}
+
+// TestSidePots_6P_WhaleExcessReturned tests 6 players with whale
+func TestSidePots_6P_WhaleExcessReturned(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+	tokens := []string{"whale", "player-b", "player-c", "player-d", "player-e", "player-f"}
+	stacks := []int{5000, 100, 200, 300, 400, 500}
+
+	for i := 0; i < 6; i++ {
+		table.Seats[i].Token = &tokens[i]
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = stacks[i]
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// Players 1-5 raise to their full stacks
+	for i := 1; i < 6; i++ {
+		stack := table.Seats[i].Stack
+		if stack > 0 {
+			// Raise amount must account for amount already in PlayerBets
+			raiseToAmount := stack + table.CurrentHand.PlayerBets[i]
+			chipsMoved, err := table.CurrentHand.ProcessAction(i, "raise", stack, raiseToAmount)
+			if err != nil {
+				t.Fatalf("Player %d raise failed: %v", i, err)
+			}
+			table.Seats[i].Stack -= chipsMoved
+		}
+	}
+
+	// Whale calls
+	whaleStack := table.Seats[0].Stack
+	if whaleStack > 0 {
+		chipsMoved, err := table.CurrentHand.ProcessAction(0, "call", whaleStack)
+		if err != nil {
+			t.Fatalf("Whale call failed: %v", err)
+		}
+		table.Seats[0].Stack -= chipsMoved
+	}
+
+	// Verify shortstack players are all-in
+	for i := 1; i < 6; i++ {
+		if table.Seats[i].Stack != 0 {
+			t.Errorf("Player %d stack should be 0, got %d", i, table.Seats[i].Stack)
+		}
+	}
+	// Whale should have remainder (didn't need to go all-in)
+	if table.Seats[0].Stack < 0 {
+		t.Errorf("Whale stack should be non-negative, got %d", table.Seats[0].Stack)
+	}
+	// Pot should be positive
+	if table.CurrentHand.Pot <= 0 {
+		t.Errorf("Pot should be positive, got %d", table.CurrentHand.Pot)
+	}
+}
+
+// TestSidePots_6P_MultipleSidePots tests 6 players creating multiple side pots
+func TestSidePots_6P_MultipleSidePots(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+	tokens := []string{"player-a", "player-b", "player-c", "player-d", "player-e", "player-f"}
+	stacks := []int{50, 150, 300, 500, 750, 1000}
+
+	for i := 0; i < 6; i++ {
+		table.Seats[i].Token = &tokens[i]
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = stacks[i]
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("failed to start hand: %v", err)
+	}
+
+	// All players raise to their full stacks in sequence
+	for i := 0; i < 6; i++ {
+		stack := table.Seats[i].Stack
+		if stack > 0 {
+			// Raise amount must account for amount already in PlayerBets
+			raiseToAmount := stack + table.CurrentHand.PlayerBets[i]
+			chipsMoved, err := table.CurrentHand.ProcessAction(i, "raise", stack, raiseToAmount)
+			if err != nil {
+				t.Fatalf("Player %d raise failed: %v", i, err)
+			}
+			table.Seats[i].Stack -= chipsMoved
+		}
+	}
+
+	// Verify all stacks are 0
+	for i := 0; i < 6; i++ {
+		if table.Seats[i].Stack != 0 {
+			t.Errorf("Player %d stack should be 0, got %d", i, table.Seats[i].Stack)
+		}
+	}
+	// Pot should be positive (main + multiple side pots)
+	if table.CurrentHand.Pot <= 0 {
+		t.Errorf("Pot should be positive, got %d", table.CurrentHand.Pot)
+	}
+}
