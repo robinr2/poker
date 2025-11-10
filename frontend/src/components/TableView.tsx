@@ -333,9 +333,12 @@ export function TableView({
             <>
               {(() => {
                 // Cap call amount to player's available stack
-                const currentPlayerStack = seats[currentSeatIndex]?.stack ?? 0;
+                const currentPlayerStack =
+                  currentSeatIndex !== null
+                    ? seats[currentSeatIndex]?.stack ?? 0
+                    : 0;
                 const effectiveCallAmount = Math.min(
-                  gameState.callAmount,
+                  gameState.callAmount ?? 0,
                   currentPlayerStack
                 );
                 return (
