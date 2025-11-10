@@ -588,90 +588,165 @@ describe('TableView', () => {
     });
   });
 
-  describe('TestTableViewStartHandButton', () => {
-    it('should render Start Hand button when player is seated and no active hand', () => {
-      const mockOnLeave = vi.fn();
-      const mockSendMessage = vi.fn();
-      const gameState: GameState = {
-        dealerSeat: null,
-        smallBlindSeat: null,
-        bigBlindSeat: null,
-        holeCards: null,
-        pot: 0,
-      };
+   describe('TestTableViewStartHandButton', () => {
+     it('Start Hand button shows when pot is 0 and player is seated (first hand)', () => {
+       const mockOnLeave = vi.fn();
+       const mockSendMessage = vi.fn();
+       const gameState: GameState = {
+         dealerSeat: null,
+         smallBlindSeat: null,
+         bigBlindSeat: null,
+         holeCards: null,
+         pot: 0,
+       };
 
-      render(
-        <TableView
-          tableId="table-1"
-          seats={mockSeats}
-          currentSeatIndex={1}
-          onLeave={mockOnLeave}
-          gameState={gameState}
-          onSendMessage={mockSendMessage}
-        />
-      );
+       render(
+         <TableView
+           tableId="table-1"
+           seats={mockSeats}
+           currentSeatIndex={1}
+           onLeave={mockOnLeave}
+           gameState={gameState}
+           onSendMessage={mockSendMessage}
+         />
+       );
 
-      const startHandButton = screen.getByRole('button', {
-        name: /Start Hand/i,
-      });
-      expect(startHandButton).toBeInTheDocument();
-    });
+       const startHandButton = screen.getByRole('button', {
+         name: /Start Hand/i,
+       });
+       expect(startHandButton).toBeInTheDocument();
+     });
 
-    it('should not render Start Hand button when player is not seated', () => {
-      const mockOnLeave = vi.fn();
-      const mockSendMessage = vi.fn();
-      const gameState: GameState = {
-        dealerSeat: null,
-        smallBlindSeat: null,
-        bigBlindSeat: null,
-        holeCards: null,
-        pot: 0,
-      };
+     it('Start Hand button shows when handComplete is present (after winner determined)', () => {
+       const mockOnLeave = vi.fn();
+       const mockSendMessage = vi.fn();
+       const gameState: GameState = {
+         dealerSeat: 1,
+         smallBlindSeat: 3,
+         bigBlindSeat: 5,
+         holeCards: null,
+         pot: 50, // Hand was active
+         handComplete: {
+           message: 'Hand complete',
+         },
+       };
 
-      render(
-        <TableView
-          tableId="table-1"
-          seats={mockSeats}
-          currentSeatIndex={null}
-          onLeave={mockOnLeave}
-          gameState={gameState}
-          onSendMessage={mockSendMessage}
-        />
-      );
+       render(
+         <TableView
+           tableId="table-1"
+           seats={mockSeats}
+           currentSeatIndex={1}
+           onLeave={mockOnLeave}
+           gameState={gameState}
+           onSendMessage={mockSendMessage}
+         />
+       );
 
-      const startHandButton = screen.queryByRole('button', {
-        name: /Start Hand/i,
-      });
-      expect(startHandButton).not.toBeInTheDocument();
-    });
+       const startHandButton = screen.getByRole('button', {
+         name: /Start Hand/i,
+       });
+       expect(startHandButton).toBeInTheDocument();
+     });
 
-    it('should not render Start Hand button when hand is active (pot > 0)', () => {
-      const mockOnLeave = vi.fn();
-      const mockSendMessage = vi.fn();
-      const gameState: GameState = {
-        dealerSeat: 1,
-        smallBlindSeat: 3,
-        bigBlindSeat: 5,
-        holeCards: null,
-        pot: 30, // Active hand has pot > 0
-      };
+     it('Start Hand button hides during active hand play (pot > 0, no handComplete)', () => {
+       const mockOnLeave = vi.fn();
+       const mockSendMessage = vi.fn();
+       const gameState: GameState = {
+         dealerSeat: 1,
+         smallBlindSeat: 3,
+         bigBlindSeat: 5,
+         holeCards: null,
+         pot: 30, // Active hand has pot > 0
+       };
 
-      render(
-        <TableView
-          tableId="table-1"
-          seats={mockSeats}
-          currentSeatIndex={1}
-          onLeave={mockOnLeave}
-          gameState={gameState}
-          onSendMessage={mockSendMessage}
-        />
-      );
+       render(
+         <TableView
+           tableId="table-1"
+           seats={mockSeats}
+           currentSeatIndex={1}
+           onLeave={mockOnLeave}
+           gameState={gameState}
+           onSendMessage={mockSendMessage}
+         />
+       );
 
-      const startHandButton = screen.queryByRole('button', {
-        name: /Start Hand/i,
-      });
-      expect(startHandButton).not.toBeInTheDocument();
-    });
+       const startHandButton = screen.queryByRole('button', {
+         name: /Start Hand/i,
+       });
+       expect(startHandButton).not.toBeInTheDocument();
+     });
+
+     it('Start Hand button shows even when showdown overlay is dismissed', () => {
+       const mockOnLeave = vi.fn();
+       const mockSendMessage = vi.fn();
+       const gameState: GameState = {
+         dealerSeat: 1,
+         smallBlindSeat: 3,
+         bigBlindSeat: 5,
+         holeCards: null,
+         pot: 50,
+         showdown: {
+           winnerSeats: [1],
+           winningHand: 'Pair of Aces',
+           potAmount: 100,
+           amountsWon: { 1: 100 },
+         },
+         handComplete: {
+           message: 'Hand complete',
+         },
+       };
+
+       const { container } = render(
+         <TableView
+           tableId="table-1"
+           seats={mockSeats}
+           currentSeatIndex={1}
+           onLeave={mockOnLeave}
+           gameState={gameState}
+           onSendMessage={mockSendMessage}
+         />
+       );
+
+       // Close the showdown overlay
+       const closeButton = container.querySelector('.showdown-close-button');
+       if (closeButton instanceof HTMLElement) {
+         fireEvent.click(closeButton);
+       }
+
+       // Button should still be visible even after overlay is closed
+       const startHandButton = screen.getByRole('button', {
+         name: /Start Hand/i,
+       });
+       expect(startHandButton).toBeInTheDocument();
+     });
+
+     it('should not render Start Hand button when player is not seated', () => {
+       const mockOnLeave = vi.fn();
+       const mockSendMessage = vi.fn();
+       const gameState: GameState = {
+         dealerSeat: null,
+         smallBlindSeat: null,
+         bigBlindSeat: null,
+         holeCards: null,
+         pot: 0,
+       };
+
+       render(
+         <TableView
+           tableId="table-1"
+           seats={mockSeats}
+           currentSeatIndex={null}
+           onLeave={mockOnLeave}
+           gameState={gameState}
+           onSendMessage={mockSendMessage}
+         />
+       );
+
+       const startHandButton = screen.queryByRole('button', {
+         name: /Start Hand/i,
+       });
+       expect(startHandButton).not.toBeInTheDocument();
+     });
 
     it('should send start_hand message when button is clicked', () => {
       const mockOnLeave = vi.fn();

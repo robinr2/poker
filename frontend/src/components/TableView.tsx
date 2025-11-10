@@ -109,13 +109,12 @@ export function TableView({
     }))
   );
 
-  // Determine if Start Hand button should be visible
-  // Show when: player is seated AND (no active hand OR showdown is active)
-  const isSeated = currentSeatIndex !== null && currentSeatIndex !== undefined;
-  const hasNoActiveHand =
-    !gameState || gameState.pot === 0 || gameState.pot === undefined;
-  const isShowdownActive = gameState?.showdown !== undefined;
-  const showStartHandButton = isSeated && (hasNoActiveHand || isShowdownActive);
+   // Determine if Start Hand button should be visible
+   // Show when: player is seated AND (first hand with pot=0 OR hand complete)
+   const isSeated = currentSeatIndex !== null && currentSeatIndex !== undefined;
+   const isFirstHand = !gameState || gameState.pot === 0 || gameState.pot === undefined;
+   const isHandComplete = gameState?.handComplete !== undefined;
+   const showStartHandButton = isSeated && (isFirstHand || isHandComplete);
 
   // Get player's current stack
   const playerStack =
