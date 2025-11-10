@@ -6427,3 +6427,433 @@ func TestHandleBustOutsWithNotificationsLocked_NoBustOuts(t *testing.T) {
 		t.Errorf("seat 1: expected status 'active', got '%s'", table.Seats[1].Status)
 	}
 }
+
+// ============ PHASE 2: INTEGRATION TESTS - SHOWDOWN WITH AUTO-KICK ============
+
+// TestShowdown_AllInPlayerBustsOut verifies all-in player losing at showdown gets auto-kicked
+// Simulates full hand flow: deal cards, betting (all-in), showdown, bust-out and verify auto-kick
+// Uses specific hole cards to GUARANTEE deterministic outcome: player 0 wins, player 1 busts
+func TestShowdown_AllInPlayerBustsOut(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	table := server.tables[0]
+
+	// Set up 2 players: player 0 with 1000, player 1 with exactly 30 (enough for SB+remaining to bet all)
+	token0 := "player-0"
+	token1 := "player-1"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 30 // Exactly enough to cover SB (10) + remaining bet (20 more)
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// After StartHand:
+	// - Player 0 (dealer/SB) posts 10, has 990 left
+	// - Player 1 (BB) posts 20, has 10 left
+	// - Pot is 30
+	// To simulate an all-in, we need to have player 1 bet their remaining 10 chips
+	// and have player 0 call. We'll update the hand state to reflect this.
+
+	// Set player 1's remaining stack to 0 (they went all-in with 10 on preflop)
+	table.CurrentHand.PlayerBets[1] = 30 // Player 1 bet total of 30 (all-in)
+	table.CurrentHand.Pot = 30 + 30      // Player 0 matched: 30 into pot = 60 total pot
+
+	// Now update stacks to reflect the all-in
+	table.Seats[0].Stack = 1000 - 10 - 20 // After SB (10) and calling the all-in (20), has 970
+	table.Seats[1].Stack = 0              // All-in with 30
+
+	// Set specific hole cards to GUARANTEE player 0 wins and player 1 loses
+	table.CurrentHand.HoleCards[0] = []Card{
+		{Rank: "A", Suit: "s"},
+		{Rank: "A", Suit: "h"},
+	}
+
+	// Player 1 has 2-3 (worst possible hand, will have pair of 2s at best)
+	table.CurrentHand.HoleCards[1] = []Card{
+		{Rank: "2", Suit: "c"},
+		{Rank: "3", Suit: "d"},
+	}
+
+	// Set board cards that don't form complete hands: K-Q-J-9-2
+	// Player 0 will have pair of Aces (kicker K-Q-J)
+	// Player 1 will have pair of 2s (kicker K-Q-J)
+	// Player 0 wins due to higher pair
+	table.CurrentHand.BoardCards = []Card{
+		{Rank: "K", Suit: "c"},
+		{Rank: "Q", Suit: "d"},
+		{Rank: "J", Suit: "s"},
+		{Rank: "9", Suit: "h"},
+		{Rank: "2", Suit: "s"},
+	}
+
+	// Manually set street to river (showdown state)
+	table.CurrentHand.Street = "river"
+
+	// Get initial state before showdown
+	initialToken0Stack := table.Seats[0].Stack
+	initialPot := table.CurrentHand.Pot
+
+	// Call HandleShowdown
+	table.HandleShowdown()
+
+	// After showdown, verify deterministic bust-out:
+	// Player 1 MUST have lost and busted out (stack == 0)
+	if table.Seats[1].Stack != 0 {
+		t.Fatalf("expected player 1 to bust out (stack == 0), but got stack %d", table.Seats[1].Stack)
+	}
+
+	// Verify seat 1 is cleared (auto-kicked)
+	if table.Seats[1].Token != nil {
+		t.Errorf("expected seat 1 (busted out) to have Token == nil, got %v", table.Seats[1].Token)
+	}
+	if table.Seats[1].Status != "empty" {
+		t.Errorf("expected seat 1 (busted out) to have Status 'empty', got '%s'", table.Seats[1].Status)
+	}
+
+	// Verify player 0 won and has increased stack (should have initial + pot)
+	expectedStack := initialToken0Stack + initialPot
+	if table.Seats[0].Stack != expectedStack {
+		t.Errorf("expected seat 0 to have stack %d (initial %d + pot %d), got %d", expectedStack, initialToken0Stack, initialPot, table.Seats[0].Stack)
+	}
+
+	// Verify hand is cleared after showdown
+	if table.CurrentHand != nil {
+		t.Error("expected CurrentHand to be nil after HandleShowdown")
+	}
+}
+
+// TestShowdown_MultiplePlayersBustOut verifies multiple all-in losers with zero stacks all get auto-kicked
+// Simulates 3-player hand where 2 players bust simultaneously after showdown
+// Uses specific hole cards to GUARANTEE deterministic outcome: player 0 wins, players 1 and 2 bust
+func TestShowdown_MultiplePlayersBustOut(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	table := server.tables[0]
+
+	// Set up 3 players: player 0 with 1000, players 1 and 2 with 30 each (enough for blinds + all-in)
+	token0 := "player-0"
+	token1 := "player-1"
+	token2 := "player-2"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 30 // Small stack 1
+
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 30 // Small stack 2
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// After StartHand with 3 players (dealer is 0):
+	// - Player 0 (dealer/SB) posts 10, has 990 left
+	// - Player 1 (BB) posts 20, has 10 left
+	// - Player 2 (UTG) has 30, acts first
+	// To simulate all-in scenario: player 2 goes all-in with 30, player 0 calls with 990
+	// (getting back to blinds), player 1 goes all-in with remaining 10
+	// Simplified: We manually set up the state where:
+	// - Player 1 all-in with 30 total
+	// - Player 2 all-in with 30 total
+	// - Player 0 called both with 60 total
+	// - Pot = 30 + 30 + 60 = 120
+
+	table.CurrentHand.PlayerBets[0] = 60 // Player 0 bet 60
+	table.CurrentHand.PlayerBets[1] = 30 // Player 1 all-in with 30
+	table.CurrentHand.PlayerBets[2] = 30 // Player 2 all-in with 30
+	table.CurrentHand.Pot = 120          // Total pot
+
+	// Update stacks to reflect all-in
+	table.Seats[0].Stack = 1000 - 10 - 60 // 930 (after SB + call)
+	table.Seats[1].Stack = 0              // All-in with 30
+	table.Seats[2].Stack = 0              // All-in with 30
+
+	// Set specific hole cards to GUARANTEE player 0 wins, players 1 and 2 lose
+	// Player 0 has pair of Kings
+	table.CurrentHand.HoleCards[0] = []Card{
+		{Rank: "K", Suit: "s"},
+		{Rank: "K", Suit: "h"},
+	}
+
+	// Player 1 has 2-3 (worst possible hand - will have pair of 2s at best)
+	table.CurrentHand.HoleCards[1] = []Card{
+		{Rank: "2", Suit: "c"},
+		{Rank: "3", Suit: "d"},
+	}
+
+	// Player 2 has 4-5 (low hand - will have pair of 4s or nothing)
+	table.CurrentHand.HoleCards[2] = []Card{
+		{Rank: "4", Suit: "c"},
+		{Rank: "5", Suit: "d"},
+	}
+
+	// Set board cards that don't form complete hands: Q-J-T-9-2
+	// Player 0 will have pair of Kings (best hand, kicker Q-J-T)
+	// Player 1 will have pair of 2s (kicker Q-J-T)
+	// Player 2 will have high card (kicker K-Q-J-T-9)
+	// Player 0 wins with pair of Kings
+	table.CurrentHand.BoardCards = []Card{
+		{Rank: "Q", Suit: "c"},
+		{Rank: "J", Suit: "d"},
+		{Rank: "T", Suit: "s"},
+		{Rank: "9", Suit: "h"},
+		{Rank: "2", Suit: "s"},
+	}
+
+	// Manually set street to river (showdown state)
+	table.CurrentHand.Street = "river"
+
+	// Get initial state
+	initialStack0 := table.Seats[0].Stack
+	initialPot := table.CurrentHand.Pot
+
+	// Call HandleShowdown
+	table.HandleShowdown()
+
+	// After showdown, verify deterministic bust-out of multiple players:
+	// Players 1 and 2 MUST have lost and busted out (stack == 0)
+	if table.Seats[1].Stack != 0 {
+		t.Fatalf("expected player 1 to bust out (stack == 0), but got stack %d", table.Seats[1].Stack)
+	}
+	if table.Seats[2].Stack != 0 {
+		t.Fatalf("expected player 2 to bust out (stack == 0), but got stack %d", table.Seats[2].Stack)
+	}
+
+	// Verify seats 1 and 2 are cleared (auto-kicked)
+	if table.Seats[1].Token != nil {
+		t.Errorf("expected seat 1 (busted out) to have Token == nil, got %v", table.Seats[1].Token)
+	}
+	if table.Seats[1].Status != "empty" {
+		t.Errorf("expected seat 1 (busted out) to have Status 'empty', got '%s'", table.Seats[1].Status)
+	}
+
+	if table.Seats[2].Token != nil {
+		t.Errorf("expected seat 2 (busted out) to have Token == nil, got %v", table.Seats[2].Token)
+	}
+	if table.Seats[2].Status != "empty" {
+		t.Errorf("expected seat 2 (busted out) to have Status 'empty', got '%s'", table.Seats[2].Status)
+	}
+
+	// Verify player 0 won and has increased stack (should have initial + pot)
+	expectedStack := initialStack0 + initialPot
+	if table.Seats[0].Stack != expectedStack {
+		t.Fatalf("expected seat 0 to have stack %d (initial %d + pot %d), got %d", expectedStack, initialStack0, initialPot, table.Seats[0].Stack)
+	}
+
+	// Verify hand is cleared
+	if table.CurrentHand != nil {
+		t.Error("expected CurrentHand to be nil after HandleShowdown")
+	}
+}
+
+// TestShowdown_WinnerWithStackNotKicked verifies winners with stack > 0 are NOT kicked
+// Player 0: AA (pair of Aces) - wins
+// Player 1: KQ (pair of Kings with board) - loses but has remaining stack, not kicked
+func TestShowdown_WinnerWithStackNotKicked(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	table := server.tables[0]
+
+	// Set up 2 players
+	token0 := "player-0"
+	token1 := "player-1"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 100
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 100
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Set specific hole cards to guarantee player 0 wins
+	table.CurrentHand.HoleCards[0] = []Card{
+		{Rank: "A", Suit: "s"},
+		{Rank: "A", Suit: "h"},
+	}
+	table.CurrentHand.HoleCards[1] = []Card{
+		{Rank: "K", Suit: "c"},
+		{Rank: "Q", Suit: "d"},
+	}
+
+	// Manually set up showdown scenario
+	table.CurrentHand.Street = "river"
+
+	// Board: 9-8-7-5-2 (no pairs/straights involving K,Q - player 0 has pair of Aces, player 1 has high card K)
+	table.CurrentHand.BoardCards = []Card{
+		{Rank: "9", Suit: "d"},
+		{Rank: "8", Suit: "h"},
+		{Rank: "7", Suit: "s"},
+		{Rank: "5", Suit: "c"},
+		{Rank: "2", Suit: "d"},
+	}
+
+	// Call HandleShowdown - player 0 should win with pair of Aces
+	table.HandleShowdown()
+
+	// Verify player 0 won (has pair of Aces)
+	if table.Seats[0].Stack <= 100 {
+		t.Errorf("expected player 0 to win and have stack > 100, got %d", table.Seats[0].Stack)
+	}
+	if table.Seats[0].Token == nil {
+		t.Error("expected player 0 (winner) to NOT be kicked (Token should not be nil)")
+	}
+	if table.Seats[0].Status == "empty" {
+		t.Error("expected player 0 (winner) to NOT be kicked (Status should not be 'empty')")
+	}
+
+	// Verify player 1 lost but still has chips (not busted)
+	if table.Seats[1].Stack <= 0 {
+		t.Errorf("expected player 1 to lose but NOT bust (should have stack > 0), got %d", table.Seats[1].Stack)
+	}
+	if table.Seats[1].Stack >= 100 {
+		t.Errorf("expected player 1 to lose some chips (stack < 100), got %d", table.Seats[1].Stack)
+	}
+	if table.Seats[1].Token == nil {
+		t.Error("expected player 1 (loser with remaining chips) to NOT be kicked (Token should not be nil)")
+	}
+	if table.Seats[1].Status == "empty" {
+		t.Error("expected player 1 (loser with remaining chips) to NOT be kicked (Status should not be 'empty')")
+	}
+
+	// Verify hand is cleared
+	if table.CurrentHand != nil {
+		t.Error("expected CurrentHand to be nil after HandleShowdown")
+	}
+}
+
+// TestShowdown_AllInWinnerNotKicked verifies edge case: player goes all-in and WINS (not kicked)
+// Player starts with 30 chip stack, goes all-in, and wins despite having 0 stack before distribution
+// After pot distribution, should have stack > 0 and NOT be kicked (not an empty seat)
+func TestShowdown_AllInWinnerNotKicked(t *testing.T) {
+	logger := slog.Default()
+	server := NewServer(logger)
+	table := server.tables[0]
+
+	// Set up 2 players: both with small all-in stacks
+	token0 := "player-0"
+	token1 := "player-1"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 30 // Small all-in stack
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 30 // Small all-in stack
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Simulate all-in scenario where:
+	// - Player 0 (SB) goes all-in with 30
+	// - Player 1 (BB) goes all-in with 30
+	// - Pot = 60
+	// After StartHand: Player 0 has 20 (30-10 SB), Player 1 has 10 (30-20 BB)
+	// We need both to have 0 remaining, so they each bet all their chips
+	// Player 0 bets remaining 20 (total 30), Player 1 calls with 10 (total 30)
+
+	table.CurrentHand.PlayerBets[0] = 30 // Player 0 all-in with 30 total
+	table.CurrentHand.PlayerBets[1] = 30 // Player 1 all-in with 30 total
+	table.CurrentHand.Pot = 60           // Total pot
+
+	// Update stacks to reflect all-in
+	table.Seats[0].Stack = 0 // Player 0 all-in
+	table.Seats[1].Stack = 0 // Player 1 all-in
+
+	// Set specific hole cards to GUARANTEE player 0 wins despite all-in with small stack
+	// Player 0 has pair of Aces (will win)
+	table.CurrentHand.HoleCards[0] = []Card{
+		{Rank: "A", Suit: "s"},
+		{Rank: "A", Suit: "h"},
+	}
+
+	// Player 1 has 2-3 (worst hand - will lose, will have pair of 2s at best)
+	table.CurrentHand.HoleCards[1] = []Card{
+		{Rank: "2", Suit: "c"},
+		{Rank: "3", Suit: "d"},
+	}
+
+	// Set board cards that don't form complete hands: K-Q-J-9-2
+	// Player 0 will have pair of Aces (best hand)
+	// Player 1 will have pair of 2s (loses)
+	table.CurrentHand.BoardCards = []Card{
+		{Rank: "K", Suit: "c"},
+		{Rank: "Q", Suit: "d"},
+		{Rank: "J", Suit: "s"},
+		{Rank: "9", Suit: "h"},
+		{Rank: "2", Suit: "s"},
+	}
+
+	// Manually set street to river (showdown state)
+	table.CurrentHand.Street = "river"
+
+	// Get initial pot
+	initialPot := table.CurrentHand.Pot
+
+	// Call HandleShowdown
+	table.HandleShowdown()
+
+	// After showdown, verify winner with all-in stack is NOT kicked:
+	// Player 0 should have won and have stack > 0 after pot distribution
+	if table.Seats[0].Stack <= 0 {
+		t.Fatalf("expected player 0 (all-in winner) to have stack > 0 after pot distribution, got %d", table.Seats[0].Stack)
+	}
+
+	// Verify the winner received the correct pot
+	expectedStack := initialPot // Winner gets the entire pot
+	if table.Seats[0].Stack != expectedStack {
+		t.Errorf("expected player 0 to have stack %d (pot %d), got %d", expectedStack, initialPot, table.Seats[0].Stack)
+	}
+
+	// Verify seat 0 is NOT cleared (player is still seated)
+	if table.Seats[0].Token == nil {
+		t.Errorf("expected seat 0 (all-in winner) to have Token != nil, got nil")
+	}
+	if table.Seats[0].Status == "empty" {
+		t.Errorf("expected seat 0 (all-in winner) to NOT have Status 'empty', got 'empty'")
+	}
+
+	// Verify player 1 lost and busted out
+	if table.Seats[1].Stack != 0 {
+		t.Errorf("expected player 1 to bust out (stack == 0), got %d", table.Seats[1].Stack)
+	}
+
+	// Verify seat 1 is cleared (auto-kicked as busted player)
+	if table.Seats[1].Token != nil {
+		t.Errorf("expected seat 1 (busted out) to have Token == nil, got %v", table.Seats[1].Token)
+	}
+	if table.Seats[1].Status != "empty" {
+		t.Errorf("expected seat 1 (busted out) to have Status 'empty', got '%s'", table.Seats[1].Status)
+	}
+
+	// Verify hand is cleared
+	if table.CurrentHand != nil {
+		t.Error("expected CurrentHand to be nil after HandleShowdown")
+	}
+}
