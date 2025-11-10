@@ -121,14 +121,71 @@ describe('App', () => {
   });
 
   describe('TestApp_InvalidToken_ShowsPrompt', () => {
-    it('should clear token and show NamePrompt when server returns invalid token error', async () => {
-      // Start with an invalid token in localStorage
-      localStorage.setItem('poker_session_token', 'invalid-expired-token');
+    it('should clear token and reload page when server returns invalid token error', async () => {
+      // Mock window.location.reload
+      const reloadMock = vi.fn();
+      const reloadDescriptor = Object.getOwnPropertyDescriptor(
+        window.location,
+        'reload'
+      );
+      Object.defineProperty(window.location, 'reload', {
+        configurable: true,
+        writable: true,
+        value: reloadMock,
+      });
+
+      try {
+        // Start with an invalid token in localStorage
+        localStorage.setItem('poker_session_token', 'invalid-expired-token');
+
+        render(<App />);
+
+        // Initially, prompt should not be shown (token exists)
+        expect(screen.queryByText('Enter Your Name')).not.toBeInTheDocument();
+
+        // Wait for socket to be created
+        await waitFor(() => {
+          expect(createdMockSockets.length).toBeGreaterThan(0);
+        });
+
+        const mockSocket = createdMockSockets[0];
+
+        // Simulate error message from server about invalid token
+        const errorMessage = JSON.stringify({
+          type: 'error',
+          payload: { message: 'Invalid or expired token' },
+        });
+
+        mockSocket.simulateMessage(errorMessage);
+
+        // Should clear the token from localStorage
+        await waitFor(() => {
+          const savedToken = localStorage.getItem('poker_session_token');
+          expect(savedToken).toBeNull();
+        });
+
+        // Should reload the page
+        await waitFor(() => {
+          expect(reloadMock).toHaveBeenCalled();
+        });
+      } finally {
+        // Restore original reload descriptor
+        if (reloadDescriptor) {
+          Object.defineProperty(window.location, 'reload', reloadDescriptor);
+        }
+      }
+    });
+
+    it('should allow user to create new session after page reload from invalid token', async () => {
+      // This test simulates the flow AFTER page reload (no token in localStorage)
+      // The token was already cleared and page reloaded in previous test
 
       render(<App />);
 
-      // Initially, prompt should not be shown (token exists)
-      expect(screen.queryByText('Enter Your Name')).not.toBeInTheDocument();
+      // With no token, prompt should show immediately
+      await waitFor(() => {
+        expect(screen.getByText('Enter Your Name')).toBeInTheDocument();
+      });
 
       // Wait for socket to be created
       await waitFor(() => {
@@ -136,51 +193,6 @@ describe('App', () => {
       });
 
       const mockSocket = createdMockSockets[0];
-
-      // Simulate error message from server about invalid token
-      const errorMessage = JSON.stringify({
-        type: 'error',
-        payload: { message: 'Invalid or expired token' },
-      });
-
-      mockSocket.simulateMessage(errorMessage);
-
-      // Should clear the token from localStorage
-      await waitFor(() => {
-        const savedToken = localStorage.getItem('poker_session_token');
-        expect(savedToken).toBeNull();
-      });
-
-      // Should show the name prompt
-      await waitFor(() => {
-        expect(screen.getByText('Enter Your Name')).toBeInTheDocument();
-      });
-    });
-
-    it('should allow user to create new session after invalid token', async () => {
-      // Start with an invalid token
-      localStorage.setItem('poker_session_token', 'bad-token');
-
-      render(<App />);
-
-      await waitFor(() => {
-        expect(createdMockSockets.length).toBeGreaterThan(0);
-      });
-
-      const mockSocket = createdMockSockets[0];
-
-      // Simulate invalid token error
-      mockSocket.simulateMessage(
-        JSON.stringify({
-          type: 'error',
-          payload: { message: 'Invalid or expired token' },
-        })
-      );
-
-      // Wait for prompt to show
-      await waitFor(() => {
-        expect(screen.getByText('Enter Your Name')).toBeInTheDocument();
-      });
 
       // Enter a new name
       const input = screen.getByPlaceholderText(

@@ -67,11 +67,11 @@ function App() {
         const errorMessage = message.payload.message as string;
         console.error('[App] Error from server:', errorMessage);
         
-        // If token is invalid/expired, clear it and show name prompt
+        // If token is invalid/expired, clear it and reload to reconnect without token
         if (errorMessage && errorMessage.toLowerCase().includes('token')) {
           SessionService.clearToken();
-          setPlayerName(null);
-          setShowPrompt(true);
+          // Reload the page to reconnect without token and show name prompt
+          window.location.reload();
         }
       }
       // lobby_state is now handled by useWebSocket hook
