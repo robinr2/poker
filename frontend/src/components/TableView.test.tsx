@@ -815,219 +815,219 @@ describe('TableView', () => {
       const sentMessage = mockSendMessage.mock.calls[0][0];
       expect(typeof sentMessage).toBe('string');
       expect(sentMessage).toContain('start_hand');
-     });
+    });
 
-      it('Start Hand button hides immediately after clicking (optimistic)', () => {
-        const mockOnLeave = vi.fn();
-        const mockSendMessage = vi.fn();
+    it('Start Hand button hides immediately after clicking (optimistic)', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
 
-        // Simulate a hand in progress (pot > 0)
-        const activeHandGameState: GameState = {
-          dealerSeat: 1,
-          smallBlindSeat: 3,
-          bigBlindSeat: 5,
-          holeCards: ['As', 'Kh'],
-          pot: 50, // Active hand
-        };
+      // Simulate a hand in progress (pot > 0)
+      const activeHandGameState: GameState = {
+        dealerSeat: 1,
+        smallBlindSeat: 3,
+        bigBlindSeat: 5,
+        holeCards: ['As', 'Kh'],
+        pot: 50, // Active hand
+      };
 
-        const { rerender } = render(
-          <TableView
-            tableId="table-1"
-            seats={mockSeats}
-            currentSeatIndex={1}
-            onLeave={mockOnLeave}
-            gameState={activeHandGameState}
-            onSendMessage={mockSendMessage}
-          />
-        );
+      const { rerender } = render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={activeHandGameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
 
-        // Button should be hidden during active hand (pot > 0, no handComplete)
-        const activeHandButton = screen.queryByRole('button', {
-          name: /Start Hand/i,
-        });
-        expect(activeHandButton).not.toBeInTheDocument();
-
-        // After clicking start_hand, optimistic update happens:
-        // - handComplete is deleted
-        // - street is deleted
-        // - boardCards = []
-        // - pot STAYS at 50 (not reset to 0 in optimistic update anymore)
-        // This is the KEY FIX: we no longer set pot = 0, so pot > 0 means button stays hidden
-        const optimisticGameState: GameState = {
-          dealerSeat: 1,
-          smallBlindSeat: 3,
-          bigBlindSeat: 5,
-          holeCards: ['As', 'Kh'],
-          pot: 50, // pot stays the same - this is the fix!
-        };
-
-        rerender(
-          <TableView
-            tableId="table-1"
-            seats={mockSeats}
-            currentSeatIndex={1}
-            onLeave={mockOnLeave}
-            gameState={optimisticGameState}
-            onSendMessage={mockSendMessage}
-          />
-        );
-
-        // Button should STILL be hidden because pot > 0 (even though handComplete is gone)
-        // Before the fix, setting pot=0 would make it visible
-        // After the fix, pot stays at its value, so button stays hidden
-        const buttonAfterClick = screen.queryByRole('button', {
-          name: /Start Hand/i,
-        });
-        expect(buttonAfterClick).not.toBeInTheDocument();
+      // Button should be hidden during active hand (pot > 0, no handComplete)
+      const activeHandButton = screen.queryByRole('button', {
+        name: /Start Hand/i,
       });
+      expect(activeHandButton).not.toBeInTheDocument();
 
-     it('Start Hand button remains hidden while pot is greater than 0 (active hand)', () => {
-       const mockOnLeave = vi.fn();
-       const mockSendMessage = vi.fn();
-       const gameState: GameState = {
-         dealerSeat: 1,
-         smallBlindSeat: 3,
-         bigBlindSeat: 5,
-         holeCards: null,
-         pot: 50, // Active hand with pot > 0
-       };
+      // After clicking start_hand, optimistic update happens:
+      // - handComplete is deleted
+      // - street is deleted
+      // - boardCards = []
+      // - pot STAYS at 50 (not reset to 0 in optimistic update anymore)
+      // This is the KEY FIX: we no longer set pot = 0, so pot > 0 means button stays hidden
+      const optimisticGameState: GameState = {
+        dealerSeat: 1,
+        smallBlindSeat: 3,
+        bigBlindSeat: 5,
+        holeCards: ['As', 'Kh'],
+        pot: 50, // pot stays the same - this is the fix!
+      };
 
-       render(
-         <TableView
-           tableId="table-1"
-           seats={mockSeats}
-           currentSeatIndex={1}
-           onLeave={mockOnLeave}
-           gameState={gameState}
-           onSendMessage={mockSendMessage}
-         />
-       );
+      rerender(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={optimisticGameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
 
-       // Button should not be visible when pot > 0 and no handComplete
-       const startHandButton = screen.queryByRole('button', {
-         name: /Start Hand/i,
-       });
-       expect(startHandButton).not.toBeInTheDocument();
-     });
+      // Button should STILL be hidden because pot > 0 (even though handComplete is gone)
+      // Before the fix, setting pot=0 would make it visible
+      // After the fix, pot stays at its value, so button stays hidden
+      const buttonAfterClick = screen.queryByRole('button', {
+        name: /Start Hand/i,
+      });
+      expect(buttonAfterClick).not.toBeInTheDocument();
+    });
 
-     it('Start Hand button shows again only when handComplete is set', () => {
-       const mockOnLeave = vi.fn();
-       const mockSendMessage = vi.fn();
+    it('Start Hand button remains hidden while pot is greater than 0 (active hand)', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+      const gameState: GameState = {
+        dealerSeat: 1,
+        smallBlindSeat: 3,
+        bigBlindSeat: 5,
+        holeCards: null,
+        pot: 50, // Active hand with pot > 0
+      };
 
-       // Start with state where pot is > 0 (hand in progress)
-       const activeHandGameState: GameState = {
-         dealerSeat: 1,
-         smallBlindSeat: 3,
-         bigBlindSeat: 5,
-         holeCards: null,
-         pot: 50,
-       };
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
 
-       const { rerender } = render(
-         <TableView
-           tableId="table-1"
-           seats={mockSeats}
-           currentSeatIndex={1}
-           onLeave={mockOnLeave}
-           gameState={activeHandGameState}
-           onSendMessage={mockSendMessage}
-         />
-       );
+      // Button should not be visible when pot > 0 and no handComplete
+      const startHandButton = screen.queryByRole('button', {
+        name: /Start Hand/i,
+      });
+      expect(startHandButton).not.toBeInTheDocument();
+    });
 
-       // Button should not be visible during active hand
-       let startHandButton = screen.queryByRole('button', {
-         name: /Start Hand/i,
-       });
-       expect(startHandButton).not.toBeInTheDocument();
+    it('Start Hand button shows again only when handComplete is set', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
 
-       // Update to show handComplete (hand finished)
-       const completedHandGameState: GameState = {
-         dealerSeat: 1,
-         smallBlindSeat: 3,
-         bigBlindSeat: 5,
-         holeCards: null,
-         pot: 50,
-         handComplete: {
-           message: 'Hand complete',
-         },
-       };
+      // Start with state where pot is > 0 (hand in progress)
+      const activeHandGameState: GameState = {
+        dealerSeat: 1,
+        smallBlindSeat: 3,
+        bigBlindSeat: 5,
+        holeCards: null,
+        pot: 50,
+      };
 
-       rerender(
-         <TableView
-           tableId="table-1"
-           seats={mockSeats}
-           currentSeatIndex={1}
-           onLeave={mockOnLeave}
-           gameState={completedHandGameState}
-           onSendMessage={mockSendMessage}
-         />
-       );
+      const { rerender } = render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={activeHandGameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
 
-       // Button should be visible again when handComplete is set
-       startHandButton = screen.getByRole('button', {
-         name: /Start Hand/i,
-       });
-       expect(startHandButton).toBeInTheDocument();
-     });
-   });
+      // Button should not be visible during active hand
+      let startHandButton = screen.queryByRole('button', {
+        name: /Start Hand/i,
+      });
+      expect(startHandButton).not.toBeInTheDocument();
 
-   describe('TestTableViewPhase4FoldedPlayers', () => {
-     it('should apply folded class to folded players', () => {
-       const mockOnLeave = vi.fn();
-       const gameState: ExtendedGameState = {
-         dealerSeat: 0,
-         smallBlindSeat: 1,
-         bigBlindSeat: 2,
-         holeCards: null,
-         pot: 50,
-         foldedPlayers: [1, 2], // Seats 1 and 2 have folded
-       };
+      // Update to show handComplete (hand finished)
+      const completedHandGameState: GameState = {
+        dealerSeat: 1,
+        smallBlindSeat: 3,
+        bigBlindSeat: 5,
+        holeCards: null,
+        pot: 50,
+        handComplete: {
+          message: 'Hand complete',
+        },
+      };
 
-       render(
-         <TableView
-           tableId="table-1"
-           seats={mockSeats}
-           currentSeatIndex={0}
-           onLeave={mockOnLeave}
-           gameState={gameState}
-         />
-       );
+      rerender(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={completedHandGameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
 
-       const seatContainers = document.querySelectorAll('.seat');
-       expect(seatContainers[1].classList.contains('folded')).toBe(true);
-       expect(seatContainers[2].classList.contains('folded')).toBe(true);
-     });
+      // Button should be visible again when handComplete is set
+      startHandButton = screen.getByRole('button', {
+        name: /Start Hand/i,
+      });
+      expect(startHandButton).toBeInTheDocument();
+    });
+  });
 
-     it('should not apply folded class to active players', () => {
-       const mockOnLeave = vi.fn();
-       const gameState: ExtendedGameState = {
-         dealerSeat: 0,
-         smallBlindSeat: 1,
-         bigBlindSeat: 2,
-         holeCards: null,
-         pot: 50,
-         foldedPlayers: [1], // Only seat 1 folded
-       };
+  describe('TestTableViewPhase4FoldedPlayers', () => {
+    it('should apply folded class to folded players', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 50,
+        foldedPlayers: [1, 2], // Seats 1 and 2 have folded
+      };
 
-       render(
-         <TableView
-           tableId="table-1"
-           seats={mockSeats}
-           currentSeatIndex={0}
-           onLeave={mockOnLeave}
-           gameState={gameState}
-         />
-       );
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
 
-       const seatContainers = document.querySelectorAll('.seat');
-       expect(seatContainers[0].classList.contains('folded')).toBe(false);
-       expect(seatContainers[1].classList.contains('folded')).toBe(true);
-       expect(seatContainers[2].classList.contains('folded')).toBe(false);
-     });
-   });
+      const seatContainers = document.querySelectorAll('.seat');
+      expect(seatContainers[1].classList.contains('folded')).toBe(true);
+      expect(seatContainers[2].classList.contains('folded')).toBe(true);
+    });
 
-   describe('TestTableViewPhase4CardRendering', () => {
-     it('renders card backs based on cardCount', () => {
+    it('should not apply folded class to active players', () => {
+      const mockOnLeave = vi.fn();
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 50,
+        foldedPlayers: [1], // Only seat 1 folded
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      const seatContainers = document.querySelectorAll('.seat');
+      expect(seatContainers[0].classList.contains('folded')).toBe(false);
+      expect(seatContainers[1].classList.contains('folded')).toBe(true);
+      expect(seatContainers[2].classList.contains('folded')).toBe(false);
+    });
+  });
+
+  describe('TestTableViewPhase4CardRendering', () => {
+    it('renders card backs based on cardCount', () => {
       const mockOnLeave = vi.fn();
       const gameState: GameState = {
         dealerSeat: 1,
@@ -2470,6 +2470,524 @@ describe('Phase 4: Board Card Display', () => {
       expect(screen.getByText(/A♠/)).toBeInTheDocument();
       expect(screen.getByText(/K♥/)).toBeInTheDocument();
       expect(screen.getByText(/Q♦/)).toBeInTheDocument();
+    });
+  });
+});
+
+describe('Phase 2: Multi-Player UI Display Calculations', () => {
+  const mockSeats: SeatInfo[] = [
+    { index: 0, playerName: 'Alice', status: 'occupied', stack: 1000 },
+    { index: 1, playerName: 'Bob', status: 'occupied', stack: 980 },
+    { index: 2, playerName: 'Charlie', status: 'occupied', stack: 1200 },
+    { index: 3, playerName: 'Diana', status: 'occupied', stack: 500 },
+    { index: 4, playerName: 'Eve', status: 'occupied', stack: 750 },
+    { index: 5, playerName: 'Frank', status: 'occupied', stack: 850 },
+  ];
+
+  interface ExtendedGameState extends GameState {
+    playerBets?: Record<number, number>;
+    currentActor?: number | null;
+    validActions?: string[] | null;
+    callAmount?: number | null;
+    minRaise?: number;
+    maxRaise?: number;
+    boardCards?: string[];
+  }
+
+  describe('TestMultiPlayer_CallAmountDisplay', () => {
+    it('test_call_amount_capped_at_remaining_stack_multiplayer - 2 players', () => {
+      // When bet > player's remaining stack, show capped amount
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+
+      // Alice bet 1000, Bob only has 980 remaining
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 0,
+        holeCards: ['As', 'Kh'],
+        pot: 100,
+        currentActor: 1,
+        validActions: ['fold', 'call'],
+        callAmount: 980, // Backend should send the capped amount (min of bet and stack)
+        playerBets: {
+          0: 100, // Alice's contribution
+          1: 20, // Bob's contribution
+        },
+      };
+
+      const seatsFor2P = mockSeats.slice(0, 2);
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={seatsFor2P}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      // Call button should show the capped amount (980, not 1000)
+      const callButton = screen.getByRole('button', { name: /Call 980/i });
+      expect(callButton).toBeInTheDocument();
+    });
+
+    it('test_call_button_shows_correct_amount_3p', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+
+      // 3-player game: Alice bets 500, Bob's remaining = 100, Charlie's remaining = 500
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 150,
+        currentActor: 1,
+        validActions: ['fold', 'call'],
+        callAmount: 100, // Capped at Bob's remaining stack
+        playerBets: {
+          0: 500, // Alice
+          1: 50, // Bob
+          2: 100, // Charlie (not acting yet)
+        },
+      };
+
+      const seatsFor3P = mockSeats.slice(0, 3);
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={seatsFor3P}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      const callButton = screen.getByRole('button', { name: /Call 100/i });
+      expect(callButton).toBeInTheDocument();
+    });
+  });
+
+  describe('TestMultiPlayer_CurrentBetTracking', () => {
+    it('test_current_bet_tracks_highest_contribution - multiple player stacks', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+
+      // 4 players with different contributions
+      // Current bet should reflect the highest (1200)
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 1950,
+        currentActor: 3,
+        validActions: ['fold', 'call', 'raise'],
+        callAmount: 500, // Diana's remaining stack
+        minRaise: 1200,
+        maxRaise: 500,
+        playerBets: {
+          0: 300, // Alice
+          1: 500, // Bob
+          2: 650, // Charlie
+          3: 500, // Diana (has 500 remaining from 1000 total)
+        },
+      };
+
+      const seatsFor4P = mockSeats.slice(0, 4);
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={seatsFor4P}
+          currentSeatIndex={3}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      // Current actor (Diana) should see callAmount = 500 (capped at her remaining)
+      const callButton = screen.getByRole('button', { name: /Call 500/i });
+      expect(callButton).toBeInTheDocument();
+    });
+  });
+
+  describe('TestMultiPlayer_RaiseCalculations', () => {
+    it('test_min_raise_correct_after_multiple_raises_2p', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+
+      // 2-player: Alice raised to 200, Bob raised to 500
+      // Min raise for next action = current bet + last raise size
+      // current bet = 500, last raise = 300, so minRaise = 800
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 0,
+        holeCards: ['As', 'Kh'],
+        pot: 700,
+        currentActor: 0,
+        validActions: ['fold', 'call', 'raise'],
+        callAmount: 300, // Alice needs 300 more to call
+        minRaise: 800, // 500 (current) + 300 (last raise)
+        maxRaise: 1000,
+        playerBets: {
+          0: 200, // Alice bet 200
+          1: 500, // Bob raised to 500
+        },
+      };
+
+      const seatsFor2P = mockSeats.slice(0, 2);
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={seatsFor2P}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      const minButton = screen.getByRole('button', { name: /Min/i });
+      fireEvent.click(minButton);
+
+      const raiseInput = screen.getByDisplayValue('800') as HTMLInputElement;
+      expect(raiseInput.value).toBe('800');
+    });
+
+    it('test_pot_size_includes_all_contributions_3p', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+
+      // 3-player game
+      // Pot = sum of all contributions = 150 (Alice: 50, Bob: 50, Charlie: 50)
+      // Pot-sized raise = callAmount + pot = 50 + 150 = 200
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 150,
+        currentActor: 0,
+        validActions: ['fold', 'call', 'raise'],
+        callAmount: 50,
+        minRaise: 100,
+        maxRaise: 1000,
+        playerBets: {
+          0: 50, // Alice
+          1: 50, // Bob
+          2: 50, // Charlie
+        },
+      };
+
+      const seatsFor3P = mockSeats.slice(0, 3);
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={seatsFor3P}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      const potButton = screen.getByRole('button', { name: /Pot/i });
+      fireEvent.click(potButton);
+
+      // Pot-sized = callAmount (50) + pot (150) = 200
+      const raiseInput = screen.getByDisplayValue('200') as HTMLInputElement;
+      expect(raiseInput.value).toBe('200');
+    });
+  });
+
+  describe('TestMultiPlayer_AllInButton', () => {
+    it('test_allin_button_always_shows_remaining_stack_2p', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+
+      // 2 players: Alice has 1000, Bob has 980
+      // All-in for each should show their remaining stack
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 0,
+        holeCards: ['As', 'Kh'],
+        pot: 50,
+        currentActor: 1,
+        validActions: ['fold', 'call', 'raise'],
+        callAmount: 30,
+        minRaise: 100,
+        maxRaise: 980,
+        playerBets: {
+          0: 50,
+          1: 20,
+        },
+      };
+
+      const seatsFor2P = mockSeats.slice(0, 2);
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={seatsFor2P}
+          currentSeatIndex={1}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      const allInButton = screen.getByRole('button', { name: /All-in/i });
+      fireEvent.click(allInButton);
+
+      // Bob's remaining stack = 980
+      const raiseInput = screen.getByDisplayValue('980') as HTMLInputElement;
+      expect(raiseInput.value).toBe('980');
+    });
+
+    it('test_allin_button_always_shows_remaining_stack_6p', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+
+      // 6-player game: different stack sizes
+      // All-in for each player = their remaining stack
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 250,
+        currentActor: 3,
+        validActions: ['fold', 'call', 'raise'],
+        callAmount: 200, // Diana's remaining
+        minRaise: 500,
+        maxRaise: 500,
+        playerBets: {
+          0: 100,
+          1: 50,
+          2: 100,
+          3: 500, // Diana is all-in
+          4: 0,
+          5: 0,
+        },
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={3}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      const allInButton = screen.getByRole('button', { name: /All-in/i });
+      fireEvent.click(allInButton);
+
+      // Diana's remaining stack = 500 (she already bet 500 from 1000 total)
+      const raiseInput = screen.getByDisplayValue('500') as HTMLInputElement;
+      expect(raiseInput.value).toBe('500');
+    });
+
+    it('test_allin_button_never_grayed_out', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+
+      // All-in button should always be enabled for active players
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 50,
+        currentActor: 0,
+        validActions: ['fold', 'call', 'raise'],
+        callAmount: 30,
+        minRaise: 100,
+        maxRaise: 1000,
+        playerBets: {
+          0: 50,
+          1: 20,
+          2: 30,
+        },
+      };
+
+      const seatsFor3P = mockSeats.slice(0, 3);
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={seatsFor3P}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      const allInButton = screen.getByRole('button', { name: /All-in/i });
+      expect(allInButton).not.toBeDisabled();
+    });
+  });
+
+  describe('TestMultiPlayer_GreenDollarDisplay', () => {
+    it('test_green_dollar_updates_for_all_players_3p', () => {
+      const mockOnLeave = vi.fn();
+
+      // 3-player game: check that playerBets are displayed for all players
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 150,
+        playerBets: {
+          0: 50, // Alice's contribution (Green $)
+          1: 50, // Bob's contribution (Green $)
+          2: 50, // Charlie's contribution (Green $)
+        },
+      };
+
+      const seatsFor3P = mockSeats.slice(0, 3);
+      const { container } = render(
+        <TableView
+          tableId="table-1"
+          seats={seatsFor3P}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      // All three players should have their bets displayed
+      const betAmounts = container.querySelectorAll('.bet-amount');
+      expect(betAmounts.length).toBe(3);
+
+      // Verify amounts
+      const betTexts = Array.from(betAmounts).map((el) => el.textContent || '');
+      expect(betTexts.some((text) => text.includes('50'))).toBe(true);
+    });
+
+    it('test_green_dollar_correct_after_multiple_raises_4p', () => {
+      const mockOnLeave = vi.fn();
+
+      // 4-player game: Alice raised to 300, Bob called, Charlie raised to 800
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 1400,
+        playerBets: {
+          0: 300, // Alice's contribution (Green $)
+          1: 300, // Bob called
+          2: 300, // Charlie's initial
+          3: 500, // Diana's additional
+        },
+      };
+
+      const seatsFor4P = mockSeats.slice(0, 4);
+      const { container } = render(
+        <TableView
+          tableId="table-1"
+          seats={seatsFor4P}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      // All contributions should be displayed
+      const betAmounts = container.querySelectorAll('.bet-amount');
+      expect(betAmounts.length).toBeGreaterThanOrEqual(3);
+    });
+  });
+
+  describe('TestMultiPlayer_EdgeCases', () => {
+    it('should handle call with remaining stack equal to call amount', () => {
+      const mockOnLeave = vi.fn();
+      const mockSendMessage = vi.fn();
+
+      // Eve has exactly 100 remaining, needs 100 to call
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: ['As', 'Kh'],
+        pot: 300,
+        currentActor: 4,
+        validActions: ['fold', 'call'],
+        callAmount: 100,
+        playerBets: {
+          0: 200,
+          1: 50,
+          2: 50,
+          3: 0,
+          4: 0,
+          5: 0,
+        },
+      };
+
+      render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={4}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+          onSendMessage={mockSendMessage}
+        />
+      );
+
+      const callButton = screen.getByRole('button', { name: /Call 100/i });
+      expect(callButton).toBeInTheDocument();
+    });
+
+    it('should handle zero bet display correctly', () => {
+      const mockOnLeave = vi.fn();
+
+      // Some players have bet, some have not
+      const gameState: ExtendedGameState = {
+        dealerSeat: 0,
+        smallBlindSeat: 1,
+        bigBlindSeat: 2,
+        holeCards: null,
+        pot: 150,
+        playerBets: {
+          0: 100,
+          1: 50,
+          2: 0, // Charlie has not bet yet
+          3: 0,
+          4: 0,
+          5: 0,
+        },
+      };
+
+      const { container } = render(
+        <TableView
+          tableId="table-1"
+          seats={mockSeats}
+          currentSeatIndex={0}
+          onLeave={mockOnLeave}
+          gameState={gameState}
+        />
+      );
+
+      // Only Alice and Bob should have bet displays
+      const betAmounts = container.querySelectorAll('.bet-amount');
+      expect(betAmounts.length).toBe(2);
     });
   });
 });

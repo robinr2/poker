@@ -92,7 +92,7 @@ export function TableView({
 }: TableViewProps) {
   // Suppress unused warning for sendAction - will be used in future optimistic updates
   void sendAction;
-  
+
   const [raiseAmount, setRaiseAmount] = useState<string>('');
   const [showShowdown, setShowShowdown] = useState<boolean>(true);
 
@@ -183,11 +183,11 @@ export function TableView({
       <h1>Table: {tableId}</h1>
       <div className="table-container">
         <div className="seats-grid">
-           {seats.map((seat) => (
-             <div
-               key={seat.index}
-               className={`seat ${seat.index === currentSeatIndex ? 'own-seat' : ''} ${gameState?.currentActor === seat.index ? 'turn-active' : ''} ${gameState?.showdown?.winnerSeats.includes(seat.index) ? 'winner-seat' : ''} ${gameState?.foldedPlayers?.includes(seat.index) ? 'folded' : ''}`}
-             >
+          {seats.map((seat) => (
+            <div
+              key={seat.index}
+              className={`seat ${seat.index === currentSeatIndex ? 'own-seat' : ''} ${gameState?.currentActor === seat.index ? 'turn-active' : ''} ${gameState?.showdown?.winnerSeats.includes(seat.index) ? 'winner-seat' : ''} ${gameState?.foldedPlayers?.includes(seat.index) ? 'folded' : ''}`}
+            >
               {/* Dealer Button */}
               {gameState?.dealerSeat === seat.index && (
                 <span className="dealer-badge">D</span>
@@ -210,7 +210,8 @@ export function TableView({
                 gameState.playerBets[seat.index] !== undefined &&
                 gameState.playerBets[seat.index] > 0 && (
                   <div className="bet-amount">
-                    <span className="money-icon">$</span> {gameState.playerBets[seat.index]}
+                    <span className="money-icon">$</span>{' '}
+                    {gameState.playerBets[seat.index]}
                   </div>
                 )}
 
@@ -245,7 +246,8 @@ export function TableView({
               {/* Chip Stack Display */}
               {seat.playerName && (
                 <p className="stack">
-                  <span className="chip-icon">⬤</span> {seat.stack !== undefined ? seat.stack : 'N/A'}
+                  <span className="chip-icon">⬤</span>{' '}
+                  {seat.stack !== undefined ? seat.stack : 'N/A'}
                 </p>
               )}
             </div>

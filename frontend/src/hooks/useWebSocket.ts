@@ -298,19 +298,19 @@ export function useWebSocket(
               ? (JSON.parse(message.payload) as HandStartedPayload)
               : (message.payload as HandStartedPayload);
           console.log('[useWebSocket] hand_started payload:', payload);
-           setGameState((prev) => {
-             const updated = { ...prev };
-             updated.dealerSeat = payload.dealerSeat;
-             updated.smallBlindSeat = payload.smallBlindSeat;
-             updated.bigBlindSeat = payload.bigBlindSeat;
-             updated.playerBets = {}; // Clear player bets for new hand
-             updated.boardCards = []; // Clear board cards for new hand
-             updated.street = undefined; // Clear street for new hand
-             updated.foldedPlayers = []; // Clear folded players for new hand
-             delete updated.showdown; // Clear showdown state so button hides for all players
-             delete updated.handComplete; // Clear handComplete state so button hides for all players
-             return updated;
-           });
+          setGameState((prev) => {
+            const updated = { ...prev };
+            updated.dealerSeat = payload.dealerSeat;
+            updated.smallBlindSeat = payload.smallBlindSeat;
+            updated.bigBlindSeat = payload.bigBlindSeat;
+            updated.playerBets = {}; // Clear player bets for new hand
+            updated.boardCards = []; // Clear board cards for new hand
+            updated.street = undefined; // Clear street for new hand
+            updated.foldedPlayers = []; // Clear folded players for new hand
+            delete updated.showdown; // Clear showdown state so button hides for all players
+            delete updated.handComplete; // Clear handComplete state so button hides for all players
+            return updated;
+          });
           console.log(
             '[useWebSocket] gameState updated with dealer:',
             payload.dealerSeat,

@@ -1906,15 +1906,15 @@ describe('Phase 3: Remove Auto-Clear and Show Start Hand Button After Showdown',
         expect(result.current.gameState.pot).toBe(150);
       });
 
-       // Now send start_hand action
-       act(() => {
-         result.current.sendStartHand();
-       });
+      // Now send start_hand action
+      act(() => {
+        result.current.sendStartHand();
+      });
 
-       // After sending start_hand, pot should remain at its previous value (150)
-       // The optimistic update no longer sets pot = 0
-       expect(result.current.gameState.pot).toBe(150);
-     });
+      // After sending start_hand, pot should remain at its previous value (150)
+      // The optimistic update no longer sets pot = 0
+      expect(result.current.gameState.pot).toBe(150);
+    });
 
     it('start_hand optimistic update clears all hand state (pot, boardCards, showdown, handComplete)', async () => {
       mockServiceInstance.getStatus.mockReturnValue('connected');
@@ -2004,19 +2004,19 @@ describe('Phase 3: Remove Auto-Clear and Show Start Hand Button After Showdown',
         expect(result.current.gameState.handComplete).toBeDefined();
       });
 
-       // Now send start_hand action
-       act(() => {
-         result.current.sendStartHand();
-       });
+      // Now send start_hand action
+      act(() => {
+        result.current.sendStartHand();
+      });
 
-       // After sending start_hand, pot should remain at its previous value (300)
-       // The optimistic update no longer sets pot = 0
-       // But boardCards, showdown, and handComplete should be cleared
-       expect(result.current.gameState.pot).toBe(300);
-       expect(result.current.gameState.boardCards).toEqual([]);
-       expect(result.current.gameState.showdown).toBeUndefined();
-       expect(result.current.gameState.handComplete).toBeUndefined();
-     });
+      // After sending start_hand, pot should remain at its previous value (300)
+      // The optimistic update no longer sets pot = 0
+      // But boardCards, showdown, and handComplete should be cleared
+      expect(result.current.gameState.pot).toBe(300);
+      expect(result.current.gameState.boardCards).toEqual([]);
+      expect(result.current.gameState.showdown).toBeUndefined();
+      expect(result.current.gameState.handComplete).toBeUndefined();
+    });
   });
 });
 
@@ -2399,15 +2399,15 @@ describe('Phase 3: Clear Board Cards on Hand Started Message (Backend Confirmati
       });
 
       await waitFor(() => {
-         // foldedPlayers should be cleared for new hand
-         expect(result.current.gameState.foldedPlayers).toEqual([]);
-         // Dealer/blind seats should be updated
-         expect(result.current.gameState.dealerSeat).toBe(1);
-         expect(result.current.gameState.smallBlindSeat).toBe(2);
-         expect(result.current.gameState.bigBlindSeat).toBe(0);
-       });
-     });
-   });
+        // foldedPlayers should be cleared for new hand
+        expect(result.current.gameState.foldedPlayers).toEqual([]);
+        // Dealer/blind seats should be updated
+        expect(result.current.gameState.dealerSeat).toBe(1);
+        expect(result.current.gameState.smallBlindSeat).toBe(2);
+        expect(result.current.gameState.bigBlindSeat).toBe(0);
+      });
+    });
+  });
 });
 
 describe('Phase 3: Frontend Integration - Seat Cleared During Active Hand', () => {

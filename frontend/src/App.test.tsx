@@ -520,205 +520,210 @@ describe('App', () => {
     });
   });
 
-   describe('TestAppHandlesSeatClearedMessage', () => {
-     it('should switch back to lobby view when receiving seat_cleared message', async () => {
-       localStorage.setItem('poker_session_token', 'return-lobby-token');
+  describe('TestAppHandlesSeatClearedMessage', () => {
+    it('should switch back to lobby view when receiving seat_cleared message', async () => {
+      localStorage.setItem('poker_session_token', 'return-lobby-token');
 
-       render(<App />);
+      render(<App />);
 
-       await waitFor(() => {
-         expect(createdMockSockets.length).toBeGreaterThan(0);
-       });
+      await waitFor(() => {
+        expect(createdMockSockets.length).toBeGreaterThan(0);
+      });
 
-       const mockSocket = createdMockSockets[createdMockSockets.length - 1];
+      const mockSocket = createdMockSockets[createdMockSockets.length - 1];
 
-       const sessionMessage = JSON.stringify({
-         type: 'session_restored',
-         payload: { name: 'Charlie' },
-       });
-       mockSocket.simulateMessage(sessionMessage);
+      const sessionMessage = JSON.stringify({
+        type: 'session_restored',
+        payload: { name: 'Charlie' },
+      });
+      mockSocket.simulateMessage(sessionMessage);
 
-       await waitFor(() => {
-         expect(screen.getByText('Lobby')).toBeInTheDocument();
-       });
+      await waitFor(() => {
+        expect(screen.getByText('Lobby')).toBeInTheDocument();
+      });
 
-       // Send seat_assigned to go to table
-       const seatMessage = JSON.stringify({
-         type: 'seat_assigned',
-         payload: {
-           tableId: 'table-1',
-           seatIndex: 1,
-         },
-       });
-       mockSocket.simulateMessage(seatMessage);
+      // Send seat_assigned to go to table
+      const seatMessage = JSON.stringify({
+        type: 'seat_assigned',
+        payload: {
+          tableId: 'table-1',
+          seatIndex: 1,
+        },
+      });
+      mockSocket.simulateMessage(seatMessage);
 
-       await waitFor(() => {
-         expect(screen.getByText(/Table: table-1/i)).toBeInTheDocument();
-       });
+      await waitFor(() => {
+        expect(screen.getByText(/Table: table-1/i)).toBeInTheDocument();
+      });
 
-       // Send seat_cleared to return to lobby
-       const clearMessage = JSON.stringify({
-         type: 'seat_cleared',
-         payload: {},
-       });
-       mockSocket.simulateMessage(clearMessage);
+      // Send seat_cleared to return to lobby
+      const clearMessage = JSON.stringify({
+        type: 'seat_cleared',
+        payload: {},
+      });
+      mockSocket.simulateMessage(clearMessage);
 
-       await waitFor(() => {
-         expect(screen.queryByText(/Table:/i)).not.toBeInTheDocument();
-         expect(screen.getByText('Lobby')).toBeInTheDocument();
-       });
-     });
+      await waitFor(() => {
+        expect(screen.queryByText(/Table:/i)).not.toBeInTheDocument();
+        expect(screen.getByText('Lobby')).toBeInTheDocument();
+      });
+    });
 
-     it('test_bust_out_flow_complete: should complete full bust-out flow from name prompt through showdown to lobby', async () => {
-       render(<App />);
+    it('test_bust_out_flow_complete: should complete full bust-out flow from name prompt through showdown to lobby', async () => {
+      render(<App />);
 
-       // Step 1: Verify NamePrompt is shown
-       expect(screen.getByText('Enter Your Name')).toBeInTheDocument();
+      // Step 1: Verify NamePrompt is shown
+      expect(screen.getByText('Enter Your Name')).toBeInTheDocument();
 
-       // Step 2: Enter name and submit
-       const input = screen.getByPlaceholderText(
-         'Your name'
-       ) as HTMLInputElement;
-       const button = screen.getByRole('button', { name: 'Join Game' });
+      // Step 2: Enter name and submit
+      const input = screen.getByPlaceholderText(
+        'Your name'
+      ) as HTMLInputElement;
+      const button = screen.getByRole('button', { name: 'Join Game' });
 
-       fireEvent.change(input, { target: { value: 'BustOutPlayer' } });
+      fireEvent.change(input, { target: { value: 'BustOutPlayer' } });
 
-       await waitFor(() => {
-         expect(createdMockSockets.length).toBeGreaterThan(0);
-       });
+      await waitFor(() => {
+        expect(createdMockSockets.length).toBeGreaterThan(0);
+      });
 
-       fireEvent.click(button);
+      fireEvent.click(button);
 
-       // Step 3: Receive session_created and verify lobby appears
-       const mockSocket = createdMockSockets[0];
+      // Step 3: Receive session_created and verify lobby appears
+      const mockSocket = createdMockSockets[0];
 
-       const sessionMessage = JSON.stringify({
-         type: 'session_created',
-         payload: { token: 'bust-out-token', name: 'BustOutPlayer' },
-       });
+      const sessionMessage = JSON.stringify({
+        type: 'session_created',
+        payload: { token: 'bust-out-token', name: 'BustOutPlayer' },
+      });
 
-       mockSocket.simulateMessage(sessionMessage);
+      mockSocket.simulateMessage(sessionMessage);
 
-       await waitFor(() => {
-         expect(screen.getByText('Lobby')).toBeInTheDocument();
-       });
+      await waitFor(() => {
+        expect(screen.getByText('Lobby')).toBeInTheDocument();
+      });
 
-       // Step 4: Receive lobby_state with available table
-       const lobbyMessage = JSON.stringify({
-         type: 'lobby_state',
-         payload: [
-           {
-             id: 'table-1',
-             name: 'Table 1',
-             seats_occupied: 1,
-             max_seats: 6,
-           },
-         ],
-       });
+      // Step 4: Receive lobby_state with available table
+      const lobbyMessage = JSON.stringify({
+        type: 'lobby_state',
+        payload: [
+          {
+            id: 'table-1',
+            name: 'Table 1',
+            seats_occupied: 1,
+            max_seats: 6,
+          },
+        ],
+      });
 
-       mockSocket.simulateMessage(lobbyMessage);
+      mockSocket.simulateMessage(lobbyMessage);
 
-       await waitFor(() => {
-         expect(screen.getByText('Table 1')).toBeInTheDocument();
-       });
+      await waitFor(() => {
+        expect(screen.getByText('Table 1')).toBeInTheDocument();
+      });
 
-       // Step 5: Join table by clicking Join button
-       const joinButton = screen.getByRole('button', { name: 'Join' });
-       fireEvent.click(joinButton);
+      // Step 5: Join table by clicking Join button
+      const joinButton = screen.getByRole('button', { name: 'Join' });
+      fireEvent.click(joinButton);
 
-       // Step 6: Receive seat_assigned and switch to table view
-       const seatMessage = JSON.stringify({
-         type: 'seat_assigned',
-         payload: {
-           tableId: 'table-1',
-           seatIndex: 1,
-         },
-       });
+      // Step 6: Receive seat_assigned and switch to table view
+      const seatMessage = JSON.stringify({
+        type: 'seat_assigned',
+        payload: {
+          tableId: 'table-1',
+          seatIndex: 1,
+        },
+      });
 
-       mockSocket.simulateMessage(seatMessage);
+      mockSocket.simulateMessage(seatMessage);
 
-       await waitFor(() => {
-         expect(screen.getByText(/Table: table-1/i)).toBeInTheDocument();
-       });
+      await waitFor(() => {
+        expect(screen.getByText(/Table: table-1/i)).toBeInTheDocument();
+      });
 
-       // Step 7: Receive table_state with game in progress
-       const tableStateMessage = JSON.stringify({
-         type: 'table_state',
-         payload: {
-           tableId: 'table-1',
-           seats: [
-             { index: 0, playerName: 'Alice', status: 'occupied', stack: 1500 },
-             { index: 1, playerName: 'BustOutPlayer', status: 'occupied', stack: 100 },
-           ],
-           handInProgress: true,
-           dealerSeat: 0,
-           smallBlindSeat: 1,
-           bigBlindSeat: 0,
-           pot: 150,
-         },
-       });
+      // Step 7: Receive table_state with game in progress
+      const tableStateMessage = JSON.stringify({
+        type: 'table_state',
+        payload: {
+          tableId: 'table-1',
+          seats: [
+            { index: 0, playerName: 'Alice', status: 'occupied', stack: 1500 },
+            {
+              index: 1,
+              playerName: 'BustOutPlayer',
+              status: 'occupied',
+              stack: 100,
+            },
+          ],
+          handInProgress: true,
+          dealerSeat: 0,
+          smallBlindSeat: 1,
+          bigBlindSeat: 0,
+          pot: 150,
+        },
+      });
 
-       mockSocket.simulateMessage(tableStateMessage);
+      mockSocket.simulateMessage(tableStateMessage);
 
-       await waitFor(() => {
-         // Verify we can see other player and our stack
-         expect(screen.getByText('Alice')).toBeInTheDocument();
-         expect(screen.getByText(/100/)).toBeInTheDocument();
-       });
+      await waitFor(() => {
+        // Verify we can see other player and our stack
+        expect(screen.getByText('Alice')).toBeInTheDocument();
+        expect(screen.getByText(/100/)).toBeInTheDocument();
+      });
 
-       // Step 8: Simulate showdown where player busts out (their stack goes to 0)
-       const showdownMessage = JSON.stringify({
-         type: 'showdown_result',
-         payload: {
-           winnerSeats: [0],
-           winningHand: 'Pair of Kings',
-           potAmount: 250,
-           amountsWon: {
-             '0': 250,
-           },
-         },
-       });
+      // Step 8: Simulate showdown where player busts out (their stack goes to 0)
+      const showdownMessage = JSON.stringify({
+        type: 'showdown_result',
+        payload: {
+          winnerSeats: [0],
+          winningHand: 'Pair of Kings',
+          potAmount: 250,
+          amountsWon: {
+            '0': 250,
+          },
+        },
+      });
 
-       mockSocket.simulateMessage(showdownMessage);
+      mockSocket.simulateMessage(showdownMessage);
 
-       await waitFor(() => {
-         // Verify showdown results are displayed
-         expect(screen.getByText(/Pair of Kings/i)).toBeInTheDocument();
-       });
+      await waitFor(() => {
+        // Verify showdown results are displayed
+        expect(screen.getByText(/Pair of Kings/i)).toBeInTheDocument();
+      });
 
-       // Step 9: Receive hand_complete message
-       const handCompleteMessage = JSON.stringify({
-         type: 'hand_complete',
-         payload: {
-           message: 'Hand complete! Alice wins the pot.',
-         },
-       });
+      // Step 9: Receive hand_complete message
+      const handCompleteMessage = JSON.stringify({
+        type: 'hand_complete',
+        payload: {
+          message: 'Hand complete! Alice wins the pot.',
+        },
+      });
 
-       mockSocket.simulateMessage(handCompleteMessage);
+      mockSocket.simulateMessage(handCompleteMessage);
 
-       await waitFor(() => {
-         expect(screen.getByText(/Hand complete/i)).toBeInTheDocument();
-       });
+      await waitFor(() => {
+        expect(screen.getByText(/Hand complete/i)).toBeInTheDocument();
+      });
 
-       // Step 10: Receive seat_cleared message indicating player has busted out
-       const seatClearedMessage = JSON.stringify({
-         type: 'seat_cleared',
-         payload: {},
-       });
+      // Step 10: Receive seat_cleared message indicating player has busted out
+      const seatClearedMessage = JSON.stringify({
+        type: 'seat_cleared',
+        payload: {},
+      });
 
-       mockSocket.simulateMessage(seatClearedMessage);
+      mockSocket.simulateMessage(seatClearedMessage);
 
-       // Step 11: Verify return to lobby view
-       await waitFor(() => {
-         expect(screen.queryByText(/Table:/i)).not.toBeInTheDocument();
-         expect(screen.getByText('Lobby')).toBeInTheDocument();
-       });
+      // Step 11: Verify return to lobby view
+      await waitFor(() => {
+        expect(screen.queryByText(/Table:/i)).not.toBeInTheDocument();
+        expect(screen.getByText('Lobby')).toBeInTheDocument();
+      });
 
-       // Step 12: Verify session persists (can rejoin other tables)
-       const savedToken = localStorage.getItem('poker_session_token');
-       expect(savedToken).toBe('bust-out-token');
-     });
-   });
+      // Step 12: Verify session persists (can rejoin other tables)
+      const savedToken = localStorage.getItem('poker_session_token');
+      expect(savedToken).toBe('bust-out-token');
+    });
+  });
 
   describe('TestAppJoinTableIntegration', () => {
     it('should send join_table message when joining a table from lobby', async () => {
