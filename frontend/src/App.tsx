@@ -62,6 +62,17 @@ function App() {
         const name = message.payload.name as string;
         setPlayerName(name);
         setShowPrompt(false);
+      } else if (message.type === 'error' && message.payload) {
+        // Handle error messages (e.g., invalid token)
+        const errorMessage = message.payload.message as string;
+        console.error('[App] Error from server:', errorMessage);
+        
+        // If token is invalid/expired, clear it and show name prompt
+        if (errorMessage && errorMessage.toLowerCase().includes('token')) {
+          SessionService.clearToken();
+          setPlayerName(null);
+          setShowPrompt(true);
+        }
       }
       // lobby_state is now handled by useWebSocket hook
     } catch (error) {

@@ -120,6 +120,98 @@ describe('App', () => {
     });
   });
 
+  describe('TestApp_InvalidToken_ShowsPrompt', () => {
+    it('should clear token and show NamePrompt when server returns invalid token error', async () => {
+      // Start with an invalid token in localStorage
+      localStorage.setItem('poker_session_token', 'invalid-expired-token');
+
+      render(<App />);
+
+      // Initially, prompt should not be shown (token exists)
+      expect(screen.queryByText('Enter Your Name')).not.toBeInTheDocument();
+
+      // Wait for socket to be created
+      await waitFor(() => {
+        expect(createdMockSockets.length).toBeGreaterThan(0);
+      });
+
+      const mockSocket = createdMockSockets[0];
+
+      // Simulate error message from server about invalid token
+      const errorMessage = JSON.stringify({
+        type: 'error',
+        payload: { message: 'Invalid or expired token' },
+      });
+
+      mockSocket.simulateMessage(errorMessage);
+
+      // Should clear the token from localStorage
+      await waitFor(() => {
+        const savedToken = localStorage.getItem('poker_session_token');
+        expect(savedToken).toBeNull();
+      });
+
+      // Should show the name prompt
+      await waitFor(() => {
+        expect(screen.getByText('Enter Your Name')).toBeInTheDocument();
+      });
+    });
+
+    it('should allow user to create new session after invalid token', async () => {
+      // Start with an invalid token
+      localStorage.setItem('poker_session_token', 'bad-token');
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(createdMockSockets.length).toBeGreaterThan(0);
+      });
+
+      const mockSocket = createdMockSockets[0];
+
+      // Simulate invalid token error
+      mockSocket.simulateMessage(
+        JSON.stringify({
+          type: 'error',
+          payload: { message: 'Invalid or expired token' },
+        })
+      );
+
+      // Wait for prompt to show
+      await waitFor(() => {
+        expect(screen.getByText('Enter Your Name')).toBeInTheDocument();
+      });
+
+      // Enter a new name
+      const input = screen.getByPlaceholderText(
+        'Your name'
+      ) as HTMLInputElement;
+      const button = screen.getByRole('button', { name: 'Join Game' });
+
+      fireEvent.change(input, { target: { value: 'Bob' } });
+      fireEvent.click(button);
+
+      // Simulate session created
+      mockSocket.simulateMessage(
+        JSON.stringify({
+          type: 'session_created',
+          payload: { token: 'new-valid-token', name: 'Bob' },
+        })
+      );
+
+      // Should save new token
+      await waitFor(() => {
+        const savedToken = localStorage.getItem('poker_session_token');
+        expect(savedToken).toBe('new-valid-token');
+      });
+
+      // Should hide prompt
+      await waitFor(() => {
+        expect(screen.queryByText('Enter Your Name')).not.toBeInTheDocument();
+      });
+    });
+  });
+
   describe('TestApp_SessionCreated_SavesToken', () => {
     it('should save token to localStorage on session_created', async () => {
       render(<App />);
