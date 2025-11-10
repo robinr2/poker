@@ -2533,6 +2533,51 @@ describe('Phase 5: Street Indicator', () => {
         // Should display winner name (Alice is in seat 1)
         expect(screen.getByText(/Alice/i)).toBeInTheDocument();
       });
+
+      it('should display "Start Hand" button when showdown exists', () => {
+        const mockOnLeave = vi.fn();
+        const mockSendAction = vi.fn();
+        const gameState: ExtendedGameState = {
+          dealerSeat: 0,
+          smallBlindSeat: 1,
+          bigBlindSeat: 2,
+          holeCards: null,
+          pot: 300,
+          boardCards: ['As', 'Kh', 'Qd', 'Jc', 'Ts'],
+          street: 'river',
+          showdown: {
+            winnerSeats: [1],
+            winningHand: 'Pair of Aces',
+            potAmount: 300,
+            amountsWon: { 1: 300 },
+          },
+          handComplete: {
+            message: 'Hand complete!',
+          },
+        };
+
+        render(
+          <TableView
+            tableId="table-1"
+            seats={mockSeats}
+            currentSeatIndex={0}
+            onLeave={mockOnLeave}
+            gameState={gameState}
+            sendAction={mockSendAction}
+          />
+        );
+
+        // Should display the "Start Hand" button
+        const startHandButton = screen.getByRole('button', {
+          name: /Start Hand/i,
+        });
+        expect(startHandButton).toBeInTheDocument();
+        expect(startHandButton).not.toBeDisabled();
+
+        // Button should be visible and clickable during showdown
+        fireEvent.click(startHandButton);
+        expect(mockSendAction).toHaveBeenCalledWith('start_hand');
+      });
     });
   });
 });

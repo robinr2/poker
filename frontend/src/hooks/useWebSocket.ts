@@ -148,9 +148,8 @@ export function useWebSocket(
     roundOver: null,
     playerBets: {},
   });
-  const serviceRef = useRef<WebSocketService | null>(null);
-  const onMessageRef = useRef(options?.onMessage);
-  const handCompleteTimeoutRef = useRef<number | null>(null);
+   const serviceRef = useRef<WebSocketService | null>(null);
+   const onMessageRef = useRef(options?.onMessage);
 
   // Update the ref when the callback changes
   useEffect(() => {
@@ -545,29 +544,13 @@ export function useWebSocket(
                : (message.payload as Record<string, unknown>);
            console.log('[useWebSocket] hand_complete payload:', payload);
 
-           setGameState((prev) => ({
-             ...prev,
-             handComplete: {
-               message: (payload.message as string) || '',
-             },
-           }));
-           console.log('[useWebSocket] gameState updated with handComplete');
-
-           // Clear any existing timeout
-           if (handCompleteTimeoutRef.current) {
-             clearTimeout(handCompleteTimeoutRef.current);
-           }
-
-           // Schedule clearing of showdown state after 5 seconds
-           handCompleteTimeoutRef.current = setTimeout(() => {
-             setGameState((prev) => {
-               const updated = { ...prev };
-               delete updated.showdown;
-               delete updated.handComplete;
-               return updated;
-             });
-             handCompleteTimeoutRef.current = null;
-           }, 5000);
+            setGameState((prev) => ({
+              ...prev,
+              handComplete: {
+                message: (payload.message as string) || '',
+              },
+            }));
+            console.log('[useWebSocket] gameState updated with handComplete');
          }
        } catch {
          // Silently ignore parsing errors for non-JSON messages
@@ -581,11 +564,6 @@ export function useWebSocket(
 
     // Cleanup on unmount or dependency change
     return () => {
-      // Clear any pending hand complete timeout
-      if (handCompleteTimeoutRef.current) {
-        clearTimeout(handCompleteTimeoutRef.current);
-        handCompleteTimeoutRef.current = null;
-      }
       unsubscribeStatus();
       unsubscribeMessage();
       service.disconnect();
@@ -623,6 +601,16 @@ export function useWebSocket(
             payload: payload,
           });
           serviceRef.current.send(message);
+
+          // Clear showdown and handComplete state when starting a new hand
+          if (action === 'start_hand') {
+            setGameState((prev) => {
+              const updated = { ...prev };
+              delete updated.showdown;
+              delete updated.handComplete;
+              return updated;
+            });
+          }
         } catch (error) {
           console.error('Failed to send action:', error);
         }

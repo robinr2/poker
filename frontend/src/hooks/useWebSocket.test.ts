@@ -1472,6 +1472,135 @@ describe('Phase 6: Showdown & Settlement - WebSocket Event Handling', () => {
   });
 });
 
+describe('Phase 3: Remove Auto-Clear and Show Start Hand Button After Showdown', () => {
+  describe('TestUseWebSocket_ShowdownPersists', () => {
+    it('should not auto-clear showdown state after timeout', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      // First send showdown_result
+      const showdownMessage = JSON.stringify({
+        type: 'showdown_result',
+        payload: {
+          winnerSeats: [1],
+          winningHand: 'Pair of Aces',
+          potAmount: 300,
+          amountsWon: { '1': 300 },
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(showdownMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.showdown).toBeDefined();
+      });
+
+      // Then send hand_complete
+      const handCompleteMessage = JSON.stringify({
+        type: 'hand_complete',
+        payload: {
+          message: 'Hand complete!',
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(handCompleteMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.handComplete).toBeDefined();
+        expect(result.current.gameState.showdown).toBeDefined();
+      });
+
+      // Wait 2 seconds (half of the old timeout)
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // Showdown should still be there (not auto-cleared)
+      expect(result.current.gameState.showdown).toBeDefined();
+      expect(result.current.gameState.handComplete).toBeDefined();
+    }, 10000); // Increase test timeout to 10 seconds
+
+    it('should clear showdown and handComplete when start_hand action is sent', async () => {
+      mockServiceInstance.getStatus.mockReturnValue('connected');
+
+      const { result } = renderHook(() =>
+        useWebSocket('ws://localhost:8080/ws')
+      );
+
+      // First set player's seat
+      const seatAssignedMessage = JSON.stringify({
+        type: 'seat_assigned',
+        payload: {
+          tableId: 'table-1',
+          seatIndex: 1,
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(seatAssignedMessage));
+      });
+
+      // First set up showdown state
+      const showdownMessage = JSON.stringify({
+        type: 'showdown_result',
+        payload: {
+          winnerSeats: [1],
+          winningHand: 'Pair of Aces',
+          potAmount: 300,
+          amountsWon: { '1': 300 },
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(showdownMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.showdown).toBeDefined();
+      });
+
+      // Then send hand_complete
+      const handCompleteMessage = JSON.stringify({
+        type: 'hand_complete',
+        payload: {
+          message: 'Hand complete!',
+        },
+      });
+
+      act(() => {
+        mockMessageCallbacks.forEach((cb) => cb(handCompleteMessage));
+      });
+
+      await waitFor(() => {
+        expect(result.current.gameState.handComplete).toBeDefined();
+      });
+
+      // Now send start_hand action
+      act(() => {
+        result.current.sendAction('start_hand');
+      });
+
+      // After sending start_hand, local state should be cleared
+      // (the server would send table_state to reset officially, but locally we clear immediately)
+      expect(result.current.gameState.showdown).toBeUndefined();
+      expect(result.current.gameState.handComplete).toBeUndefined();
+
+      // Verify the message was sent to the server
+      expect(mockServiceInstance.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          type: 'player_action',
+          payload: { seatIndex: 1, action: 'start_hand' },
+        })
+      );
+    });
+  });
+});
+
 describe('Action Request and Result Handlers', () => {
   describe('TestUseWebSocket_ActionRequest', () => {
     it('should update game state when action_request message is received', async () => {

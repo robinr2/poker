@@ -3,6 +3,7 @@ import '../styles/NamePrompt.css';
 
 interface NamePromptProps {
   onSubmit: (name: string) => void | Promise<void>;
+  onCancel?: () => void;
 }
 
 export function NamePrompt({ onSubmit }: NamePromptProps) {

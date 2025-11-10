@@ -3201,6 +3201,223 @@ func TestHandlerFlow_StartHandButtonWorksAfterShowdown(t *testing.T) {
 	}
 }
 
+// TestHandleAction_RiverBettingCompleteTriggersShowdown verifies showdown is called
+// when betting completes on river via IsBettingRoundComplete path
+func TestHandleAction_RiverBettingCompleteTriggersShowdown(t *testing.T) {
+	// This test specifically checks the IsBettingRoundComplete path on the river
+	// where both players have acted and matched the bet
+
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players with sessions
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	sm.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	sm.UpdateSession(token2, &table.ID, &[]int{1}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Setup: Create a hand already at river with 2 active players
+	hand := &Hand{
+		Pot:            100,
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   0,
+		Street:         "river",
+		HoleCards: map[int][]Card{
+			0: {Card{Rank: "A", Suit: "s"}, Card{Rank: "K", Suit: "s"}},
+			1: {Card{Rank: "Q", Suit: "h"}, Card{Rank: "J", Suit: "h"}},
+		},
+		BoardCards: []Card{
+			{Rank: "T", Suit: "d"}, {Rank: "9", Suit: "c"}, {Rank: "8", Suit: "s"},
+			{Rank: "7", Suit: "h"}, {Rank: "6", Suit: "d"},
+		},
+		FoldedPlayers: make(map[int]bool),
+		ActedPlayers:  make(map[int]bool),
+		PlayerBets: map[int]int{
+			0: 50,
+			1: 50,
+		},
+		CurrentBet:        50,
+		BigBlindHasOption: false,
+	}
+
+	table.mu.Lock()
+	table.CurrentHand = hand
+	dealerSeat := 0
+	table.DealerSeat = &dealerSeat
+
+	// Set current actor to seat 0 (about to act)
+	currentActor := 0
+	hand.CurrentActor = &currentActor
+
+	// Mark players as having acted and matched current bet
+	hand.ActedPlayers[0] = true
+	hand.ActedPlayers[1] = true
+
+	// Verify betting round is complete (triggers the IsBettingRoundComplete path)
+	if !hand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected betting round to be complete on river")
+	}
+	table.mu.Unlock()
+
+	// Create client for player 0
+	client := &Client{
+		hub:   hub,
+		Token: token1,
+		send:  make(chan []byte, 256),
+	}
+
+	// Call HandlePlayerAction to trigger the handler logic
+	// This should detect river + betting complete and call HandleShowdown
+	err := server.HandlePlayerAction(sm, client, 0, "check")
+	if err != nil {
+		t.Errorf("expected no error from HandlePlayerAction, got %v", err)
+	}
+
+	// Verify the hand is cleared (indicates HandleShowdown was called)
+	table.mu.RLock()
+	if table.CurrentHand != nil {
+		t.Errorf("expected CurrentHand to be nil after HandlePlayerAction on river with complete betting, got %v", table.CurrentHand)
+	}
+	table.mu.RUnlock()
+
+	// Verify dealer was rotated (another indicator ShowDown was called)
+	table.mu.RLock()
+	if table.DealerSeat == nil || *table.DealerSeat != 1 {
+		t.Errorf("expected dealer to rotate to seat 1, got %v", table.DealerSeat)
+	}
+	table.mu.RUnlock()
+}
+
+// TestHandleAction_RiverNoShowdownIfNotComplete verifies showdown is NOT called
+// when betting is incomplete on river
+func TestHandleAction_RiverNoShowdownIfNotComplete(t *testing.T) {
+	// This test verifies that if betting is not complete on the river,
+	// showdown is not triggered yet
+
+	logger := slog.Default()
+	server := NewServer(logger)
+	sm := NewSessionManager(logger)
+	hub := server.hub
+	go hub.Run()
+
+	// Get first table
+	server.mu.RLock()
+	table := server.tables[0]
+	server.mu.RUnlock()
+
+	// Set up 2 players with sessions
+	session1, _ := sm.CreateSession("Player1")
+	session2, _ := sm.CreateSession("Player2")
+	token1 := session1.Token
+	token2 := session2.Token
+
+	// Update sessions with table and seat info
+	sm.UpdateSession(token1, &table.ID, &[]int{0}[0])
+	sm.UpdateSession(token2, &table.ID, &[]int{1}[0])
+
+	// Assign seats and set to active
+	table.mu.Lock()
+	table.Seats[0].Token = &token1
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+	table.Seats[1].Token = &token2
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+	table.mu.Unlock()
+
+	// Setup: Create a hand on river with 2 active players, but betting not complete
+	hand := &Hand{
+		Pot:            100,
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   0,
+		Street:         "river",
+		HoleCards: map[int][]Card{
+			0: {Card{Rank: "A", Suit: "s"}, Card{Rank: "K", Suit: "s"}},
+			1: {Card{Rank: "Q", Suit: "h"}, Card{Rank: "J", Suit: "h"}},
+		},
+		BoardCards: []Card{
+			{Rank: "T", Suit: "d"}, {Rank: "9", Suit: "c"}, {Rank: "8", Suit: "s"},
+			{Rank: "7", Suit: "h"}, {Rank: "6", Suit: "d"},
+		},
+		FoldedPlayers: make(map[int]bool),
+		ActedPlayers:  make(map[int]bool),
+		PlayerBets: map[int]int{
+			0: 50,
+			1: 25, // Player 1 has only bet 25, hasn't matched
+		},
+		CurrentBet:        50,
+		BigBlindHasOption: false,
+	}
+
+	table.mu.Lock()
+	table.CurrentHand = hand
+	dealerSeat := 0
+	table.DealerSeat = &dealerSeat
+
+	// Set current actor to seat 0
+	currentActor := 0
+	hand.CurrentActor = &currentActor
+
+	// Only player 1 has acted, player 0 has not
+	hand.ActedPlayers[0] = false
+	hand.ActedPlayers[1] = true
+
+	// Verify betting round is NOT complete
+	if hand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected betting round to NOT be complete (player 0 hasn't acted)")
+	}
+	table.mu.Unlock()
+
+	// Create client for player 0
+	client := &Client{
+		hub:   hub,
+		Token: token1,
+		send:  make(chan []byte, 256),
+	}
+
+	// Call HandlePlayerAction for player 0 - should advance to next actor, not trigger showdown
+	err := server.HandlePlayerAction(sm, client, 0, "check")
+	if err != nil {
+		t.Errorf("expected no error from HandlePlayerAction, got %v", err)
+	}
+
+	// Verify the hand is NOT cleared (showdown should not have been called)
+	table.mu.RLock()
+	if table.CurrentHand == nil {
+		t.Error("expected CurrentHand to still exist (showdown should not have been triggered)")
+	}
+
+	// Verify we're still on the river street
+	if table.CurrentHand.Street != "river" {
+		t.Errorf("expected to remain on river street, got %s", table.CurrentHand.Street)
+	}
+	table.mu.RUnlock()
+}
+
 // Helper function to create a pointer to a string
 func newString(s string) *string {
 	return &s

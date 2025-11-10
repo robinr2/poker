@@ -637,6 +637,7 @@
   text-align: center;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
   animation: scale-in 0.3s ease-out;
+  position: relative;
 }
 
 @keyframes scale-in {
@@ -648,6 +649,35 @@
     transform: scale(1);
     opacity: 1;
   }
+}
+
+.showdown-close-button {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background-color: transparent;
+  border: none;
+  font-size: 2rem;
+  color: #6b7280;
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  line-height: 1;
+  padding: 0;
+}
+
+.showdown-close-button:hover {
+  background-color: #f3f4f6;
+  color: #1f2937;
+}
+
+.showdown-close-button:active {
+  background-color: #e5e7eb;
 }
 
 .winning-hand {

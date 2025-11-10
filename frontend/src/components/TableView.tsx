@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface SeatInfo {
   index: number;
@@ -42,6 +42,7 @@ interface TableViewProps {
   onLeave: () => void;
   gameState?: GameState;
   onSendMessage?: (message: string) => void;
+  sendAction?: (action: string, amount?: number) => void;
 }
 
 // Helper function to convert card string format to display format
@@ -85,8 +86,17 @@ export function TableView({
   onLeave,
   gameState,
   onSendMessage,
+  sendAction,
 }: TableViewProps) {
   const [raiseAmount, setRaiseAmount] = useState<string>('');
+  const [showShowdown, setShowShowdown] = useState<boolean>(true);
+
+  // Reset showShowdown when a new showdown appears
+  useEffect(() => {
+    if (gameState?.showdown) {
+      setShowShowdown(true);
+    }
+  }, [gameState?.showdown]);
 
   console.log('[TableView] render with gameState:', gameState);
   console.log('[TableView] currentSeatIndex:', currentSeatIndex);
@@ -100,18 +110,21 @@ export function TableView({
   );
 
   // Determine if Start Hand button should be visible
-  // Show only when: player is seated AND no active hand (pot === 0 or undefined)
+  // Show when: player is seated AND (no active hand OR showdown is active)
   const isSeated = currentSeatIndex !== null && currentSeatIndex !== undefined;
   const hasNoActiveHand =
     !gameState || gameState.pot === 0 || gameState.pot === undefined;
-  const showStartHandButton = isSeated && hasNoActiveHand;
+  const isShowdownActive = gameState?.showdown !== undefined;
+  const showStartHandButton = isSeated && (hasNoActiveHand || isShowdownActive);
 
   // Get player's current stack
   const playerStack =
     currentSeatIndex !== null ? (seats[currentSeatIndex]?.stack ?? 0) : 0;
 
   const handleStartHand = () => {
-    if (onSendMessage) {
+    if (sendAction) {
+      sendAction('start_hand');
+    } else if (onSendMessage) {
       const message = JSON.stringify({
         type: 'start_hand',
         payload: {},
@@ -264,9 +277,16 @@ export function TableView({
        </div>
 
        {/* Showdown Overlay */}
-       {gameState?.showdown && (
-         <div className="showdown-overlay">
-           <div className="showdown-content">
+       {gameState?.showdown && showShowdown && (
+         <div className="showdown-overlay" onClick={() => setShowShowdown(false)}>
+           <div className="showdown-content" onClick={(e) => e.stopPropagation()}>
+             <button 
+               className="showdown-close-button" 
+               onClick={() => setShowShowdown(false)}
+               aria-label="Close"
+             >
+               ×
+             </button>
              <div className="winning-hand">{gameState.showdown.winningHand}</div>
              <div className="winners">
                Winners: {getPlayerNamesFromSeats(gameState.showdown.winnerSeats, seats).join(', ')}
