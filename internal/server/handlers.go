@@ -1503,3 +1503,50 @@ func (c *Client) HandlePlayerActionMessage(sm *SessionManager, server *Server, l
 
 	return nil
 }
+
+// handleBustOutNotifications sends seat_cleared messages to busted players and updates their sessions
+// Assumes the table lock has already been released
+func (s *Server) handleBustOutNotifications(table *Table, bustedTokens []string) {
+	if s == nil || s.hub == nil {
+		return
+	}
+
+	for _, token := range bustedTokens {
+		// Find the client for this token
+		var client *Client
+		s.hub.mu.RLock()
+		for c := range s.hub.clients {
+			if c.Token == token {
+				client = c
+				break
+			}
+		}
+		s.hub.mu.RUnlock()
+
+		// If client is connected, send seat_cleared message
+		if client != nil {
+			err := client.SendSeatCleared(s.logger)
+			if err != nil {
+				s.logger.Warn("failed to send seat_cleared to busted player", "token", token, "error", err)
+			}
+		}
+
+		// Update the player's session (clear table and seat index)
+		_, err := s.sessionManager.UpdateSession(token, nil, nil)
+		if err != nil {
+			s.logger.Warn("failed to update session for busted player", "token", token, "error", err)
+		}
+	}
+
+	// Broadcast the updated table state to all players at the table
+	err := s.broadcastTableState(table.ID, nil)
+	if err != nil {
+		s.logger.Warn("failed to broadcast table state after bust-outs", "error", err)
+	}
+
+	// Broadcast updated lobby state to all clients
+	err = s.broadcastLobbyState()
+	if err != nil {
+		s.logger.Warn("failed to broadcast lobby state after bust-outs", "error", err)
+	}
+}

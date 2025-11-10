@@ -194,8 +194,8 @@ func (t *Table) HandleShowdown() {
 					t.Seats[seatIdx].Stack += amount
 				}
 
-				// Handle bust-outs (clear seats with stack == 0)
-				t.handleBustOutsLocked()
+				// Handle bust-outs and collect busted tokens
+				bustedTokens := t.handleBustOutsWithNotificationsLocked()
 
 				// Rotate dealer for next hand and clear hand
 				t.assignDealerLocked()
@@ -207,6 +207,11 @@ func (t *Table) HandleShowdown() {
 				if t.Server != nil {
 					t.Server.broadcastShowdown(t, []int{i}, nil, distribution)
 					t.Server.broadcastHandComplete(t)
+
+					// Send bust-out notifications if any
+					if len(bustedTokens) > 0 {
+						t.Server.handleBustOutNotifications(t, bustedTokens)
+					}
 				}
 				return
 			}
@@ -252,8 +257,8 @@ func (t *Table) HandleShowdown() {
 		t.Seats[seatIdx].Stack += amount
 	}
 
-	// Handle bust-outs (clear seats with stack == 0) - use locked version since we already hold lock
-	t.handleBustOutsLocked()
+	// Handle bust-outs and collect busted tokens
+	bustedTokens := t.handleBustOutsWithNotificationsLocked()
 
 	// Rotate dealer for next hand and clear hand
 	t.assignDealerLocked()
@@ -265,6 +270,11 @@ func (t *Table) HandleShowdown() {
 	if t.Server != nil {
 		t.Server.broadcastShowdown(t, winners, winningRank, distribution)
 		t.Server.broadcastHandComplete(t)
+
+		// Send bust-out notifications if any
+		if len(bustedTokens) > 0 {
+			t.Server.handleBustOutNotifications(t, bustedTokens)
+		}
 	}
 }
 
@@ -302,6 +312,26 @@ func (t *Table) handleBustOutsLocked() {
 			t.Seats[i].Status = "empty"
 		}
 	}
+}
+
+// handleBustOutsWithNotificationsLocked identifies players with stack == 0, clears their seats,
+// and returns their tokens for notification purposes.
+// Assumes the lock is already held (use for internal calls within locked sections).
+// Returns a slice of tokens for players who busted out.
+func (t *Table) handleBustOutsWithNotificationsLocked() []string {
+	var bustedTokens []string
+
+	// First, collect tokens of players with stack == 0
+	for i := 0; i < 6; i++ {
+		if t.Seats[i].Stack == 0 && t.Seats[i].Token != nil {
+			bustedTokens = append(bustedTokens, *t.Seats[i].Token)
+		}
+	}
+
+	// Then call the existing handleBustOutsLocked to clear the seats
+	t.handleBustOutsLocked()
+
+	return bustedTokens
 }
 
 // HandleBustOuts clears seats with stack == 0 (Token = nil, Status = "empty") - thread-safe

@@ -6267,3 +6267,163 @@ func TestHandleShowdown_EarlyWinner_OpponentBustsOut(t *testing.T) {
 		t.Errorf("expected bust-out opponent stack to remain 0, got %d", table.Seats[1].Stack)
 	}
 }
+
+// TestHandleBustOutsWithNotificationsLocked_SinglePlayerBusted
+// Verifies that a single player with stack 0 is identified, cleared, and token is returned
+func TestHandleBustOutsWithNotificationsLocked_SinglePlayerBusted(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up: 2 players, one with 0 stack
+	token0 := "player-0"
+	token1 := "player-1"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 500
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 0 // This player busted
+
+	// Call handleBustOutsWithNotificationsLocked - should return the busted token
+	bustedTokens := table.handleBustOutsWithNotificationsLocked()
+
+	// Verify busted player token is returned
+	if len(bustedTokens) != 1 {
+		t.Errorf("expected 1 busted token, got %d", len(bustedTokens))
+	}
+	if len(bustedTokens) > 0 && bustedTokens[0] != token1 {
+		t.Errorf("expected busted token '%s', got '%s'", token1, bustedTokens[0])
+	}
+
+	// Verify seat 1 is cleared
+	if table.Seats[1].Status != "empty" {
+		t.Errorf("expected busted seat to be 'empty', got '%s'", table.Seats[1].Status)
+	}
+	if table.Seats[1].Token != nil {
+		t.Errorf("expected busted seat Token to be nil, got %v", table.Seats[1].Token)
+	}
+
+	// Verify seat 0 (winner) is untouched
+	if table.Seats[0].Status != "active" {
+		t.Errorf("expected winner seat to remain 'active', got '%s'", table.Seats[0].Status)
+	}
+	if table.Seats[0].Token == nil || *table.Seats[0].Token != token0 {
+		t.Errorf("expected winner token to remain '%s'", token0)
+	}
+	if table.Seats[0].Stack != 500 {
+		t.Errorf("expected winner stack to remain 500, got %d", table.Seats[0].Stack)
+	}
+}
+
+// TestHandleBustOutsWithNotificationsLocked_MultiplePlayersBusted
+// Verifies multiple players with stack 0 are identified, cleared, and tokens are returned
+func TestHandleBustOutsWithNotificationsLocked_MultiplePlayersBusted(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up: 4 players, 2 with 0 stack
+	token0 := "player-0"
+	token1 := "player-1"
+	token2 := "player-2"
+	token3 := "player-3"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 0 // Busted
+
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 500
+
+	table.Seats[3].Token = &token3
+	table.Seats[3].Status = "active"
+	table.Seats[3].Stack = 0 // Busted
+
+	// Call handleBustOutsWithNotificationsLocked
+	bustedTokens := table.handleBustOutsWithNotificationsLocked()
+
+	// Verify 2 busted tokens are returned
+	if len(bustedTokens) != 2 {
+		t.Errorf("expected 2 busted tokens, got %d", len(bustedTokens))
+	}
+
+	// Verify busted tokens are correct (order may vary)
+	bustedTokenMap := make(map[string]bool)
+	for _, token := range bustedTokens {
+		bustedTokenMap[token] = true
+	}
+	if !bustedTokenMap[token1] {
+		t.Errorf("expected busted token '%s' in result", token1)
+	}
+	if !bustedTokenMap[token3] {
+		t.Errorf("expected busted token '%s' in result", token3)
+	}
+
+	// Verify seats 1 and 3 are cleared
+	if table.Seats[1].Status != "empty" {
+		t.Errorf("seat 1: expected 'empty', got '%s'", table.Seats[1].Status)
+	}
+	if table.Seats[1].Token != nil {
+		t.Errorf("seat 1: expected Token nil, got %v", table.Seats[1].Token)
+	}
+
+	if table.Seats[3].Status != "empty" {
+		t.Errorf("seat 3: expected 'empty', got '%s'", table.Seats[3].Status)
+	}
+	if table.Seats[3].Token != nil {
+		t.Errorf("seat 3: expected Token nil, got %v", table.Seats[3].Token)
+	}
+
+	// Verify other seats are untouched
+	if table.Seats[0].Stack != 1000 {
+		t.Errorf("seat 0: expected stack 1000, got %d", table.Seats[0].Stack)
+	}
+	if table.Seats[2].Stack != 500 {
+		t.Errorf("seat 2: expected stack 500, got %d", table.Seats[2].Stack)
+	}
+}
+
+// TestHandleBustOutsWithNotificationsLocked_NoBustOuts
+// Verifies no bust-outs returns empty list and seats are unchanged
+func TestHandleBustOutsWithNotificationsLocked_NoBustOuts(t *testing.T) {
+	table := NewTable("table-1", "Test Table", nil)
+
+	// Set up: players with non-zero stacks
+	token0 := "player-0"
+	token1 := "player-1"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 500
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 300
+
+	// Call handleBustOutsWithNotificationsLocked
+	bustedTokens := table.handleBustOutsWithNotificationsLocked()
+
+	// Verify no busted tokens
+	if len(bustedTokens) != 0 {
+		t.Errorf("expected 0 busted tokens, got %d", len(bustedTokens))
+	}
+
+	// Verify seats are unchanged
+	if table.Seats[0].Stack != 500 {
+		t.Errorf("seat 0: expected stack 500, got %d", table.Seats[0].Stack)
+	}
+	if table.Seats[1].Stack != 300 {
+		t.Errorf("seat 1: expected stack 300, got %d", table.Seats[1].Stack)
+	}
+
+	if table.Seats[0].Status != "active" {
+		t.Errorf("seat 0: expected status 'active', got '%s'", table.Seats[0].Status)
+	}
+	if table.Seats[1].Status != "active" {
+		t.Errorf("seat 1: expected status 'active', got '%s'", table.Seats[1].Status)
+	}
+}
