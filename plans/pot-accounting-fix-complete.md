@@ -36,12 +36,13 @@ Successfully completed the pot accounting fix across backend and frontend, plus 
 - This fixes the issue where pot=0 during preflop made button appear incorrectly
 
 **Frontend - Community Cards Display:**
-- Fixed game info and board cards visibility condition to persist after hand completion
-- Board cards now remain visible after showdown/winner determination until new hand starts
+- Fixed game info and board cards visibility condition from `!showStartHandButton` to `handInProgress`
+- This allows board cards to remain visible after showdown/winner determination until new hand starts
+- Players can now review the final board state and verify hand rankings after the pot is awarded
 - Added logic to show 5 card back placeholders (🂠) during preflop when no board cards exist yet
 - Placeholders transition to actual cards as flop/turn/river are dealt
 - Empty slots shown for remaining cards after partial board is dealt
-- Added `handInProgress` field to `GameState` interface
+- Board cards and game info visibility now tied to hand state (holeCards or dealerSeat present)
 - Game info (street indicator and pot) also persists until new hand starts
 
 **Frontend - Test Updates:**
@@ -64,8 +65,8 @@ Backend:
 - `Hand.ProcessAction()` - Early winner fix
 
 Frontend:
-- `TableView` component - Start hand button logic, all-in button fix, display conditions, board placeholder logic
-- `GameState` interface - Added `handInProgress` field
+- `TableView` component - Start hand button logic, all-in button fix, board visibility conditions using handInProgress, board placeholder logic
+- Board card and game info display now based on hand state rather than button visibility
 
 **Visual Improvements:**
 
