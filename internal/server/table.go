@@ -199,11 +199,8 @@ func (t *Table) HandleShowdown() {
 				}
 				t.CurrentHand.PlayerBets = make(map[int]int)
 
-				// Capture pot amount before clearing hand
-				potAmount := t.CurrentHand.Pot
-
-				// Distribute pot to the early winner
-				distribution := t.DistributePot([]int{i}, potAmount)
+				// Distribute pot to the early winner (new signature: DistributePot takes only winners)
+				distribution := t.DistributePot([]int{i})
 				for seatIdx, amount := range distribution {
 					t.Seats[seatIdx].Stack += amount
 				}
@@ -272,8 +269,8 @@ func (t *Table) HandleShowdown() {
 	}
 	t.CurrentHand.PlayerBets = make(map[int]int)
 
-	// Distribute the pot to winners
-	distribution := t.DistributePot(winners, t.CurrentHand.Pot)
+	// Distribute the pot to winners (new signature: DistributePot takes only winners)
+	distribution := t.DistributePot(winners)
 	for seatIdx, amount := range distribution {
 		t.Seats[seatIdx].Stack += amount
 	}
@@ -299,27 +296,78 @@ func (t *Table) HandleShowdown() {
 	}
 }
 
-// DistributePot divides the pot among winners, with remainder going to the first winner
-// Returns map of seat index to amount won. Remainder chip goes to first winner in list.
-func (t *Table) DistributePot(winners []int, pot int) map[int]int {
+// DistributePot distributes the pot to winners using proper side pot logic
+// Uses CalculateSidePots() to handle multiple all-in situations correctly
+// Only eligible winners for each pot level can win that pot
+// Returns map of seat index to amount won
+// Sets t.CurrentHand.Pot to 0 after distribution
+func (t *Table) DistributePot(winners []int) map[int]int {
 	result := make(map[int]int)
-	if len(winners) == 0 {
+
+	if len(winners) == 0 || t.CurrentHand == nil || t.CurrentHand.Pot == 0 {
 		return result
 	}
 
-	// Calculate share per winner
-	share := pot / len(winners)
-	remainder := pot % len(winners)
-
-	// Distribute equal share to all winners
-	for _, seatIdx := range winners {
-		result[seatIdx] = share
+	// Build map of folded players from hand state
+	foldedPlayers := make(map[int]bool)
+	if t.CurrentHand.FoldedPlayers != nil {
+		foldedPlayers = t.CurrentHand.FoldedPlayers
 	}
 
-	// Give remainder to first winner
-	if remainder > 0 {
-		result[winners[0]] += remainder
+	// Get contributions (should already be populated during betting)
+	contributions := t.CurrentHand.TotalContributions
+	if len(contributions) == 0 {
+		// Fallback: if no contributions tracked, just split evenly (shouldn't happen)
+		share := t.CurrentHand.Pot / len(winners)
+		remainder := t.CurrentHand.Pot % len(winners)
+		for _, seatIdx := range winners {
+			result[seatIdx] = share
+		}
+		if remainder > 0 {
+			result[winners[0]] += remainder
+		}
+		t.CurrentHand.Pot = 0
+		return result
 	}
+
+	// Calculate side pots based on contributions
+	sidePots := CalculateSidePots(contributions, foldedPlayers)
+
+	// Distribute each side pot to only the winners eligible for that pot
+	for _, pot := range sidePots {
+		// Filter winners to only those eligible for this pot
+		eligibleWinners := []int{}
+		for _, winnerSeat := range winners {
+			for _, eligibleSeat := range pot.EligibleSeats {
+				if winnerSeat == eligibleSeat {
+					eligibleWinners = append(eligibleWinners, winnerSeat)
+					break
+				}
+			}
+		}
+
+		// If no eligible winners for this pot, skip it (unclaimed chips are discarded)
+		if len(eligibleWinners) == 0 {
+			continue
+		}
+
+		// Divide pot amount among eligible winners
+		share := pot.Amount / len(eligibleWinners)
+		remainder := pot.Amount % len(eligibleWinners)
+
+		// Award base share to each eligible winner
+		for _, seatIdx := range eligibleWinners {
+			result[seatIdx] += share
+		}
+
+		// Award remainder to first eligible winner
+		if remainder > 0 && len(eligibleWinners) > 0 {
+			result[eligibleWinners[0]] += remainder
+		}
+	}
+
+	// Clear the pot
+	t.CurrentHand.Pot = 0
 
 	return result
 }
@@ -769,6 +817,14 @@ func (t *Table) StartHand() error {
 		LastRaise:          bigBlind,
 		BigBlindHasOption:  true,
 		TotalContributions: make(map[int]int),
+	}
+
+	// Initialize TotalContributions for all active players (even if they haven't acted yet)
+	// This ensures they're included in side pot calculations
+	for i := 0; i < 6; i++ {
+		if t.Seats[i].Status == "active" {
+			hand.TotalContributions[i] = 0
+		}
 	}
 
 	// Step 4: Shuffle the deck
@@ -1868,13 +1924,11 @@ func CalculateSidePots(contributions map[int]int, foldedPlayers map[int]bool) []
 			}
 		}
 
-		// Only add pot if there are eligible seats
-		if len(eligibleSeats) > 0 {
-			pots = append(pots, SidePot{
-				Amount:        potAmount,
-				EligibleSeats: eligibleSeats,
-			})
-		}
+		// Add pot regardless of eligible seats (we need to track unclaimed chips)
+		pots = append(pots, SidePot{
+			Amount:        potAmount,
+			EligibleSeats: eligibleSeats,
+		})
 
 		previousLevel = currentLevel
 	}

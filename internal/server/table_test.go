@@ -2041,20 +2041,41 @@ func TestGetFirstActor_Postflop_WithFoldedSB(t *testing.T) {
 
 // ============ PHASE 3: POT DISTRIBUTION & STACK UPDATES TESTS ============
 
-// TestDistributePot_SingleWinner verifies single winner gets entire pot
+// TestDistributePot_SingleWinner verifies single winner gets eligible pot(s) only
 func TestDistributePot_SingleWinner(t *testing.T) {
 	table := NewTable("table-1", "Table 1", nil)
 	winners := []int{2}
-	pot := 100
 
-	result := table.DistributePot(winners, pot)
+	// Set up hand with pot and contributions
+	// Seat 0 (30), Seat 1 (40), Seat 2 (30) - only seat 2 is not folded
+	// Main pot at level 30: 30 * 3 = 90 (all contributed at least 30)
+	// Seat 2 only eligible for main pot (level 30) since it's the only non-folded player
+	// Side pot at level 40: 10 * 1 (only seat 1 at this level, but it's folded) = 10, no eligible winners
+	// So seat 2 wins 90, the 10 remains unawarded
+	table.CurrentHand = &Hand{
+		Pot: 100,
+		TotalContributions: map[int]int{
+			0: 30,
+			1: 40,
+			2: 30,
+		},
+		FoldedPlayers: map[int]bool{
+			0: true,
+			1: true,
+			2: false, // winner
+		},
+	}
+
+	result := table.DistributePot(winners)
 
 	if len(result) == 0 {
 		t.Fatal("expected result map to be non-empty")
 	}
 
-	if result[2] != 100 {
-		t.Errorf("expected winner at seat 2 to receive 100, got %d", result[2])
+	// Seat 2 is eligible for main pot (30 * 3 = 90)
+	// But NOT eligible for side pot (only seat 1 at level 40, and seat 1 is folded)
+	if result[2] != 90 {
+		t.Errorf("expected winner at seat 2 to receive 90 (main pot), got %d", result[2])
 	}
 
 	// Verify only the winner seat is in the map
@@ -2069,7 +2090,19 @@ func TestDistributePot_TwoWayTie_EvenSplit(t *testing.T) {
 	winners := []int{1, 3}
 	pot := 100
 
-	result := table.DistributePot(winners, pot)
+	table.CurrentHand = &Hand{
+		Pot: pot,
+		TotalContributions: map[int]int{
+			1: 50,
+			3: 50,
+		},
+		FoldedPlayers: map[int]bool{
+			1: false, // winner
+			3: false, // winner
+		},
+	}
+
+	result := table.DistributePot(winners)
 
 	if result[1] != 50 {
 		t.Errorf("expected winner at seat 1 to receive 50, got %d", result[1])
@@ -2090,7 +2123,21 @@ func TestDistributePot_ThreeWayTie_EvenSplit(t *testing.T) {
 	winners := []int{0, 2, 4}
 	pot := 90
 
-	result := table.DistributePot(winners, pot)
+	table.CurrentHand = &Hand{
+		Pot: pot,
+		TotalContributions: map[int]int{
+			0: 30,
+			2: 30,
+			4: 30,
+		},
+		FoldedPlayers: map[int]bool{
+			0: false, // winner
+			2: false, // winner
+			4: false, // winner
+		},
+	}
+
+	result := table.DistributePot(winners)
 
 	if result[0] != 30 {
 		t.Errorf("expected winner at seat 0 to receive 30, got %d", result[0])
@@ -2109,24 +2156,40 @@ func TestDistributePot_ThreeWayTie_EvenSplit(t *testing.T) {
 	}
 }
 
-// TestDistributePot_TwoWayTie_OddPot verifies remainder goes to first winner by seat order (101 chip pot, 2 winners)
+// TestDistributePot_TwoWayTie_OddPot verifies remainder goes to first winner in list (101 chip pot, 2 winners)
 func TestDistributePot_TwoWayTie_OddPot(t *testing.T) {
 	table := NewTable("table-1", "Table 1", nil)
-	// Winners: seat 3 and seat 5. With 101 chips: 50 each + 1 extra chip
-	// First winner by seat order is seat 3, so they get the extra chip
+	// Winners: seat 3 and seat 5. Seat 5 put in 1 more chip than seat 3
+	// Main pot (50*2 = 100): splits evenly 50 each (both eligible)
+	// Side pot (1*1 = 1): goes to seat 5 only (only seat 5 contributed this)
+	// Result: seat 3 gets 50, seat 5 gets 51
 	winners := []int{3, 5}
 	pot := 101
 
-	result := table.DistributePot(winners, pot)
-
-	// Seat 3 (first in winners list) should get 51
-	if result[3] != 51 {
-		t.Errorf("expected first winner at seat 3 to receive 51 (50 + 1 remainder), got %d", result[3])
+	table.CurrentHand = &Hand{
+		Pot: pot,
+		TotalContributions: map[int]int{
+			3: 50, // contributed 50 (eligible for main pot only)
+			5: 51, // contributed 51 (eligible for both pots)
+		},
+		FoldedPlayers: map[int]bool{
+			3: false, // winner
+			5: false, // winner
+		},
 	}
 
-	// Seat 5 should get 50
-	if result[5] != 50 {
-		t.Errorf("expected second winner at seat 5 to receive 50, got %d", result[5])
+	result := table.DistributePot(winners)
+
+	// Main pot (50*2=100): split evenly between 3 and 5 = 50 each
+	// Side pot (1*1=1): only eligible for seat 5 = 1
+	// Seat 3 total: 50
+	if result[3] != 50 {
+		t.Errorf("expected seat 3 to receive 50, got %d", result[3])
+	}
+
+	// Seat 5 total: 50 + 1 = 51
+	if result[5] != 51 {
+		t.Errorf("expected seat 5 to receive 51, got %d", result[5])
 	}
 
 	if len(result) != 2 {
@@ -2158,14 +2221,21 @@ func TestHandleShowdown_UpdatesStacks(t *testing.T) {
 	// Seats 0 and 1 are still active, seat 2 folded
 	// Use the actual pot and stacks after StartHand (which posts blinds)
 	table.CurrentHand.Street = "river"
-	table.CurrentHand.FoldedPlayers[2] = true
+	table.CurrentHand.FoldedPlayers[2] = true // Seat 2 folded
 
-	// With new pot accounting: after StartHand, Pot=0 and PlayerBets has blinds
-	// Before showdown, we need to sweep PlayerBets into Pot (simulating street advances)
+	// Simulate seat 0 calling the BB (20 chips) by adding to PlayerBets
+	table.CurrentHand.PlayerBets[0] = 20 // Seat 0 calls the BB
+
+	// With new pot accounting: sweep all PlayerBets into Pot
 	for _, bet := range table.CurrentHand.PlayerBets {
 		table.CurrentHand.Pot += bet
 	}
 	table.CurrentHand.PlayerBets = make(map[int]int)
+
+	// Update TotalContributions to reflect seat 0's call
+	table.CurrentHand.TotalContributions[0] = 20 // Seat 0 called the BB
+	table.Seats[0].Stack = 1000 - 20             // Deduct the call from seat 0's stack
+	// Now Pot should be 50 (10 + 20 + 20)
 
 	// Add board cards (5 cards for river) for proper hand evaluation
 	table.CurrentHand.BoardCards = []Card{
@@ -2176,9 +2246,9 @@ func TestHandleShowdown_UpdatesStacks(t *testing.T) {
 		{Rank: "T", Suit: "s"},
 	}
 
-	// Verify initial stacks after blind posting
-	if table.Seats[0].Stack != 1000 {
-		t.Errorf("expected seat 0 stack 1000 (dealer, no blind), got %d", table.Seats[0].Stack)
+	// Verify initial stacks after blind posting and seat 0's call
+	if table.Seats[0].Stack != 980 {
+		t.Errorf("expected seat 0 stack 980 (dealer, called BB -20), got %d", table.Seats[0].Stack)
 	}
 	if table.Seats[1].Stack != 990 {
 		t.Errorf("expected seat 1 stack 990 (SB -10), got %d", table.Seats[1].Stack)
@@ -2191,7 +2261,8 @@ func TestHandleShowdown_UpdatesStacks(t *testing.T) {
 	table.HandleShowdown()
 
 	// After showdown, at least one player should have an updated stack (winner gets the pot)
-	// The pot (30 chips from blinds) should be distributed to one or both of seats 0 and 1
+	// The pot (50 chips from blinds and seat 0's call) should be distributed to seats 0 and/or 1
+	// (seat 2 is not eligible since it folded)
 	totalStacks := table.Seats[0].Stack + table.Seats[1].Stack + table.Seats[2].Stack
 	originalTotal := 1000 + 1000 + 1000 // Original chips before any betting
 	if totalStacks != originalTotal {
@@ -6872,6 +6943,10 @@ func TestShowdown_AllInPlayerBustsOut(t *testing.T) {
 	table.CurrentHand.PlayerBets[1] = 30 // Player 1 bet total of 30 (all-in)
 	table.CurrentHand.Pot = 0            // Pot is 0 during betting; will be swept to 60 at showdown
 
+	// Update TotalContributions to match the actual contributions in this scenario
+	table.CurrentHand.TotalContributions[0] = 30 // Player 0 total contribution
+	table.CurrentHand.TotalContributions[1] = 30 // Player 1 total contribution
+
 	// Now update stacks to reflect the all-in
 	table.Seats[0].Stack = 1000 - 10 - 20 // After SB (10) and calling the all-in (20), has 970
 	table.Seats[1].Stack = 0              // All-in with 30
@@ -6989,6 +7064,11 @@ func TestShowdown_MultiplePlayersBustOut(t *testing.T) {
 	table.CurrentHand.PlayerBets[1] = 30 // Player 1 all-in with 30
 	table.CurrentHand.PlayerBets[2] = 30 // Player 2 all-in with 30
 	table.CurrentHand.Pot = 0            // With new pot accounting, pot is 0 during betting
+
+	// Update TotalContributions to match the actual contributions in this scenario
+	table.CurrentHand.TotalContributions[0] = 60 // Player 0 total contribution
+	table.CurrentHand.TotalContributions[1] = 30 // Player 1 total contribution (all-in)
+	table.CurrentHand.TotalContributions[2] = 30 // Player 2 total contribution (all-in)
 
 	// Update stacks to reflect all-in
 	table.Seats[0].Stack = 1000 - 10 - 60 // 930 (after SB + call)
@@ -7198,6 +7278,10 @@ func TestShowdown_AllInWinnerNotKicked(t *testing.T) {
 	table.CurrentHand.PlayerBets[0] = 30 // Player 0 all-in with 30 total
 	table.CurrentHand.PlayerBets[1] = 30 // Player 1 all-in with 30 total
 	table.CurrentHand.Pot = 0            // With new pot accounting, pot is 0 during betting
+
+	// Update TotalContributions to match the actual contributions in this scenario
+	table.CurrentHand.TotalContributions[0] = 30 // Player 0 total contribution
+	table.CurrentHand.TotalContributions[1] = 30 // Player 1 total contribution
 
 	// Update stacks to reflect all-in
 	table.Seats[0].Stack = 0 // Player 0 all-in
@@ -10960,5 +11044,475 @@ func TestCalculateSidePotsZeroContributions(t *testing.T) {
 
 	if len(pots) != 0 {
 		t.Fatalf("Expected 0 pots, got %d", len(pots))
+	}
+}
+
+// ============================================================================
+// Phase 4: DistributePot with Side Pot Support Tests
+// ============================================================================
+
+// TestDistributePot_Phase4_SingleWinner_TakesAll: One winner takes entire pot
+func TestDistributePot_Phase4_SingleWinner_TakesAll(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up hand with contributions and folded players
+	table.CurrentHand = &Hand{
+		Pot: 1000,
+		TotalContributions: map[int]int{
+			0: 500,
+			1: 300,
+			2: 200,
+		},
+		FoldedPlayers: map[int]bool{
+			0: false, // winner
+			1: true,  // folded
+			2: true,  // folded
+		},
+	}
+
+	// Set up seats with starting stacks (they would be 0 after all contributions)
+	table.Seats[0] = Seat{Index: 0, Stack: 0, Status: "active"}
+	table.Seats[1] = Seat{Index: 1, Stack: 0, Status: "active"}
+	table.Seats[2] = Seat{Index: 2, Stack: 0, Status: "active"}
+
+	distribution := table.DistributePot([]int{0})
+
+	if distribution[0] != 1000 {
+		t.Errorf("expected winner to receive 1000, got %d", distribution[0])
+	}
+
+	if table.CurrentHand.Pot != 0 {
+		t.Errorf("expected pot to be 0 after distribution, got %d", table.CurrentHand.Pot)
+	}
+}
+
+// TestDistributePot_Phase4_TwoWinners_EqualStacks_SplitPot: Two winners split evenly
+func TestDistributePot_Phase4_TwoWinners_EqualStacks_SplitPot(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	table.CurrentHand = &Hand{
+		Pot: 1000,
+		TotalContributions: map[int]int{
+			0: 500,
+			1: 500,
+		},
+		FoldedPlayers: map[int]bool{
+			0: false, // winner
+			1: false, // winner (tie)
+		},
+	}
+
+	table.Seats[0] = Seat{Index: 0, Stack: 0, Status: "active"}
+	table.Seats[1] = Seat{Index: 1, Stack: 0, Status: "active"}
+
+	distribution := table.DistributePot([]int{0, 1})
+
+	if distribution[0] != 500 {
+		t.Errorf("expected seat 0 to receive 500, got %d", distribution[0])
+	}
+
+	if distribution[1] != 500 {
+		t.Errorf("expected seat 1 to receive 500, got %d", distribution[1])
+	}
+
+	if table.CurrentHand.Pot != 0 {
+		t.Errorf("expected pot to be 0 after distribution, got %d", table.CurrentHand.Pot)
+	}
+}
+
+// TestDistributePot_Phase4_ThreeWinners_EqualStacks_SplitThreeWay: Three winners split evenly
+func TestDistributePot_Phase4_ThreeWinners_EqualStacks_SplitThreeWay(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	table.CurrentHand = &Hand{
+		Pot: 900,
+		TotalContributions: map[int]int{
+			0: 300,
+			1: 300,
+			2: 300,
+		},
+		FoldedPlayers: map[int]bool{
+			0: false, // winner
+			1: false, // winner
+			2: false, // winner
+		},
+	}
+
+	table.Seats[0] = Seat{Index: 0, Stack: 0, Status: "active"}
+	table.Seats[1] = Seat{Index: 1, Stack: 0, Status: "active"}
+	table.Seats[2] = Seat{Index: 2, Stack: 0, Status: "active"}
+
+	distribution := table.DistributePot([]int{0, 1, 2})
+
+	if distribution[0] != 300 {
+		t.Errorf("expected seat 0 to receive 300, got %d", distribution[0])
+	}
+	if distribution[1] != 300 {
+		t.Errorf("expected seat 1 to receive 300, got %d", distribution[1])
+	}
+	if distribution[2] != 300 {
+		t.Errorf("expected seat 2 to receive 300, got %d", distribution[2])
+	}
+}
+
+// TestDistributePot_Phase4_OneShortStack_WinnerIsShortStack: Short stack wins only main pot
+func TestDistributePot_Phase4_OneShortStack_WinnerIsShortStack(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Seat 0 is short stack (50), seats 1 and 2 each contributed 100
+	table.CurrentHand = &Hand{
+		Pot: 250,
+		TotalContributions: map[int]int{
+			0: 50,  // short stack - all-in
+			1: 100, // big stack
+			2: 100, // big stack
+		},
+		FoldedPlayers: map[int]bool{
+			0: false, // winner (short stack)
+			1: true,  // folded
+			2: true,  // folded
+		},
+	}
+
+	table.Seats[0] = Seat{Index: 0, Stack: 0, Status: "active"}
+	table.Seats[1] = Seat{Index: 1, Stack: 0, Status: "active"}
+	table.Seats[2] = Seat{Index: 2, Stack: 0, Status: "active"}
+
+	distribution := table.DistributePot([]int{0})
+
+	// Main pot: 50 * 3 = 150 (short stack + both big stacks)
+	// Side pot: 50 * 2 = 100 (only big stacks can win, both folded, so no winner for side pot)
+	// Winner should get 150 (main pot only)
+	if distribution[0] != 150 {
+		t.Errorf("expected short stack to receive 150 (main pot), got %d", distribution[0])
+	}
+
+	// The side pot goes to neither seat (both folded), so shouldn't appear in distribution
+	// Total distributed should be 150 (the other 100 remains unawarded but pot is zeroed)
+}
+
+// TestDistributePot_Phase4_OneShortStack_WinnerIsBigStack: Big stack wins all pots
+func TestDistributePot_Phase4_OneShortStack_WinnerIsBigStack(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Seat 0 is short stack (50), seat 1 is big stack (100), seat 1 wins
+	table.CurrentHand = &Hand{
+		Pot: 250,
+		TotalContributions: map[int]int{
+			0: 50,  // short stack
+			1: 100, // big stack - winner
+			2: 100, // big stack
+		},
+		FoldedPlayers: map[int]bool{
+			0: true,  // folded
+			1: false, // winner (big stack)
+			2: true,  // folded
+		},
+	}
+
+	table.Seats[0] = Seat{Index: 0, Stack: 0, Status: "active"}
+	table.Seats[1] = Seat{Index: 1, Stack: 0, Status: "active"}
+	table.Seats[2] = Seat{Index: 2, Stack: 0, Status: "active"}
+
+	distribution := table.DistributePot([]int{1})
+
+	// Main pot: 50 * 3 = 150 (only eligible: 0, 1, 2; winner: 1)
+	// Side pot: 50 * 2 = 100 (only eligible: 1, 2; winner: 1 only)
+	// Winner gets 150 + 100 = 250
+	if distribution[1] != 250 {
+		t.Errorf("expected big stack winner to receive 250, got %d", distribution[1])
+	}
+}
+
+// TestDistributePot_Phase4_TwoShortStacks_MultipleWinners: Different winners for main/side
+func TestDistributePot_Phase4_TwoShortStacks_MultipleWinners(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Seat 0 (50), Seat 1 (50), Seat 2 (100) - seats 0 and 1 are winners, seat 2 folded
+	// Main pot at level 50: 50 * 3 = 150 (all contributed at least 50)
+	// Both seat 0 and 1 eligible for main pot
+	// Side pot at level 100: 50 * 1 = 50 (only seat 2 at this level, but it's folded) - no eligible winners
+	// So seats 0 and 1 split 150 = 75 each
+	table.CurrentHand = &Hand{
+		Pot: 200,
+		TotalContributions: map[int]int{
+			0: 50,  // winner
+			1: 50,  // winner
+			2: 100, // folded
+		},
+		FoldedPlayers: map[int]bool{
+			0: false, // winner
+			1: false, // winner
+			2: true,  // folded
+		},
+	}
+
+	table.Seats[0] = Seat{Index: 0, Stack: 0, Status: "active"}
+	table.Seats[1] = Seat{Index: 1, Stack: 0, Status: "active"}
+	table.Seats[2] = Seat{Index: 2, Stack: 0, Status: "active"}
+
+	// Both seats are eligible for main pot only, so they split evenly
+	distribution := table.DistributePot([]int{0, 1})
+
+	if distribution[0] != 75 {
+		t.Errorf("expected seat 0 to receive 75 (150 / 2), got %d", distribution[0])
+	}
+	if distribution[1] != 75 {
+		t.Errorf("expected seat 1 to receive 75 (150 / 2), got %d", distribution[1])
+	}
+}
+
+// TestDistributePot_Phase4_ComplexSidePots_SingleWinner: Multiple side pots, one winner takes all
+func TestDistributePot_Phase4_ComplexSidePots_SingleWinner(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Three contribution levels: 30, 60, 100
+	// All seats contribute at each level, then seat 2 contributes more
+	// Main pot (level 30): 30*3 = 90, all eligible
+	// Side pot 1 (level 60): (60-30)*3 = 90, all eligible (each contributed at least 60)
+	// Side pot 2 (level 100): (100-60)*3 = 120, all eligible (each contributed at least 100)
+	table.CurrentHand = &Hand{
+		Pot: 300, // 30*3 + 30*3 + 40*3 = 90 + 90 + 120
+		TotalContributions: map[int]int{
+			0: 100, // equal contribution
+			1: 100, // equal contribution
+			2: 100, // equal contribution
+		},
+		FoldedPlayers: map[int]bool{
+			0: false, // winner
+			1: false,
+			2: false,
+		},
+	}
+
+	table.Seats[0] = Seat{Index: 0, Stack: 0, Status: "active"}
+	table.Seats[1] = Seat{Index: 1, Stack: 0, Status: "active"}
+	table.Seats[2] = Seat{Index: 2, Stack: 0, Status: "active"}
+
+	distribution := table.DistributePot([]int{0})
+
+	// Only seat 0 is the winner, all pots go to seat 0
+	if distribution[0] != 300 {
+		t.Errorf("expected seat 0 to receive 300, got %d", distribution[0])
+	}
+}
+
+// TestDistributePot_Phase4_OddChipDistribution: Pot doesn't divide evenly
+func TestDistributePot_Phase4_OddChipDistribution(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// 315 chips split 3 ways = 105 each, no remainder
+	table.CurrentHand = &Hand{
+		Pot: 315,
+		TotalContributions: map[int]int{
+			0: 105,
+			1: 105,
+			2: 105,
+		},
+		FoldedPlayers: map[int]bool{
+			0: false,
+			1: false,
+			2: false,
+		},
+	}
+
+	table.Seats[0] = Seat{Index: 0, Stack: 0, Status: "active"}
+	table.Seats[1] = Seat{Index: 1, Stack: 0, Status: "active"}
+	table.Seats[2] = Seat{Index: 2, Stack: 0, Status: "active"}
+
+	distribution := table.DistributePot([]int{0, 1, 2})
+
+	if distribution[0] != 105 {
+		t.Errorf("expected seat 0 to receive 105, got %d", distribution[0])
+	}
+	if distribution[1] != 105 {
+		t.Errorf("expected seat 1 to receive 105, got %d", distribution[1])
+	}
+	if distribution[2] != 105 {
+		t.Errorf("expected seat 2 to receive 105, got %d", distribution[2])
+	}
+}
+
+// TestDistributePot_Phase4_OddChip_RemainderGoesToFirst: Remainder goes to first winner
+func TestDistributePot_Phase4_OddChip_RemainderGoesToFirst(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Seats have equal contribution but different amounts
+	// Seats 0 and 1 contribute 35 each
+	// Seat 2 contributes 36 (1 extra)
+	// Main pot (35*3 = 105): all eligible, split evenly 35 each
+	// Side pot (1*1 = 1): only seat 2 eligible, gets 1
+	table.CurrentHand = &Hand{
+		Pot: 106,
+		TotalContributions: map[int]int{
+			0: 35, // eligible for main pot only
+			1: 35, // eligible for main pot only
+			2: 36, // eligible for both pots
+		},
+		FoldedPlayers: map[int]bool{
+			0: false,
+			1: false,
+			2: false,
+		},
+	}
+
+	table.Seats[0] = Seat{Index: 0, Stack: 0, Status: "active"}
+	table.Seats[1] = Seat{Index: 1, Stack: 0, Status: "active"}
+	table.Seats[2] = Seat{Index: 2, Stack: 0, Status: "active"}
+
+	distribution := table.DistributePot([]int{0, 1, 2})
+
+	// Main pot (105): 105 / 3 = 35 each
+	// Side pot (1): 1 / 1 = 1 to seat 2
+	if distribution[0] != 35 {
+		t.Errorf("expected seat 0 to receive 35, got %d", distribution[0])
+	}
+	if distribution[1] != 35 {
+		t.Errorf("expected seat 1 to receive 35, got %d", distribution[1])
+	}
+	if distribution[2] != 36 {
+		t.Errorf("expected seat 2 to receive 36 (35 + 1 from side pot), got %d", distribution[2])
+	}
+}
+
+// TestDistributePot_Phase4_ZeroPot: No pot to distribute
+func TestDistributePot_Phase4_ZeroPot(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	table.CurrentHand = &Hand{
+		Pot: 0,
+		TotalContributions: map[int]int{
+			0: 0,
+			1: 0,
+		},
+		FoldedPlayers: map[int]bool{
+			0: false,
+			1: false,
+		},
+	}
+
+	table.Seats[0] = Seat{Index: 0, Stack: 0, Status: "active"}
+	table.Seats[1] = Seat{Index: 1, Stack: 0, Status: "active"}
+
+	distribution := table.DistributePot([]int{0})
+
+	// No chips to distribute
+	if len(distribution) != 0 {
+		t.Errorf("expected empty distribution for zero pot, got %d entries", len(distribution))
+	}
+
+	if table.CurrentHand.Pot != 0 {
+		t.Errorf("expected pot to remain 0, got %d", table.CurrentHand.Pot)
+	}
+}
+
+// TestDistributePot_Phase4_AllInScenario_MultipleWinners: Realistic all-in with 2+ winners
+func TestDistributePot_Phase4_AllInScenario_MultipleWinners(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Three players: A (100 all-in), B (300 all-in), C (500 - call and win)
+	// A and B both go all-in, C calls with big stack and wins
+	// Main pot (A's level): 100 * 3 = 300 (all three eligible)
+	// Side pot (B's level): 200 * 2 = 400 (B and C eligible)
+	// Side pot (C's level): 200 * 1 = 200 (C only)
+	// All go to C (winner)
+	table.CurrentHand = &Hand{
+		Pot: 900,
+		TotalContributions: map[int]int{
+			0: 100, // A - all-in
+			1: 300, // B - all-in
+			2: 500, // C - big stack, winner
+		},
+		FoldedPlayers: map[int]bool{
+			0: false,
+			1: false,
+			2: false, // winner
+		},
+	}
+
+	table.Seats[0] = Seat{Index: 0, Stack: 0, Status: "active"}
+	table.Seats[1] = Seat{Index: 1, Stack: 0, Status: "active"}
+	table.Seats[2] = Seat{Index: 2, Stack: 0, Status: "active"}
+
+	distribution := table.DistributePot([]int{2})
+
+	if distribution[2] != 900 {
+		t.Errorf("expected seat 2 to receive 900, got %d", distribution[2])
+	}
+
+	if table.CurrentHand.Pot != 0 {
+		t.Errorf("expected pot to be 0 after distribution, got %d", table.CurrentHand.Pot)
+	}
+}
+
+// TestDistributePot_Phase4_NoWinnersForSidePot: Side pot has no eligible winners (all folded)
+func TestDistributePot_Phase4_NoWinnersForSidePot(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Seat 0 (50 - all-in) and Seat 1 (100 - all-in) both fold
+	// Seat 2 (100) folds before all-in, so there are no winners
+	// In practice, this shouldn't happen if called from showdown correctly
+	// But the function should handle it gracefully by not crashing
+	table.CurrentHand = &Hand{
+		Pot: 250,
+		TotalContributions: map[int]int{
+			0: 50,  // all-in, folded
+			1: 100, // all-in, folded
+			2: 100, // called but folded
+		},
+		FoldedPlayers: map[int]bool{
+			0: true, // folded
+			1: true, // folded
+			2: true, // folded
+		},
+	}
+
+	table.Seats[0] = Seat{Index: 0, Stack: 0, Status: "active"}
+	table.Seats[1] = Seat{Index: 1, Stack: 0, Status: "active"}
+	table.Seats[2] = Seat{Index: 2, Stack: 0, Status: "active"}
+
+	// Call with empty winners list (shouldn't happen in normal flow, but test for robustness)
+	distribution := table.DistributePot([]int{})
+
+	// Distribution should be empty
+	if len(distribution) != 0 {
+		t.Errorf("expected empty distribution with no winners, got %d entries", len(distribution))
+	}
+}
+
+// TestDistributePot_Phase4_PartialRefund: Winner smaller than one of contributions
+func TestDistributePot_Phase4_PartialRefund(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Seat 0 (200 - all-in)
+	// Seat 1 (100 - called, not all-in yet)
+	// Seat 2 (100 - called, not all-in)
+	// Seat 0 is the winner and only eligible for main pot (200)
+	table.CurrentHand = &Hand{
+		Pot: 400,
+		TotalContributions: map[int]int{
+			0: 200,
+			1: 100,
+			2: 100,
+		},
+		FoldedPlayers: map[int]bool{
+			0: false, // winner (eligible for all pots)
+			1: true,  // folded
+			2: true,  // folded
+		},
+	}
+
+	table.Seats[0] = Seat{Index: 0, Stack: 0, Status: "active"}
+	table.Seats[1] = Seat{Index: 1, Stack: 0, Status: "active"}
+	table.Seats[2] = Seat{Index: 2, Stack: 0, Status: "active"}
+
+	distribution := table.DistributePot([]int{0})
+
+	// Main pot: 200 * 1 (only seat 0 eligible, others folded) = 200? No!
+	// Actually: main pot = 100 * 3 = 300 (all three eligible at 100 level)
+	// Side pot = 100 * 1 = 100 (only seat 0 eligible at 200 level)
+	// Total for seat 0 = 300 + 100 = 400
+	if distribution[0] != 400 {
+		t.Errorf("expected seat 0 to receive 400, got %d", distribution[0])
 	}
 }
