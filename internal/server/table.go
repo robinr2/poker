@@ -1083,10 +1083,14 @@ func (h *Hand) GetFirstActor(seats [6]Seat) int {
 // - If no seat is found after fromSeat, wraps around to find the first seat
 // - Returns nil if all other active players have folded (only one player left)
 func (h *Hand) GetNextActiveSeat(fromSeat int, seats [6]Seat) *int {
-	// Collect all active (not folded) seats that still have chips (Stack > 0)
+	// Collect all active (not folded) seats
+	// NOTE: We DO include all-in players (Stack == 0) here because:
+	// - They may still be awaiting responses from other players in the current betting round
+	// - GetValidActions() will return empty actions for all-in players
+	// - IsBettingRoundComplete() will properly detect when all-in players can't act further
 	activeSeatsList := []int{}
 	for i := 0; i < 6; i++ {
-		if seats[i].Status == "active" && !h.FoldedPlayers[i] && seats[i].Stack > 0 {
+		if seats[i].Status == "active" && !h.FoldedPlayers[i] {
 			activeSeatsList = append(activeSeatsList, i)
 		}
 	}
@@ -1576,6 +1580,34 @@ func (h *Hand) IsBettingRoundComplete(seats [6]Seat) bool {
 	}
 
 	// All conditions met: all non-folded players have acted and matched the bet
+	return true
+}
+
+// AreAllActivePlayersAllIn checks if all non-folded players are all-in (stack = 0)
+// Returns true if 2+ players remain and ALL are all-in
+// Returns false if any player has chips remaining to act
+func (h *Hand) AreAllActivePlayersAllIn(seats [6]Seat) bool {
+	activePlayers := []int{}
+	for i := 0; i < 6; i++ {
+		if seats[i].Status == "active" && !h.FoldedPlayers[i] {
+			activePlayers = append(activePlayers, i)
+		}
+	}
+
+	// Need at least 2 players for all-in scenario to matter
+	if len(activePlayers) < 2 {
+		return false
+	}
+
+	// Check if all active players are all-in (stack = 0)
+	for _, seatNum := range activePlayers {
+		if seats[seatNum].Stack > 0 {
+			// Found a player with chips remaining, not all-in
+			return false
+		}
+	}
+
+	// All active players are all-in
 	return true
 }
 

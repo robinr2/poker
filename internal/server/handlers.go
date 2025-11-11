@@ -1382,7 +1382,41 @@ func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, sea
 			return nil
 		}
 
-		// Multiple players remain - check if we're not on the river - advance to next street
+		// Multiple players remain - check if all players are all-in
+		allPlayersAllIn := table.CurrentHand.AreAllActivePlayersAllIn(table.Seats)
+
+		if allPlayersAllIn {
+			// All remaining players are all-in - auto-deal remaining streets and go to showdown
+			server.logger.Info("all players all-in, auto-dealing remaining streets", "currentStreet", table.CurrentHand.Street)
+
+			// Deal all remaining streets without prompting for action
+			for table.CurrentHand != nil && table.CurrentHand.Street != "river" {
+				currentStreet := table.CurrentHand.Street
+				server.logger.Info("auto-advancing from street", "street", currentStreet)
+
+				table.mu.Unlock()
+				err = table.AdvanceToNextStreetWithBroadcast()
+				if err != nil {
+					server.logger.Warn("failed to auto-advance street (all-in)", "error", err)
+				}
+				table.mu.Lock()
+
+				if table.CurrentHand != nil {
+					server.logger.Info("advanced to street", "street", table.CurrentHand.Street, "boardCards", len(table.CurrentHand.BoardCards))
+				}
+			}
+
+			// All streets dealt - trigger showdown
+			if table.CurrentHand != nil {
+				server.logger.Info("calling showdown", "street", table.CurrentHand.Street, "boardCards", len(table.CurrentHand.BoardCards))
+			}
+			table.mu.Unlock()
+			table.HandleShowdown()
+			table.mu.Lock()
+			return nil
+		}
+
+		// Not all players are all-in - normal street advancement with action prompts
 		currentStreet := table.CurrentHand.Street
 		if currentStreet != "river" {
 			// Unlock before calling AdvanceToNextStreetWithBroadcast (long-running operation with broadcasting)

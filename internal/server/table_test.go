@@ -8771,11 +8771,12 @@ func TestGetValidActions_AllInPlayerWithRaise(t *testing.T) {
 	}
 }
 
-// TestGetNextActiveSeat_AllInScenarios tests GetNextActiveSeat() skips all-in players (stack=0)
-// These 7 subtests verify the fix handles various multi-player scenarios with all-in players
+// TestGetNextActiveSeat_AllInScenarios tests GetNextActiveSeat() includes all-in players in rotation
+// All-in players are included because GetValidActions() will return empty actions for them
+// These tests verify that all-in players remain in rotation (they may still need to be offered actions)
 func TestGetNextActiveSeat_AllInScenarios(t *testing.T) {
 
-	// Subtest 1: two_players_one_allin - Skip all-in, return active player
+	// Subtest 1: two_players_one_allin - Include all-in in rotation
 	t.Run("two_players_one_allin", func(t *testing.T) {
 		table := NewTable("table-1", "Table 1", nil)
 
@@ -8784,7 +8785,7 @@ func TestGetNextActiveSeat_AllInScenarios(t *testing.T) {
 		token1 := "player-1"
 		table.Seats[0].Token = &token0
 		table.Seats[0].Status = "active"
-		table.Seats[0].Stack = 1000 // Active
+		table.Seats[0].Stack = 1000 // Active with chips
 		table.Seats[1].Token = &token1
 		table.Seats[1].Status = "active"
 		table.Seats[1].Stack = 0 // All-in
@@ -8800,20 +8801,20 @@ func TestGetNextActiveSeat_AllInScenarios(t *testing.T) {
 			table.CurrentHand.FoldedPlayers = make(map[int]bool)
 		}
 
-		// From seat 1 (all-in), should skip to seat 0 (active) - but since only 1 active, return nil
-		next := table.CurrentHand.GetNextActiveSeat(1, table.Seats)
-		if next != nil {
-			t.Errorf("expected nil when only one non-all-in player remains, got %v", next)
+		// From seat 0, should rotate to seat 1 (even though all-in)
+		next := table.CurrentHand.GetNextActiveSeat(0, table.Seats)
+		if next == nil || *next != 1 {
+			t.Errorf("expected next seat to be 1 (all-in player included), got %v", next)
 		}
 
-		// From seat 0 (active), should skip seat 1 (all-in) - but only 1 active so return nil
-		next = table.CurrentHand.GetNextActiveSeat(0, table.Seats)
-		if next != nil {
-			t.Errorf("expected nil when only one non-all-in player remains, got %v", next)
+		// From seat 1, should rotate to seat 0
+		next = table.CurrentHand.GetNextActiveSeat(1, table.Seats)
+		if next == nil || *next != 0 {
+			t.Errorf("expected next seat to be 0, got %v", next)
 		}
 	})
 
-	// Subtest 2: two_players_both_allin - Both all-in returns nil
+	// Subtest 2: two_players_both_allin - Both all-in still rotates
 	t.Run("two_players_both_allin", func(t *testing.T) {
 		table := NewTable("table-1", "Table 1", nil)
 
@@ -8838,20 +8839,20 @@ func TestGetNextActiveSeat_AllInScenarios(t *testing.T) {
 			table.CurrentHand.FoldedPlayers = make(map[int]bool)
 		}
 
-		// From seat 0, both all-in so no active players -> nil
+		// From seat 0, should rotate to seat 1
 		next := table.CurrentHand.GetNextActiveSeat(0, table.Seats)
-		if next != nil {
-			t.Errorf("expected nil when all players are all-in, got %v", next)
+		if next == nil || *next != 1 {
+			t.Errorf("expected next seat to be 1, got %v", next)
 		}
 
-		// From seat 1, both all-in so no active players -> nil
+		// From seat 1, should rotate to seat 0
 		next = table.CurrentHand.GetNextActiveSeat(1, table.Seats)
-		if next != nil {
-			t.Errorf("expected nil when all players are all-in, got %v", next)
+		if next == nil || *next != 0 {
+			t.Errorf("expected next seat to be 0, got %v", next)
 		}
 	})
 
-	// Subtest 3: three_players_one_allin - Skip all-in in 3-player
+	// Subtest 3: three_players_one_allin - Include all-in in 3-player rotation
 	t.Run("three_players_one_allin", func(t *testing.T) {
 		table := NewTable("table-1", "Table 1", nil)
 
@@ -8878,20 +8879,26 @@ func TestGetNextActiveSeat_AllInScenarios(t *testing.T) {
 			table.CurrentHand.FoldedPlayers = make(map[int]bool)
 		}
 
-		// From seat 0, should skip all-in seat 1 and go to seat 2
+		// From seat 0, should go to seat 1 (all-in player included)
 		next := table.CurrentHand.GetNextActiveSeat(0, table.Seats)
-		if next == nil || *next != 2 {
-			t.Errorf("expected next active seat after 0 (skipping all-in 1) to be 2, got %v", next)
+		if next == nil || *next != 1 {
+			t.Errorf("expected next active seat after 0 to be 1 (including all-in), got %v", next)
 		}
 
-		// From seat 2, should skip all-in seat 1 and go to seat 0
+		// From seat 1, should go to seat 2
+		next = table.CurrentHand.GetNextActiveSeat(1, table.Seats)
+		if next == nil || *next != 2 {
+			t.Errorf("expected next active seat after 1 to be 2, got %v", next)
+		}
+
+		// From seat 2, should wrap to seat 0
 		next = table.CurrentHand.GetNextActiveSeat(2, table.Seats)
 		if next == nil || *next != 0 {
-			t.Errorf("expected next active seat after 2 (wrapping and skipping all-in 1) to be 0, got %v", next)
+			t.Errorf("expected next active seat after 2 (wrapping) to be 0, got %v", next)
 		}
 	})
 
-	// Subtest 4: three_players_two_allin - Skip both all-in, return active
+	// Subtest 4: three_players_two_allin - Include all-in players in rotation
 	t.Run("three_players_two_allin", func(t *testing.T) {
 		table := NewTable("table-1", "Table 1", nil)
 
@@ -8903,7 +8910,7 @@ func TestGetNextActiveSeat_AllInScenarios(t *testing.T) {
 			if i == 1 || i == 2 {
 				table.Seats[i].Stack = 0 // Seats 1 and 2 are all-in
 			} else {
-				table.Seats[i].Stack = 1000 // Only seat 0 active
+				table.Seats[i].Stack = 1000 // Only seat 0 has chips
 			}
 		}
 
@@ -8918,14 +8925,26 @@ func TestGetNextActiveSeat_AllInScenarios(t *testing.T) {
 			table.CurrentHand.FoldedPlayers = make(map[int]bool)
 		}
 
-		// From seat 0, only one non-all-in player -> nil
+		// From seat 0, should rotate to seat 1 (even though all-in)
 		next := table.CurrentHand.GetNextActiveSeat(0, table.Seats)
-		if next != nil {
-			t.Errorf("expected nil when only one non-all-in player remains, got %v", next)
+		if next == nil || *next != 1 {
+			t.Errorf("expected next seat to be 1, got %v", next)
+		}
+
+		// From seat 1, should rotate to seat 2
+		next = table.CurrentHand.GetNextActiveSeat(1, table.Seats)
+		if next == nil || *next != 2 {
+			t.Errorf("expected next seat to be 2, got %v", next)
+		}
+
+		// From seat 2, should wrap to seat 0
+		next = table.CurrentHand.GetNextActiveSeat(2, table.Seats)
+		if next == nil || *next != 0 {
+			t.Errorf("expected next seat to be 0, got %v", next)
 		}
 	})
 
-	// Subtest 5: four_players_mixed_allin_folded - Skip all-in and folded
+	// Subtest 5: four_players_mixed_allin_folded - Include all-in but skip folded
 	t.Run("four_players_mixed_allin_folded", func(t *testing.T) {
 		table := NewTable("table-1", "Table 1", nil)
 
@@ -8955,20 +8974,27 @@ func TestGetNextActiveSeat_AllInScenarios(t *testing.T) {
 		// Mark seat 3 as folded
 		table.CurrentHand.FoldedPlayers[3] = true
 
-		// From seat 0, skip all-in 1 and folded 3, go to seat 2
+		// From seat 0, should go to seat 1 (all-in included, folded skipped)
 		next := table.CurrentHand.GetNextActiveSeat(0, table.Seats)
-		if next == nil || *next != 2 {
-			t.Errorf("expected next active seat after 0 (skipping all-in 1 and folded 3) to be 2, got %v", next)
+		if next == nil || *next != 1 {
+			t.Errorf("expected next active seat after 0 to be 1 (including all-in, skipping folded), got %v", next)
 		}
 
-		// From seat 2, skip all-in 1 and folded 3, wrap to seat 0
+		// From seat 1, should go to seat 2 (skipping folded 3)
+		next = table.CurrentHand.GetNextActiveSeat(1, table.Seats)
+		if next == nil || *next != 2 {
+			t.Errorf("expected next active seat after 1 to be 2 (skipping folded 3), got %v", next)
+		}
+
+		// From seat 2, should wrap to seat 0 (skipping folded 3)
 		next = table.CurrentHand.GetNextActiveSeat(2, table.Seats)
 		if next == nil || *next != 0 {
-			t.Errorf("expected next active seat after 2 (skipping all-in 1, folded 3, wrapping) to be 0, got %v", next)
+			t.Errorf("expected next active seat after 2 to be 0 (skipping folded 3, wrapping), got %v", next)
 		}
 	})
 
-	// Subtest 6: all_folded_except_allin - Return nil when only all-in remains
+	// Subtest 6: all_folded_except_allin - Return nil when only one player remains
+	// This tests the edge case where all players fold except one (who happens to be all-in)
 	t.Run("all_folded_except_allin", func(t *testing.T) {
 		table := NewTable("table-1", "Table 1", nil)
 
@@ -9045,4 +9071,751 @@ func TestGetNextActiveSeat_AllInScenarios(t *testing.T) {
 			t.Errorf("expected next active seat after 2 (wrapping) to be 0, got %v", next)
 		}
 	})
+}
+
+// ============ PHASE 5: ALL-IN BETTING LOOP INTEGRATION TESTS ============
+// These tests verify that all three fixes (IsBettingRoundComplete, GetValidActions, GetNextActiveSeat)
+// work together correctly across realistic game scenarios and all streets
+
+// TestAllInBettingLoop_Integration_TwoPlayerUnequalAllIn tests the classic bug scenario:
+// Two players with unequal all-in stacks preflop. Verifies:
+// - IsBettingRoundComplete() skips checking all-in player's bet matching
+// - GetValidActions() returns empty for all-in player
+// - GetNextActiveSeat() skips all-in player
+// - Betting round completes without infinite loop
+// - Game can advance to flop
+func TestAllInBettingLoop_Integration_TwoPlayerUnequalAllIn(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up heads-up: seat 0 (SB=900) vs seat 1 (BB=1000)
+	token0 := "player-0"
+	token1 := "player-1"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 900
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	// Start hand (dealer at 0, posts 10 SB; seat 1 posts 20 BB)
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Verify hand started correctly
+	if table.CurrentHand == nil {
+		t.Fatal("expected CurrentHand to be set after StartHand")
+	}
+
+	// At this point: dealer/SB (seat 0) has 890, BB (seat 1) has 980
+	if table.Seats[0].Stack != 890 {
+		t.Errorf("seat 0: expected stack 890, got %d", table.Seats[0].Stack)
+	}
+	if table.Seats[1].Stack != 980 {
+		t.Errorf("seat 1: expected stack 980, got %d", table.Seats[1].Stack)
+	}
+
+	// Initialize action: dealer/SB (seat 0) acts first preflop in heads-up
+	firstActor := table.CurrentHand.GetFirstActor(table.Seats)
+	if firstActor != 0 {
+		t.Errorf("expected first actor to be seat 0, got %d", firstActor)
+	}
+
+	// Dealer (seat 0) goes all-in by betting their remaining 890
+	seat0Allin := 890
+	if table.CurrentHand.PlayerBets == nil {
+		table.CurrentHand.PlayerBets = make(map[int]int)
+	}
+	if table.CurrentHand.ActedPlayers == nil {
+		table.CurrentHand.ActedPlayers = make(map[int]bool)
+	}
+
+	table.CurrentHand.PlayerBets[0] = seat0Allin
+	table.Seats[0].Stack = 0 // Mark as all-in
+	table.CurrentHand.CurrentBet = seat0Allin
+	table.CurrentHand.LastRaise = seat0Allin - 10
+	table.CurrentHand.ActedPlayers[0] = true
+	currentActor := 1
+	table.CurrentHand.CurrentActor = &currentActor
+
+	// Verify GetValidActions for all-in player returns empty
+	validActions := table.CurrentHand.GetValidActions(0, 0, table.Seats)
+	if len(validActions) != 0 {
+		t.Errorf("all-in player should have no valid actions, got %v", validActions)
+	}
+
+	// BB (seat 1) must call the all-in bet
+	table.CurrentHand.PlayerBets[1] = seat0Allin
+	table.Seats[1].Stack = 980 - seat0Allin
+	table.CurrentHand.ActedPlayers[1] = true
+	table.CurrentHand.BigBlindHasOption = false // BB has acted, so option is closed
+
+	// Verify IsBettingRoundComplete with all-in player
+	// Should return true because:
+	// - All non-folded players have acted
+	// - All non-folded, NON-ALL-IN players have matched the current bet
+	// - All-in players (stack=0) are skipped in the matching check
+	isComplete := table.CurrentHand.IsBettingRoundComplete(table.Seats)
+	if !isComplete {
+		t.Error("expected betting round to be complete after BB calls all-in player, got false")
+	}
+
+	// Verify game can advance to next street (flop)
+	table.CurrentHand.AdvanceStreet()
+	if table.CurrentHand.Street != "flop" {
+		t.Errorf("expected street to advance to flop, got %s", table.CurrentHand.Street)
+	}
+}
+
+// TestAllInBettingLoop_Integration_ThreePlayerOneAllInFlop tests one all-in mid-hand:
+// Three players, one goes all-in on flop, others continue betting.
+// Verifies all-in player is skipped in subsequent rounds.
+func TestAllInBettingLoop_Integration_ThreePlayerOneAllInFlop(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 3 active players (seats 0, 1, 2)
+	for i := 0; i < 3; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Setup: dealer at 0, SB at 1, BB at 2
+	// Stacks: 0: 1000, 1: 990, 2: 980
+	if table.Seats[0].Stack != 1000 {
+		t.Errorf("seat 0: expected stack 1000, got %d", table.Seats[0].Stack)
+	}
+	if table.Seats[1].Stack != 990 {
+		t.Errorf("seat 1: expected stack 990, got %d", table.Seats[1].Stack)
+	}
+	if table.Seats[2].Stack != 980 {
+		t.Errorf("seat 2: expected stack 980, got %d", table.Seats[2].Stack)
+	}
+
+	// Simulate preflop action to get to flop (simplified - just mark as acted)
+	if table.CurrentHand.ActedPlayers == nil {
+		table.CurrentHand.ActedPlayers = make(map[int]bool)
+	}
+	if table.CurrentHand.FoldedPlayers == nil {
+		table.CurrentHand.FoldedPlayers = make(map[int]bool)
+	}
+
+	// Preflop: all players call BB (20)
+	table.CurrentHand.PlayerBets[0] = 20
+	table.CurrentHand.PlayerBets[1] = 20
+	table.CurrentHand.PlayerBets[2] = 20
+	table.Seats[0].Stack = 980
+	table.Seats[1].Stack = 970
+	table.Seats[2].Stack = 960
+	table.CurrentHand.CurrentBet = 20
+
+	table.CurrentHand.ActedPlayers[0] = true
+	table.CurrentHand.ActedPlayers[1] = true
+	table.CurrentHand.ActedPlayers[2] = true
+	table.CurrentHand.Pot = 60 // Accumulated from preflop
+
+	// Advance to flop
+	table.CurrentHand.Street = "flop"
+	table.CurrentHand.CurrentBet = 0
+	table.CurrentHand.PlayerBets = make(map[int]int)
+	table.CurrentHand.ActedPlayers = make(map[int]bool)
+	table.CurrentHand.BigBlindHasOption = false // Reset for postflop
+
+	// On flop, seat 1 (SB) acts first and goes all-in for 500 (less than seat 2's 960)
+	seat1BetAmount := 500
+	table.CurrentHand.PlayerBets[1] = seat1BetAmount
+	table.Seats[1].Stack = 0 // All-in
+	table.CurrentHand.CurrentBet = seat1BetAmount
+	table.CurrentHand.LastRaise = seat1BetAmount
+	table.CurrentHand.ActedPlayers[1] = true
+
+	// Seat 2 (BB) calls the all-in
+	table.CurrentHand.PlayerBets[2] = seat1BetAmount
+	table.Seats[2].Stack = 960 - seat1BetAmount
+	table.CurrentHand.ActedPlayers[2] = true
+
+	// Seat 0 (dealer) calls the all-in
+	table.CurrentHand.PlayerBets[0] = seat1BetAmount
+	table.Seats[0].Stack = 980 - seat1BetAmount
+	table.CurrentHand.ActedPlayers[0] = true
+
+	// Verify IsBettingRoundComplete on flop
+	// All players have acted, all non-all-in players matched the bet
+	isComplete := table.CurrentHand.IsBettingRoundComplete(table.Seats)
+	if !isComplete {
+		t.Error("expected betting round on flop to be complete after all-in and calls, got false")
+	}
+
+	// Verify GetValidActions for all-in player on flop
+	validActions := table.CurrentHand.GetValidActions(1, 0, table.Seats)
+	if len(validActions) != 0 {
+		t.Errorf("all-in player should have no valid actions on flop, got %v", validActions)
+	}
+
+	// Verify game can advance to turn
+	table.CurrentHand.AdvanceStreet()
+	if table.CurrentHand.Street != "turn" {
+		t.Errorf("expected street to advance to turn, got %s", table.CurrentHand.Street)
+	}
+
+	// On turn: reset betting, only seats 0 and 2 have chips
+	table.CurrentHand.CurrentBet = 0
+	table.CurrentHand.PlayerBets = make(map[int]int)
+	table.CurrentHand.ActedPlayers = make(map[int]bool)
+	// Mark all-in player as acted on this street (they don't take further action)
+	table.CurrentHand.ActedPlayers[1] = true
+
+	// Seat 2 bets 100
+	table.CurrentHand.PlayerBets[2] = 100
+	table.Seats[2].Stack -= 100
+	table.CurrentHand.CurrentBet = 100
+	table.CurrentHand.ActedPlayers[2] = true
+
+	// Seat 0 calls 100
+	table.CurrentHand.PlayerBets[0] = 100
+	table.Seats[0].Stack -= 100
+	table.CurrentHand.ActedPlayers[0] = true
+
+	// Verify betting round complete on turn (all-in player skipped in all checks)
+	isComplete = table.CurrentHand.IsBettingRoundComplete(table.Seats)
+	if !isComplete {
+		t.Error("expected betting round on turn to be complete (all-in skipped), got false")
+	}
+
+	// Advance to river
+	table.CurrentHand.AdvanceStreet()
+	if table.CurrentHand.Street != "river" {
+		t.Errorf("expected street to advance to river, got %s", table.CurrentHand.Street)
+	}
+}
+
+// TestAllInBettingLoop_Integration_MultiPlayerCascadingAllIns tests multiple all-ins:
+// Three players with different stacks, two go all-in with different amounts.
+// Verifies proper handling of multiple all-ins in same round.
+func TestAllInBettingLoop_Integration_MultiPlayerCascadingAllIns(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 3 active players with different stacks
+	token0 := "player-0"
+	token1 := "player-1"
+	token2 := "player-2"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 300 // Short stack
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 800 // Medium stack
+
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1500 // Deep stack
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize maps
+	if table.CurrentHand.ActedPlayers == nil {
+		table.CurrentHand.ActedPlayers = make(map[int]bool)
+	}
+	if table.CurrentHand.FoldedPlayers == nil {
+		table.CurrentHand.FoldedPlayers = make(map[int]bool)
+	}
+
+	// Simulate preflop action to flop
+	table.CurrentHand.Street = "flop"
+	table.CurrentHand.CurrentBet = 0
+	table.CurrentHand.PlayerBets = make(map[int]int)
+	table.CurrentHand.ActedPlayers = make(map[int]bool)
+	table.CurrentHand.BigBlindHasOption = false // Reset for postflop
+
+	// On turn: seat 0 (300 stack) goes all-in for 300
+	table.CurrentHand.Street = "turn"
+	table.CurrentHand.PlayerBets[0] = 300
+	table.Seats[0].Stack = 0 // All-in
+	table.CurrentHand.CurrentBet = 300
+	table.CurrentHand.LastRaise = 300
+	table.CurrentHand.ActedPlayers[0] = true
+
+	// Seat 1 (800 stack) raises to 800
+	table.CurrentHand.PlayerBets[1] = 800
+	table.Seats[1].Stack = 0 // Also all-in now
+	table.CurrentHand.CurrentBet = 800
+	table.CurrentHand.LastRaise = 500
+	table.CurrentHand.ActedPlayers[1] = true
+
+	// Seat 2 (1500 stack) calls 800
+	table.CurrentHand.PlayerBets[2] = 800
+	table.Seats[2].Stack = 700 // Still has chips
+	table.CurrentHand.ActedPlayers[2] = true
+
+	// Verify IsBettingRoundComplete with multiple all-ins
+	isComplete := table.CurrentHand.IsBettingRoundComplete(table.Seats)
+	if !isComplete {
+		t.Error("expected betting round to be complete with multiple all-ins and non-all-in matched, got false")
+	}
+
+	// Verify GetValidActions for all-in players
+	validActions0 := table.CurrentHand.GetValidActions(0, 0, table.Seats)
+	if len(validActions0) != 0 {
+		t.Errorf("all-in seat 0 should have no valid actions, got %v", validActions0)
+	}
+
+	validActions1 := table.CurrentHand.GetValidActions(1, 0, table.Seats)
+	if len(validActions1) != 0 {
+		t.Errorf("all-in seat 1 should have no valid actions, got %v", validActions1)
+	}
+
+	// Verify non-all-in player (seat 2) still has valid actions available
+	// (they could bet more if action comes back to them in a new round, but betting is done)
+	if table.Seats[2].Stack == 0 {
+		validActions2 := table.CurrentHand.GetValidActions(2, 0, table.Seats)
+		if len(validActions2) != 0 {
+			t.Errorf("all-in seat 2 should have no valid actions, got %v", validActions2)
+		}
+	}
+
+	// At this point, IsBettingRoundComplete should be true since all players have acted
+	// and matched bets (with all-in players excluded from bet matching check)
+	if !table.CurrentHand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected betting round to be complete with cascading all-ins")
+	}
+
+	// Verify game can advance to river
+	table.CurrentHand.AdvanceStreet()
+	if table.CurrentHand.Street != "river" {
+		t.Errorf("expected street to advance to river, got %s", table.CurrentHand.Street)
+	}
+}
+
+// TestAllInBettingLoop_Integration_AllInRiverToShowdown tests all-in on river:
+// Both players all-in on river, verifies betting completes and shows down correctly.
+func TestAllInBettingLoop_Integration_AllInRiverToShowdown(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players (heads-up)
+	token0 := "player-0"
+	token1 := "player-1"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 500
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 500
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize maps
+	if table.CurrentHand.ActedPlayers == nil {
+		table.CurrentHand.ActedPlayers = make(map[int]bool)
+	}
+	if table.CurrentHand.FoldedPlayers == nil {
+		table.CurrentHand.FoldedPlayers = make(map[int]bool)
+	}
+
+	// Fast-forward to river
+	table.CurrentHand.Street = "river"
+	table.CurrentHand.CurrentBet = 0
+	table.CurrentHand.PlayerBets = make(map[int]int)
+	table.CurrentHand.ActedPlayers = make(map[int]bool)
+	table.CurrentHand.BigBlindHasOption = false // Reset for postflop
+
+	// Simulate previous betting - both players have matched bets preflop and postflop
+	table.CurrentHand.Pot = 400 // Accumulated from previous streets
+
+	// On river: seat 0 goes all-in for 490 (remaining)
+	table.CurrentHand.PlayerBets[0] = 490
+	table.Seats[0].Stack = 0 // All-in
+	table.CurrentHand.CurrentBet = 490
+	table.CurrentHand.LastRaise = 490
+	table.CurrentHand.ActedPlayers[0] = true
+
+	// Seat 1 calls the all-in for 490
+	table.CurrentHand.PlayerBets[1] = 490
+	table.Seats[1].Stack = 0 // Also all-in
+	table.CurrentHand.ActedPlayers[1] = true
+
+	// Verify both players are marked as all-in
+	if table.Seats[0].Stack != 0 {
+		t.Errorf("seat 0: expected stack 0 (all-in), got %d", table.Seats[0].Stack)
+	}
+	if table.Seats[1].Stack != 0 {
+		t.Errorf("seat 1: expected stack 0 (all-in), got %d", table.Seats[1].Stack)
+	}
+
+	// Verify IsBettingRoundComplete on river with both all-in
+	isComplete := table.CurrentHand.IsBettingRoundComplete(table.Seats)
+	if !isComplete {
+		t.Error("expected betting round on river to be complete with both all-in, got false")
+	}
+
+	// Verify GetValidActions for all-in players on river
+	validActions0 := table.CurrentHand.GetValidActions(0, 0, table.Seats)
+	if len(validActions0) != 0 {
+		t.Errorf("all-in seat 0 should have no valid actions on river, got %v", validActions0)
+	}
+
+	validActions1 := table.CurrentHand.GetValidActions(1, 0, table.Seats)
+	if len(validActions1) != 0 {
+		t.Errorf("all-in seat 1 should have no valid actions on river, got %v", validActions1)
+	}
+
+	// Verify IsBettingRoundComplete returns true (all players all-in)
+	if !table.CurrentHand.IsBettingRoundComplete(table.Seats) {
+		t.Error("expected betting round to be complete with both players all-in")
+	}
+
+	// Verify we've reached the showdown state (river with no action left)
+	// Game should proceed to showdown from here
+	if table.CurrentHand.Street != "river" {
+		t.Errorf("expected street to be river, got %s", table.CurrentHand.Street)
+	}
+}
+
+// TestAllInBettingLoop_Integration_MixedAllInAndFold tests all-in + fold scenario:
+// Player 1 goes all-in preflop, Player 2 folds on flop, Player 3 continues.
+// Verifies only active (non-folded, non-all-in) players get actions.
+func TestAllInBettingLoop_Integration_MixedAllInAndFold(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 3 active players
+	for i := 0; i < 3; i++ {
+		token := "player-" + string(rune('0'+i))
+		table.Seats[i].Token = &token
+		table.Seats[i].Status = "active"
+		table.Seats[i].Stack = 1000
+	}
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize maps
+	if table.CurrentHand.ActedPlayers == nil {
+		table.CurrentHand.ActedPlayers = make(map[int]bool)
+	}
+	if table.CurrentHand.FoldedPlayers == nil {
+		table.CurrentHand.FoldedPlayers = make(map[int]bool)
+	}
+
+	// Preflop: seat 1 goes all-in for 990
+	table.CurrentHand.PlayerBets[1] = 990
+	table.Seats[1].Stack = 0 // All-in
+	table.CurrentHand.CurrentBet = 990
+	table.CurrentHand.LastRaise = 990
+	table.CurrentHand.ActedPlayers[1] = true
+	table.CurrentHand.BigBlindHasOption = false // BB (seat 1) has acted, option closed
+
+	// Seats 0 and 2 call
+	table.CurrentHand.PlayerBets[0] = 990
+	table.Seats[0].Stack = 10
+	table.CurrentHand.ActedPlayers[0] = true
+
+	table.CurrentHand.PlayerBets[2] = 990
+	table.Seats[2].Stack = 10
+	table.CurrentHand.ActedPlayers[2] = true
+
+	// Verify betting round complete
+	isComplete := table.CurrentHand.IsBettingRoundComplete(table.Seats)
+	if !isComplete {
+		t.Error("expected preflop betting to be complete, got false")
+	}
+
+	// Advance to flop
+	table.CurrentHand.Street = "flop"
+	table.CurrentHand.CurrentBet = 0
+	table.CurrentHand.PlayerBets = make(map[int]int)
+	table.CurrentHand.ActedPlayers = make(map[int]bool)
+	table.CurrentHand.BigBlindHasOption = false // Reset for postflop
+	// Mark all-in player as acted on this street
+	table.CurrentHand.ActedPlayers[1] = true
+
+	// On flop: seat 2 checks
+	table.CurrentHand.PlayerBets[2] = 0
+	table.CurrentHand.CurrentBet = 0
+	table.CurrentHand.ActedPlayers[2] = true
+
+	// Seat 0 checks
+	table.CurrentHand.PlayerBets[0] = 0
+	table.CurrentHand.ActedPlayers[0] = true
+
+	// Verify betting round complete on flop (all-in skipped, others checked)
+	isComplete = table.CurrentHand.IsBettingRoundComplete(table.Seats)
+	if !isComplete {
+		t.Error("expected flop betting to be complete after all-in and checks, got false")
+	}
+
+	// Advance to turn
+	table.CurrentHand.Street = "turn"
+	table.CurrentHand.CurrentBet = 0
+	table.CurrentHand.PlayerBets = make(map[int]int)
+	table.CurrentHand.ActedPlayers = make(map[int]bool)
+	// Mark all-in player as acted on this street
+	table.CurrentHand.ActedPlayers[1] = true
+
+	// On turn: seat 0 bets 5
+	table.CurrentHand.PlayerBets[0] = 5
+	table.Seats[0].Stack = 5
+	table.CurrentHand.CurrentBet = 5
+	table.CurrentHand.LastRaise = 5
+	table.CurrentHand.ActedPlayers[0] = true
+
+	// Seat 2 folds
+	table.CurrentHand.FoldedPlayers[2] = true
+	table.CurrentHand.ActedPlayers[2] = true
+
+	// Verify only seat 0 remains (all-in player 1 skipped, player 2 folded)
+	// IsBettingRoundComplete should handle this correctly
+	isComplete = table.CurrentHand.IsBettingRoundComplete(table.Seats)
+	if !isComplete {
+		t.Error("expected turn betting to be complete (only one player with chips left), got false")
+	}
+}
+
+// TestAllInBettingLoop_Integration_AllInPreflop_MultiStreets verifies all-in preflop
+// works across multiple postflop streets without action.
+func TestAllInBettingLoop_Integration_AllInPreflop_MultiStreets(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	// Set up 2 active players
+	token0 := "player-0"
+	token1 := "player-1"
+
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	// Start hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("expected no error starting hand, got %v", err)
+	}
+
+	// Initialize maps
+	if table.CurrentHand.ActedPlayers == nil {
+		table.CurrentHand.ActedPlayers = make(map[int]bool)
+	}
+	if table.CurrentHand.FoldedPlayers == nil {
+		table.CurrentHand.FoldedPlayers = make(map[int]bool)
+	}
+
+	// Preflop: heads-up dealer/SB (seat 0) goes all-in for 1000
+	table.CurrentHand.PlayerBets[0] = 1000
+	table.Seats[0].Stack = 0 // All-in
+	table.CurrentHand.CurrentBet = 1000
+	table.CurrentHand.LastRaise = 1000
+	table.CurrentHand.ActedPlayers[0] = true
+
+	// BB (seat 1) calls for 1000
+	table.CurrentHand.PlayerBets[1] = 1000
+	table.Seats[1].Stack = 0 // Also all-in
+	table.CurrentHand.ActedPlayers[1] = true
+	table.CurrentHand.BigBlindHasOption = false // BB has acted, option closed
+
+	// Verify preflop betting round complete
+	isComplete := table.CurrentHand.IsBettingRoundComplete(table.Seats)
+	if !isComplete {
+		t.Error("expected preflop betting to be complete with both all-in, got false")
+	}
+
+	// Advance through flop, turn, river without action
+	streets := []string{"preflop", "flop", "turn", "river"}
+	for i := 0; i < len(streets)-1; i++ {
+		// Verify current street
+		if table.CurrentHand.Street != streets[i] {
+			t.Errorf("expected street %s, got %s", streets[i], table.CurrentHand.Street)
+		}
+
+		// Advance street
+		table.CurrentHand.AdvanceStreet()
+
+		// Verify new street
+		if table.CurrentHand.Street != streets[i+1] {
+			t.Errorf("expected street to advance to %s, got %s", streets[i+1], table.CurrentHand.Street)
+		}
+
+		// On new street, mark all-in players as acted (they don't act in new streets)
+		table.CurrentHand.ActedPlayers[0] = true
+		table.CurrentHand.ActedPlayers[1] = true
+
+		// Verify betting round still complete (both all-in, no new action)
+		isComplete := table.CurrentHand.IsBettingRoundComplete(table.Seats)
+		if !isComplete {
+			t.Errorf("expected betting to remain complete on %s with both all-in, got false", streets[i+1])
+		}
+
+		// Verify GetValidActions still returns empty for all-in players
+		validActions0 := table.CurrentHand.GetValidActions(0, 0, table.Seats)
+		if len(validActions0) != 0 {
+			t.Errorf("%s: all-in seat 0 should have no valid actions, got %v", streets[i+1], validActions0)
+		}
+
+		validActions1 := table.CurrentHand.GetValidActions(1, 0, table.Seats)
+		if len(validActions1) != 0 {
+			t.Errorf("%s: all-in seat 1 should have no valid actions, got %v", streets[i+1], validActions1)
+		}
+	}
+
+	// Verify we reached river
+	if table.CurrentHand.Street != "river" {
+		t.Errorf("expected to reach river, got %s", table.CurrentHand.Street)
+	}
+}
+
+// TestAreAllActivePlayersAllIn_TwoPlayersAllIn tests when both players are all-in
+func TestAreAllActivePlayersAllIn_TwoPlayersAllIn(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	tokenA := "token-a"
+	tokenB := "token-b"
+
+	table.Seats[0].Token = &tokenA
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 0 // All-in
+
+	table.Seats[1].Token = &tokenB
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 0 // All-in
+
+	hand := &Hand{
+		FoldedPlayers: make(map[int]bool),
+	}
+
+	result := hand.AreAllActivePlayersAllIn(table.Seats)
+	if !result {
+		t.Error("expected true when both players are all-in")
+	}
+}
+
+// TestAreAllActivePlayersAllIn_OnePlayerHasChips tests when one player has chips remaining
+func TestAreAllActivePlayersAllIn_OnePlayerHasChips(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	tokenA := "token-a"
+	tokenB := "token-b"
+
+	table.Seats[0].Token = &tokenA
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 0 // All-in
+
+	table.Seats[1].Token = &tokenB
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 500 // Has chips
+
+	hand := &Hand{
+		FoldedPlayers: make(map[int]bool),
+	}
+
+	result := hand.AreAllActivePlayersAllIn(table.Seats)
+	if result {
+		t.Error("expected false when one player has chips remaining")
+	}
+}
+
+// TestAreAllActivePlayersAllIn_ThreePlayersAllIn tests with 3 players all-in
+func TestAreAllActivePlayersAllIn_ThreePlayersAllIn(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	tokenA := "token-a"
+	tokenB := "token-b"
+	tokenC := "token-c"
+
+	table.Seats[0].Token = &tokenA
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 0 // All-in
+
+	table.Seats[1].Token = &tokenB
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 0 // All-in
+
+	table.Seats[2].Token = &tokenC
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 0 // All-in
+
+	hand := &Hand{
+		FoldedPlayers: make(map[int]bool),
+	}
+
+	result := hand.AreAllActivePlayersAllIn(table.Seats)
+	if !result {
+		t.Error("expected true when all three players are all-in")
+	}
+}
+
+// TestAreAllActivePlayersAllIn_OneFolded tests with one player folded
+func TestAreAllActivePlayersAllIn_OneFolded(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	tokenA := "token-a"
+	tokenB := "token-b"
+	tokenC := "token-c"
+
+	table.Seats[0].Token = &tokenA
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 0 // All-in
+
+	table.Seats[1].Token = &tokenB
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 0 // All-in
+
+	table.Seats[2].Token = &tokenC
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 500 // Had chips but folded
+
+	hand := &Hand{
+		FoldedPlayers: map[int]bool{
+			2: true, // Seat 2 folded
+		},
+	}
+
+	result := hand.AreAllActivePlayersAllIn(table.Seats)
+	if !result {
+		t.Error("expected true when remaining active players (not folded) are all-in")
+	}
+}
+
+// TestAreAllActivePlayersAllIn_OnlyOnePlayer tests with only one player (should return false)
+func TestAreAllActivePlayersAllIn_OnlyOnePlayer(t *testing.T) {
+	table := NewTable("table-1", "Table 1", nil)
+
+	tokenA := "token-a"
+
+	table.Seats[0].Token = &tokenA
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 0 // All-in
+
+	hand := &Hand{
+		FoldedPlayers: make(map[int]bool),
+	}
+
+	result := hand.AreAllActivePlayersAllIn(table.Seats)
+	if result {
+		t.Error("expected false when only one player remains (need 2+ for all-in to matter)")
+	}
 }
