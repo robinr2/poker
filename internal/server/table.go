@@ -34,21 +34,28 @@ func NewDeck() []Card {
 
 // Hand represents the current game hand state
 type Hand struct {
-	DealerSeat        int            // Seat number of the dealer
-	SmallBlindSeat    int            // Seat number of the small blind
-	BigBlindSeat      int            // Seat number of the big blind
-	Pot               int            // Current pot amount
-	Deck              []Card         // Cards remaining in the deck
-	HoleCards         map[int][]Card // Hole cards for each seat (key = seat number, value = 2 cards)
-	BoardCards        []Card         // Community cards on the board (flop=3, turn=4, river=5)
-	CurrentActor      *int           // Seat number of the player whose turn it is (nil if no active action)
-	CurrentBet        int            // Current bet amount in this round (what players must match)
-	PlayerBets        map[int]int    // Amount each player has bet in current round (key = seat number)
-	FoldedPlayers     map[int]bool   // Players who have folded (key = seat number, value = true if folded)
-	ActedPlayers      map[int]bool   // Players who have acted this round (key = seat number, value = true if acted)
-	Street            string         // Current street: "preflop", "flop", "turn", "river"
-	LastRaise         int            // Amount of the last raise increment (used to compute min-raise)
-	BigBlindHasOption bool           // True when BB has the option to close preflop betting (preflop only)
+	DealerSeat         int            // Seat number of the dealer
+	SmallBlindSeat     int            // Seat number of the small blind
+	BigBlindSeat       int            // Seat number of the big blind
+	Pot                int            // Current pot amount
+	Deck               []Card         // Cards remaining in the deck
+	HoleCards          map[int][]Card // Hole cards for each seat (key = seat number, value = 2 cards)
+	BoardCards         []Card         // Community cards on the board (flop=3, turn=4, river=5)
+	CurrentActor       *int           // Seat number of the player whose turn it is (nil if no active action)
+	CurrentBet         int            // Current bet amount in this round (what players must match)
+	PlayerBets         map[int]int    // Amount each player has bet in current round (key = seat number)
+	FoldedPlayers      map[int]bool   // Players who have folded (key = seat number, value = true if folded)
+	ActedPlayers       map[int]bool   // Players who have acted this round (key = seat number, value = true if acted)
+	Street             string         // Current street: "preflop", "flop", "turn", "river"
+	LastRaise          int            // Amount of the last raise increment (used to compute min-raise)
+	BigBlindHasOption  bool           // True when BB has the option to close preflop betting (preflop only)
+	TotalContributions map[int]int    // Cumulative chip contributions per player across all streets (key = seat number, value = total chips contributed)
+}
+
+// SidePot represents a single pot in a multi-way all-in situation
+type SidePot struct {
+	Amount        int   // Amount of chips in this pot
+	EligibleSeats []int // Seat numbers eligible to win this pot
 }
 
 // Seat represents a seat at a poker table
@@ -747,20 +754,21 @@ func (t *Table) StartHand() error {
 
 	// Step 3: Create new hand and deck with action state initialized
 	hand := &Hand{
-		DealerSeat:        dealerSeat,
-		SmallBlindSeat:    sbSeat,
-		BigBlindSeat:      bbSeat,
-		Pot:               0,
-		Deck:              NewDeck(),
-		HoleCards:         make(map[int][]Card),
-		BoardCards:        []Card{},
-		Street:            "preflop",
-		CurrentBet:        bigBlind,
-		PlayerBets:        make(map[int]int),
-		FoldedPlayers:     make(map[int]bool),
-		ActedPlayers:      make(map[int]bool),
-		LastRaise:         bigBlind,
-		BigBlindHasOption: true,
+		DealerSeat:         dealerSeat,
+		SmallBlindSeat:     sbSeat,
+		BigBlindSeat:       bbSeat,
+		Pot:                0,
+		Deck:               NewDeck(),
+		HoleCards:          make(map[int][]Card),
+		BoardCards:         []Card{},
+		Street:             "preflop",
+		CurrentBet:         bigBlind,
+		PlayerBets:         make(map[int]int),
+		FoldedPlayers:      make(map[int]bool),
+		ActedPlayers:       make(map[int]bool),
+		LastRaise:          bigBlind,
+		BigBlindHasOption:  true,
+		TotalContributions: make(map[int]int),
 	}
 
 	// Step 4: Shuffle the deck
@@ -794,6 +802,10 @@ func (t *Table) StartHand() error {
 	// Update PlayerBets to track blinds posted (Pot will be filled when street advances)
 	hand.PlayerBets[sbSeat] = sbPosted
 	hand.PlayerBets[bbSeat] = bbPosted
+
+	// Track blind contributions in TotalContributions
+	hand.TotalContributions[sbSeat] = sbPosted
+	hand.TotalContributions[bbSeat] = bbPosted
 
 	// Step 6: Deal hole cards to all active players
 	err = hand.DealHoleCards(t.Seats)
@@ -1304,6 +1316,9 @@ func (h *Hand) ProcessAction(seatIndex int, action string, playerStack int, amou
 	if h.ActedPlayers == nil {
 		h.ActedPlayers = make(map[int]bool)
 	}
+	if h.TotalContributions == nil {
+		h.TotalContributions = make(map[int]int)
+	}
 
 	switch action {
 	case "fold":
@@ -1346,6 +1361,9 @@ func (h *Hand) ProcessAction(seatIndex int, action string, playerStack int, amou
 
 		// Update player's bet for this round (Pot will be filled when street advances)
 		h.PlayerBets[seatIndex] += chipsToBet
+
+		// Track contribution to TotalContributions (incremental amount being bet)
+		h.TotalContributions[seatIndex] += chipsToBet
 
 		// Mark player as acted
 		h.ActedPlayers[seatIndex] = true
@@ -1394,6 +1412,9 @@ func (h *Hand) ProcessAction(seatIndex int, action string, playerStack int, amou
 		// Update player's total bet for this round (Pot will be filled when street advances)
 		h.PlayerBets[seatIndex] = raiseAmount
 
+		// Track contribution to TotalContributions (incremental amount being bet)
+		h.TotalContributions[seatIndex] += chipsToBet
+
 		// Mark player as acted
 		h.ActedPlayers[seatIndex] = true
 
@@ -1422,6 +1443,9 @@ func (h *Hand) ProcessActionWithSeats(seatIndex int, action string, playerStack 
 	if h.ActedPlayers == nil {
 		h.ActedPlayers = make(map[int]bool)
 	}
+	if h.TotalContributions == nil {
+		h.TotalContributions = make(map[int]int)
+	}
 
 	switch action {
 	case "call":
@@ -1445,6 +1469,9 @@ func (h *Hand) ProcessActionWithSeats(seatIndex int, action string, playerStack 
 
 		// Update player's bet for this round (Pot will be filled when street advances)
 		h.PlayerBets[seatIndex] += chipsToBet
+
+		// Track contribution to TotalContributions (incremental amount being bet)
+		h.TotalContributions[seatIndex] += chipsToBet
 
 		// Mark player as acted
 		h.ActedPlayers[seatIndex] = true
@@ -1495,6 +1522,9 @@ func (h *Hand) ProcessActionWithSeats(seatIndex int, action string, playerStack 
 
 		// Update player's total bet for this round
 		h.PlayerBets[seatIndex] = raiseAmount
+
+		// Track contribution to TotalContributions (incremental amount being bet)
+		h.TotalContributions[seatIndex] += chipsToBet
 
 		// Mark player as acted
 		h.ActedPlayers[seatIndex] = true
@@ -1765,4 +1795,89 @@ func (t *Table) AdvanceToNextStreetWithBroadcast() error {
 	}
 
 	return nil
+}
+
+// CalculateSidePots converts contribution data into proper side pots
+// contributions: map of seat number to total chips contributed
+// foldedPlayers: map of seat number to whether they folded
+// Returns: slice of SidePot structs representing all pots
+func CalculateSidePots(contributions map[int]int, foldedPlayers map[int]bool) []SidePot {
+	if len(contributions) == 0 {
+		return []SidePot{}
+	}
+
+	// Create a list of unique contribution amounts (sorted ascending)
+	// We'll use this to build pot levels
+	contributionLevels := make(map[int]bool)
+	var levels []int
+	for _, amount := range contributions {
+		if amount > 0 && !contributionLevels[amount] {
+			contributionLevels[amount] = true
+			levels = append(levels, amount)
+		}
+	}
+
+	// Sort levels in ascending order
+	for i := 0; i < len(levels); i++ {
+		for j := i + 1; j < len(levels); j++ {
+			if levels[i] > levels[j] {
+				levels[i], levels[j] = levels[j], levels[i]
+			}
+		}
+	}
+
+	if len(levels) == 0 {
+		return []SidePot{}
+	}
+
+	// Build pots for each level
+	var pots []SidePot
+	previousLevel := 0
+
+	for _, currentLevel := range levels {
+		// Calculate how many players contributed at this level
+		playersAtThisLevel := 0
+		for _, amount := range contributions {
+			if amount >= currentLevel {
+				playersAtThisLevel++
+			}
+		}
+
+		if playersAtThisLevel == 0 {
+			continue
+		}
+
+		// Calculate pot amount for this level
+		// pot = (currentLevel - previousLevel) * playersAtThisLevel
+		potAmount := (currentLevel - previousLevel) * playersAtThisLevel
+
+		// Collect all eligible seats (contributors at this level and not folded)
+		var eligibleSeats []int
+		for seat, amount := range contributions {
+			if amount >= currentLevel && !foldedPlayers[seat] {
+				eligibleSeats = append(eligibleSeats, seat)
+			}
+		}
+
+		// Sort eligible seats for consistent ordering
+		for i := 0; i < len(eligibleSeats); i++ {
+			for j := i + 1; j < len(eligibleSeats); j++ {
+				if eligibleSeats[i] > eligibleSeats[j] {
+					eligibleSeats[i], eligibleSeats[j] = eligibleSeats[j], eligibleSeats[i]
+				}
+			}
+		}
+
+		// Only add pot if there are eligible seats
+		if len(eligibleSeats) > 0 {
+			pots = append(pots, SidePot{
+				Amount:        potAmount,
+				EligibleSeats: eligibleSeats,
+			})
+		}
+
+		previousLevel = currentLevel
+	}
+
+	return pots
 }

@@ -9908,3 +9908,1057 @@ func TestAreAllActivePlayersAllIn_ThreePlayersOneAllIn(t *testing.T) {
 		t.Errorf("Expected true when at least one player is all-in, got false")
 	}
 }
+
+// TestTotalContributions_InitializedOnStartHand verifies TotalContributions is initialized as empty map
+func TestTotalContributions_InitializedOnStartHand(t *testing.T) {
+	server := NewServer(slog.Default())
+	table := NewTable("table-1", "Test Table", server)
+
+	// Add 2 active players
+	token0 := "player-0"
+	token1 := "player-1"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	// Start the hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("StartHand failed: %v", err)
+	}
+
+	// Verify TotalContributions exists and is a map
+	if table.CurrentHand.TotalContributions == nil {
+		t.Errorf("Expected TotalContributions to be initialized, got nil")
+	}
+
+	// Verify blinds are tracked in TotalContributions at hand start
+	sbSeat := table.CurrentHand.SmallBlindSeat
+	bbSeat := table.CurrentHand.BigBlindSeat
+
+	if table.CurrentHand.TotalContributions[sbSeat] != 10 {
+		t.Errorf("Expected TotalContributions[%d] (SB) to be 10 (small blind), got %d", sbSeat, table.CurrentHand.TotalContributions[sbSeat])
+	}
+	if table.CurrentHand.TotalContributions[bbSeat] != 20 {
+		t.Errorf("Expected TotalContributions[%d] (BB) to be 20 (big blind), got %d", bbSeat, table.CurrentHand.TotalContributions[bbSeat])
+	}
+}
+
+// TestTotalContributions_TracksBlindPosting verifies blinds are tracked in TotalContributions after StartHand
+func TestTotalContributions_TracksBlindPosting(t *testing.T) {
+	server := NewServer(slog.Default())
+	table := NewTable("table-1", "Test Table", server)
+
+	// Add 3 active players
+	token0 := "player-0"
+	token1 := "player-1"
+	token2 := "player-2"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	table.Seats[2].Token = &token2
+	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
+
+	// Start the hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("StartHand failed: %v", err)
+	}
+
+	hand := table.CurrentHand
+	sbSeat := hand.SmallBlindSeat
+	bbSeat := hand.BigBlindSeat
+
+	// After StartHand, blinds should be posted to PlayerBets
+	// Small blind = 10, Big blind = 20
+	sbAmount := hand.PlayerBets[sbSeat]
+	bbAmount := hand.PlayerBets[bbSeat]
+
+	if sbAmount != 10 {
+		t.Errorf("Expected SB to post 10, got %d", sbAmount)
+	}
+	if bbAmount != 20 {
+		t.Errorf("Expected BB to post 20, got %d", bbAmount)
+	}
+
+	// TotalContributions should now include blind amounts
+	if hand.TotalContributions[sbSeat] != 10 {
+		t.Errorf("Expected TotalContributions[%d] (SB) to be 10 (blind), got %d", sbSeat, hand.TotalContributions[sbSeat])
+	}
+	if hand.TotalContributions[bbSeat] != 20 {
+		t.Errorf("Expected TotalContributions[%d] (BB) to be 20 (blind), got %d", bbSeat, hand.TotalContributions[bbSeat])
+	}
+}
+
+// TestTotalContributions_PersistsAcrossStreets verifies TotalContributions persists through streets
+func TestTotalContributions_PersistsAcrossStreets(t *testing.T) {
+	server := NewServer(slog.Default())
+	table := NewTable("table-1", "Test Table", server)
+
+	// Add 2 active players
+	token0 := "player-0"
+	token1 := "player-1"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	// Start the hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("StartHand failed: %v", err)
+	}
+
+	hand := table.CurrentHand
+
+	// Record initial street
+	initialStreet := hand.Street
+	if initialStreet != "preflop" {
+		t.Errorf("Expected initial street to be 'preflop', got '%s'", initialStreet)
+	}
+
+	// Verify TotalContributions exists after StartHand
+	if hand.TotalContributions == nil {
+		t.Errorf("Expected TotalContributions to be initialized, got nil")
+	}
+
+	// Add some values to TotalContributions to test persistence
+	hand.TotalContributions[0] = 100
+	hand.TotalContributions[1] = 50
+
+	// Verify values were added
+	if hand.TotalContributions[0] != 100 {
+		t.Errorf("Expected TotalContributions[0] to be 100, got %d", hand.TotalContributions[0])
+	}
+	if hand.TotalContributions[1] != 50 {
+		t.Errorf("Expected TotalContributions[1] to be 50, got %d", hand.TotalContributions[1])
+	}
+
+	// Advance to next street
+	hand.AdvanceStreet()
+
+	// Verify we're on next street
+	if hand.Street != "flop" {
+		t.Errorf("Expected street to advance to 'flop', got '%s'", hand.Street)
+	}
+
+	// Verify TotalContributions persisted
+	if hand.TotalContributions[0] != 100 {
+		t.Errorf("Expected TotalContributions[0] to persist with 100 after street advance, got %d", hand.TotalContributions[0])
+	}
+	if hand.TotalContributions[1] != 50 {
+		t.Errorf("Expected TotalContributions[1] to persist with 50 after street advance, got %d", hand.TotalContributions[1])
+	}
+}
+
+// TestTotalContributions_TracksCallAmount verifies that calls are tracked in TotalContributions
+func TestTotalContributions_TracksCallAmount(t *testing.T) {
+	server := NewServer(slog.Default())
+	table := NewTable("table-1", "Test Table", server)
+
+	// Add 2 active players
+	token0 := "player-0"
+	token1 := "player-1"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	// Start the hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("StartHand failed: %v", err)
+	}
+
+	hand := table.CurrentHand
+
+	// Blinds: SB (10) and BB (20)
+	sbSeat := hand.SmallBlindSeat
+
+	// First action: SB calls to match BB
+	// SB has 10 posted, needs to call 10 more
+	callAmount := hand.GetCallAmount(sbSeat)
+	expectedIncrementalChips := callAmount // This should be 10
+
+	chipsMoved, err := hand.ProcessAction(sbSeat, "call", 1000)
+	if err != nil {
+		t.Fatalf("Call action failed: %v", err)
+	}
+
+	if chipsMoved != expectedIncrementalChips {
+		t.Errorf("Expected chipsMoved to be %d for call, got %d", expectedIncrementalChips, chipsMoved)
+	}
+
+	// Verify TotalContributions was updated: includes blind (10) + call (10) = 20
+	expectedTotal := 10 + expectedIncrementalChips // 10 (blind) + 10 (call) = 20
+	if hand.TotalContributions[sbSeat] != expectedTotal {
+		t.Errorf("Expected TotalContributions[%d] to be %d (blind 10 + call 10), got %d", sbSeat, expectedTotal, hand.TotalContributions[sbSeat])
+	}
+}
+
+// TestTotalContributions_TracksRaiseAmount verifies that raises are tracked in TotalContributions
+func TestTotalContributions_TracksRaiseAmount(t *testing.T) {
+	server := NewServer(slog.Default())
+	table := NewTable("table-1", "Test Table", server)
+
+	// Add 2 active players
+	token0 := "player-0"
+	token1 := "player-1"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	// Start the hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("StartHand failed: %v", err)
+	}
+
+	hand := table.CurrentHand
+
+	// Blinds: SB (10) and BB (20)
+	sbSeat := hand.SmallBlindSeat
+
+	// First action: SB raises to 60 (incremental: 60 - 10 = 50)
+	raiseAmount := 60
+	expectedIncrementalChips := raiseAmount - hand.PlayerBets[sbSeat] // 60 - 10 = 50
+
+	chipsMoved, err := hand.ProcessAction(sbSeat, "raise", 1000, raiseAmount)
+	if err != nil {
+		t.Fatalf("Raise action failed: %v", err)
+	}
+
+	// Chips moved should be the incremental amount (50)
+	if chipsMoved != expectedIncrementalChips {
+		t.Errorf("Expected chipsMoved to be %d for raise, got %d", expectedIncrementalChips, chipsMoved)
+	}
+
+	// Verify TotalContributions was updated: includes blind (10) + raise amount (50) = 60
+	expectedTotal := 10 + expectedIncrementalChips // 10 (blind) + 50 (raise increment) = 60
+	if hand.TotalContributions[sbSeat] != expectedTotal {
+		t.Errorf("Expected TotalContributions[%d] to be %d (blind 10 + raise increment 50), got %d", sbSeat, expectedTotal, hand.TotalContributions[sbSeat])
+	}
+}
+
+// TestTotalContributions_TracksAllInAmount verifies that all-ins are tracked in TotalContributions
+func TestTotalContributions_TracksAllInAmount(t *testing.T) {
+	server := NewServer(slog.Default())
+	table := NewTable("table-1", "Test Table", server)
+
+	// Add 2 active players with small stacks
+	token0 := "player-0"
+	token1 := "player-1"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 50 // Small stack for SB
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	// Start the hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("StartHand failed: %v", err)
+	}
+
+	hand := table.CurrentHand
+
+	// Blinds: SB (10) and BB (20)
+	sbSeat := hand.SmallBlindSeat
+
+	// First action: SB all-ins by raising to their remaining 50
+	// They have 10 posted, so 40 remaining in stack
+	// But they're all-in with 50 total bet
+	expectedIncrementalChips := 50 - hand.PlayerBets[sbSeat] // 50 - 10 = 40
+
+	chipsMoved, err := hand.ProcessAction(sbSeat, "raise", 40, 50)
+	if err != nil {
+		t.Fatalf("All-in raise action failed: %v", err)
+	}
+
+	// Chips moved should be 40 (remaining in stack)
+	if chipsMoved != expectedIncrementalChips {
+		t.Errorf("Expected chipsMoved to be %d for all-in, got %d", expectedIncrementalChips, chipsMoved)
+	}
+
+	// Verify TotalContributions was updated: includes blind (10) + all-in raise (40) = 50
+	expectedTotal := 10 + expectedIncrementalChips // 10 (blind) + 40 (all-in increment) = 50
+	if hand.TotalContributions[sbSeat] != expectedTotal {
+		t.Errorf("Expected TotalContributions[%d] to be %d (blind 10 + all-in 40), got %d", sbSeat, expectedTotal, hand.TotalContributions[sbSeat])
+	}
+}
+
+// TestTotalContributions_AccumulatesAcrossStreets verifies contributions accumulate across streets
+func TestTotalContributions_AccumulatesAcrossStreets(t *testing.T) {
+	server := NewServer(slog.Default())
+	table := NewTable("table-1", "Test Table", server)
+
+	// Add 2 active players
+	token0 := "player-0"
+	token1 := "player-1"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	// Start the hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("StartHand failed: %v", err)
+	}
+
+	hand := table.CurrentHand
+	sbSeat := hand.SmallBlindSeat
+
+	// Preflop action: SB calls to match BB (incremental: 10)
+	_, err = hand.ProcessAction(sbSeat, "call", 1000)
+	if err != nil {
+		t.Fatalf("Preflop call failed: %v", err)
+	}
+
+	// After SB calls: blind (10) + call (10) = 20
+	preflopContribution := hand.TotalContributions[sbSeat]
+	expectedPreflopTotal := 20 // 10 (blind) + 10 (call)
+	if preflopContribution != expectedPreflopTotal {
+		t.Errorf("Expected preflop contribution to be %d (blind 10 + call 10), got %d", expectedPreflopTotal, preflopContribution)
+	}
+
+	// Advance to flop
+	hand.AdvanceStreet()
+
+	// Flop action: Reset street-level tracking (PlayerBets, ActedPlayers, CurrentBet)
+	// but TotalContributions persists
+	hand.PlayerBets = make(map[int]int)
+	hand.ActedPlayers = make(map[int]bool)
+	hand.CurrentBet = 0
+
+	// SB checks (0 bet)
+	_, err = hand.ProcessAction(sbSeat, "check", 1000)
+	if err != nil {
+		t.Fatalf("Flop check failed: %v", err)
+	}
+
+	// Verify TotalContributions still has preflop contribution
+	afterCheck := hand.TotalContributions[sbSeat]
+	if afterCheck != preflopContribution {
+		t.Errorf("Expected TotalContributions to remain %d after check, got %d", preflopContribution, afterCheck)
+	}
+
+	// Flop: SB bets 50
+	_, err = hand.ProcessAction(sbSeat, "raise", 1000, 50)
+	if err != nil {
+		t.Fatalf("Flop bet failed: %v", err)
+	}
+
+	// Verify TotalContributions now includes both preflop and flop contributions
+	totalExpected := preflopContribution + 50 // 20 (preflop: blind 10 + call 10) + 50 (flop)
+	totalActual := hand.TotalContributions[sbSeat]
+	if totalActual != totalExpected {
+		t.Errorf("Expected TotalContributions to be %d (preflop %d + flop 50), got %d", totalExpected, preflopContribution, totalActual)
+	}
+}
+
+// TestTotalContributions_HandlesMultipleRaisesPerPlayer verifies multiple raises same street accumulate
+func TestTotalContributions_HandlesMultipleRaisesPerPlayer(t *testing.T) {
+	server := NewServer(slog.Default())
+	table := NewTable("table-1", "Test Table", server)
+
+	// Add 2 active players
+	token0 := "player-0"
+	token1 := "player-1"
+	table.Seats[0].Token = &token0
+	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
+
+	table.Seats[1].Token = &token1
+	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
+
+	// Start the hand
+	err := table.StartHand()
+	if err != nil {
+		t.Fatalf("StartHand failed: %v", err)
+	}
+
+	hand := table.CurrentHand
+	sbSeat := hand.SmallBlindSeat
+	bbSeat := hand.BigBlindSeat
+
+	// Preflop sequence:
+	// 1. SB raises to 60 (has 10 posted, so incremental 50)
+	_, err = hand.ProcessAction(sbSeat, "raise", 1000, 60)
+	if err != nil {
+		t.Fatalf("First raise failed: %v", err)
+	}
+
+	contrib1 := hand.TotalContributions[sbSeat]
+	expectedAfterFirstRaise := 10 + 50 // 10 (blind) + 50 (raise increment) = 60
+	if contrib1 != expectedAfterFirstRaise {
+		t.Errorf("Expected TotalContributions[%d] to be %d (blind 10 + raise 50) after first raise, got %d", sbSeat, expectedAfterFirstRaise, contrib1)
+	}
+
+	// 2. BB re-raises to 150 (has 20 posted, so incremental 130)
+	_, err = hand.ProcessAction(bbSeat, "raise", 1000, 150)
+	if err != nil {
+		t.Fatalf("BB re-raise failed: %v", err)
+	}
+
+	contribBB := hand.TotalContributions[bbSeat]
+	expectedBB := 20 + 130 // 20 (blind) + 130 (raise increment) = 150
+	if contribBB != expectedBB {
+		t.Errorf("Expected TotalContributions[%d] to be %d (blind 20 + raise 130) after BB raise, got %d", bbSeat, expectedBB, contribBB)
+	}
+
+	// 3. SB re-raises to 300 (has 60 posted from previous raise, so incremental 240)
+	_, err = hand.ProcessAction(sbSeat, "raise", 1000, 300)
+	if err != nil {
+		t.Fatalf("Second raise failed: %v", err)
+	}
+
+	// Verify TotalContributions updated with incremental amount (300 - 60 = 240 more)
+	contrib2 := hand.TotalContributions[sbSeat]
+	expectedAfterSecondRaise := expectedAfterFirstRaise + 240 // 60 + 240 = 300
+	if contrib2 != expectedAfterSecondRaise {
+		t.Errorf("Expected TotalContributions[%d] to be %d (60 + 240) after second raise, got %d", sbSeat, expectedAfterSecondRaise, contrib2)
+	}
+}
+
+// ============================================================================
+// Tests for CalculateSidePots function (Phase 3 of side pot distribution fix)
+// ============================================================================
+
+// Test2PlayerEqualStacks: Two players with equal contribution
+func TestCalculateSidePots2PlayerEqualStacks(t *testing.T) {
+	contributions := map[int]int{
+		0: 100,
+		1: 100,
+	}
+	folded := map[int]bool{
+		0: false,
+		1: false,
+	}
+
+	pots := CalculateSidePots(contributions, folded)
+
+	if len(pots) != 1 {
+		t.Fatalf("Expected 1 pot, got %d", len(pots))
+	}
+
+	if pots[0].Amount != 200 {
+		t.Errorf("Expected pot amount 200, got %d", pots[0].Amount)
+	}
+
+	expectedSeats := []int{0, 1}
+	if len(pots[0].EligibleSeats) != len(expectedSeats) {
+		t.Errorf("Expected %d eligible seats, got %d", len(expectedSeats), len(pots[0].EligibleSeats))
+	}
+
+	for i, seat := range pots[0].EligibleSeats {
+		if seat != expectedSeats[i] {
+			t.Errorf("Expected eligible seat %d at index %d, got %d", expectedSeats[i], i, seat)
+		}
+	}
+}
+
+// Test2PlayerOneShortStack: Two players with unequal contribution (one all-in with less)
+func TestCalculateSidePots2PlayerOneShortStack(t *testing.T) {
+	contributions := map[int]int{
+		0: 50,
+		1: 200,
+	}
+	folded := map[int]bool{
+		0: false,
+		1: false,
+	}
+
+	pots := CalculateSidePots(contributions, folded)
+
+	if len(pots) != 2 {
+		t.Fatalf("Expected 2 pots, got %d", len(pots))
+	}
+
+	// Pot 1: 50 * 2 = 100 (both players eligible)
+	if pots[0].Amount != 100 {
+		t.Errorf("Expected pot[0] amount 100, got %d", pots[0].Amount)
+	}
+	if len(pots[0].EligibleSeats) != 2 {
+		t.Errorf("Expected pot[0] 2 eligible seats, got %d", len(pots[0].EligibleSeats))
+	}
+
+	// Pot 2: (200 - 50) * 1 = 150 (only player 1 eligible)
+	if pots[1].Amount != 150 {
+		t.Errorf("Expected pot[1] amount 150, got %d", pots[1].Amount)
+	}
+	if len(pots[1].EligibleSeats) != 1 || pots[1].EligibleSeats[0] != 1 {
+		t.Errorf("Expected pot[1] eligible seat [1], got %v", pots[1].EligibleSeats)
+	}
+}
+
+// Test3PlayerOneShortStack: Three players, one with minimal contribution
+func TestCalculateSidePots3PlayerOneShortStack(t *testing.T) {
+	contributions := map[int]int{
+		0: 30,
+		1: 100,
+		2: 100,
+	}
+	folded := map[int]bool{
+		0: false,
+		1: false,
+		2: false,
+	}
+
+	pots := CalculateSidePots(contributions, folded)
+
+	if len(pots) != 2 {
+		t.Fatalf("Expected 2 pots, got %d", len(pots))
+	}
+
+	// Pot 1: 30 * 3 = 90 (all three eligible)
+	if pots[0].Amount != 90 {
+		t.Errorf("Expected pot[0] amount 90, got %d", pots[0].Amount)
+	}
+	if len(pots[0].EligibleSeats) != 3 {
+		t.Errorf("Expected pot[0] 3 eligible seats, got %d", len(pots[0].EligibleSeats))
+	}
+
+	// Pot 2: (100 - 30) * 2 = 140 (players 1 and 2 eligible)
+	if pots[1].Amount != 140 {
+		t.Errorf("Expected pot[1] amount 140, got %d", pots[1].Amount)
+	}
+	if len(pots[1].EligibleSeats) != 2 {
+		t.Errorf("Expected pot[1] 2 eligible seats, got %d", len(pots[1].EligibleSeats))
+	}
+}
+
+// Test3PlayerTwoShortStacks: Three players with two all-ins at different levels
+func TestCalculateSidePots3PlayerTwoShortStacks(t *testing.T) {
+	contributions := map[int]int{
+		0: 50,
+		1: 150,
+		2: 300,
+	}
+	folded := map[int]bool{
+		0: false,
+		1: false,
+		2: false,
+	}
+
+	pots := CalculateSidePots(contributions, folded)
+
+	if len(pots) != 3 {
+		t.Fatalf("Expected 3 pots, got %d", len(pots))
+	}
+
+	// Pot 1: 50 * 3 = 150 (all three eligible)
+	if pots[0].Amount != 150 {
+		t.Errorf("Expected pot[0] amount 150, got %d", pots[0].Amount)
+	}
+	if len(pots[0].EligibleSeats) != 3 {
+		t.Errorf("Expected pot[0] 3 eligible seats, got %d", len(pots[0].EligibleSeats))
+	}
+
+	// Pot 2: (150 - 50) * 2 = 200 (players 1 and 2 eligible)
+	if pots[1].Amount != 200 {
+		t.Errorf("Expected pot[1] amount 200, got %d", pots[1].Amount)
+	}
+	if len(pots[1].EligibleSeats) != 2 {
+		t.Errorf("Expected pot[1] 2 eligible seats, got %d", len(pots[1].EligibleSeats))
+	}
+
+	// Pot 3: (300 - 150) * 1 = 150 (only player 2 eligible)
+	if pots[2].Amount != 150 {
+		t.Errorf("Expected pot[2] amount 150, got %d", pots[2].Amount)
+	}
+	if len(pots[2].EligibleSeats) != 1 || pots[2].EligibleSeats[0] != 2 {
+		t.Errorf("Expected pot[2] eligible seat [2], got %v", pots[2].EligibleSeats)
+	}
+}
+
+// Test3PlayerOnePlayerFolds: Three players with one folding
+func TestCalculateSidePots3PlayerOnePlayerFolds(t *testing.T) {
+	contributions := map[int]int{
+		0: 100,
+		1: 100,
+		2: 100,
+	}
+	folded := map[int]bool{
+		0: true, // Player 0 folded
+		1: false,
+		2: false,
+	}
+
+	pots := CalculateSidePots(contributions, folded)
+
+	if len(pots) != 1 {
+		t.Fatalf("Expected 1 pot, got %d", len(pots))
+	}
+
+	// Total pot: 300, but only players 1 and 2 are eligible
+	if pots[0].Amount != 300 {
+		t.Errorf("Expected pot amount 300, got %d", pots[0].Amount)
+	}
+	if len(pots[0].EligibleSeats) != 2 {
+		t.Errorf("Expected 2 eligible seats, got %d", len(pots[0].EligibleSeats))
+	}
+
+	// Should only include seats 1 and 2
+	for _, seat := range pots[0].EligibleSeats {
+		if seat != 1 && seat != 2 {
+			t.Errorf("Expected only seats 1 and 2, got %d", seat)
+		}
+	}
+}
+
+// Test4PlayerMultipleAllIns: Four players with multiple all-ins at different levels
+func TestCalculateSidePots4PlayerMultipleAllIns(t *testing.T) {
+	contributions := map[int]int{
+		0: 50,
+		1: 100,
+		2: 200,
+		3: 300,
+	}
+	folded := map[int]bool{
+		0: false,
+		1: false,
+		2: false,
+		3: false,
+	}
+
+	pots := CalculateSidePots(contributions, folded)
+
+	if len(pots) != 4 {
+		t.Fatalf("Expected 4 pots, got %d", len(pots))
+	}
+
+	// Pot 1: 50 * 4 = 200 (all eligible)
+	if pots[0].Amount != 200 {
+		t.Errorf("Expected pot[0] amount 200, got %d", pots[0].Amount)
+	}
+	if len(pots[0].EligibleSeats) != 4 {
+		t.Errorf("Expected pot[0] 4 eligible seats, got %d", len(pots[0].EligibleSeats))
+	}
+
+	// Pot 2: (100 - 50) * 3 = 150 (players 1, 2, 3)
+	if pots[1].Amount != 150 {
+		t.Errorf("Expected pot[1] amount 150, got %d", pots[1].Amount)
+	}
+	if len(pots[1].EligibleSeats) != 3 {
+		t.Errorf("Expected pot[1] 3 eligible seats, got %d", len(pots[1].EligibleSeats))
+	}
+
+	// Pot 3: (200 - 100) * 2 = 200 (players 2, 3)
+	if pots[2].Amount != 200 {
+		t.Errorf("Expected pot[2] amount 200, got %d", pots[2].Amount)
+	}
+	if len(pots[2].EligibleSeats) != 2 {
+		t.Errorf("Expected pot[2] 2 eligible seats, got %d", len(pots[2].EligibleSeats))
+	}
+
+	// Pot 4: (300 - 200) * 1 = 100 (player 3 only)
+	if pots[3].Amount != 100 {
+		t.Errorf("Expected pot[3] amount 100, got %d", pots[3].Amount)
+	}
+	if len(pots[3].EligibleSeats) != 1 || pots[3].EligibleSeats[0] != 3 {
+		t.Errorf("Expected pot[3] eligible seat [3], got %v", pots[3].EligibleSeats)
+	}
+}
+
+// Test4PlayerWithFolds: Four players with some folding
+func TestCalculateSidePots4PlayerWithFolds(t *testing.T) {
+	contributions := map[int]int{
+		0: 100,
+		1: 200,
+		2: 200,
+		3: 100,
+	}
+	folded := map[int]bool{
+		0: true, // Folded
+		1: false,
+		2: false,
+		3: true, // Folded
+	}
+
+	pots := CalculateSidePots(contributions, folded)
+
+	if len(pots) != 2 {
+		t.Fatalf("Expected 2 pots, got %d", len(pots))
+	}
+
+	// Pot 1: 100 * 4 = 400 (all contributed, but only 1 and 2 eligible)
+	if pots[0].Amount != 400 {
+		t.Errorf("Expected pot[0] amount 400, got %d", pots[0].Amount)
+	}
+	if len(pots[0].EligibleSeats) != 2 {
+		t.Errorf("Expected pot[0] 2 eligible seats, got %d", len(pots[0].EligibleSeats))
+	}
+
+	// Pot 2: (200 - 100) * 2 = 200 (only seats 1 and 2 eligible)
+	if pots[1].Amount != 200 {
+		t.Errorf("Expected pot[1] amount 200, got %d", pots[1].Amount)
+	}
+	if len(pots[1].EligibleSeats) != 2 {
+		t.Errorf("Expected pot[1] 2 eligible seats, got %d", len(pots[1].EligibleSeats))
+	}
+}
+
+// Test4PlayerComplexScenario: Four players with complex contribution and fold pattern
+func TestCalculateSidePots4PlayerComplexScenario(t *testing.T) {
+	contributions := map[int]int{
+		0: 75,
+		1: 300,
+		2: 150,
+		3: 300,
+	}
+	folded := map[int]bool{
+		0: false,
+		1: true, // Folded
+		2: false,
+		3: false,
+	}
+
+	pots := CalculateSidePots(contributions, folded)
+
+	if len(pots) != 3 {
+		t.Fatalf("Expected 3 pots, got %d", len(pots))
+	}
+
+	// Pot 1: 75 * 4 = 300 (all contributed, but only 0, 2, 3 eligible)
+	if pots[0].Amount != 300 {
+		t.Errorf("Expected pot[0] amount 300, got %d", pots[0].Amount)
+	}
+	if len(pots[0].EligibleSeats) != 3 {
+		t.Errorf("Expected pot[0] 3 eligible seats, got %d", len(pots[0].EligibleSeats))
+	}
+
+	// Pot 2: (150 - 75) * 3 = 225 (seats 1, 2, 3 contributed, but 2, 3 eligible)
+	if pots[1].Amount != 225 {
+		t.Errorf("Expected pot[1] amount 225, got %d", pots[1].Amount)
+	}
+	if len(pots[1].EligibleSeats) != 2 {
+		t.Errorf("Expected pot[1] 2 eligible seats, got %d", len(pots[1].EligibleSeats))
+	}
+
+	// Pot 3: (300 - 150) * 2 = 300 (seats 1 and 3 eligible, but 1 folded, so only 3)
+	if pots[2].Amount != 300 {
+		t.Errorf("Expected pot[2] amount 300, got %d", pots[2].Amount)
+	}
+	if len(pots[2].EligibleSeats) != 1 || pots[2].EligibleSeats[0] != 3 {
+		t.Errorf("Expected pot[2] eligible seat [3], got %v", pots[2].EligibleSeats)
+	}
+}
+
+// Test5PlayerLadderAllIns: Five players with ladder-like contributions
+func TestCalculateSidePots5PlayerLadderAllIns(t *testing.T) {
+	contributions := map[int]int{
+		0: 100,
+		1: 200,
+		2: 300,
+		3: 400,
+		4: 500,
+	}
+	folded := map[int]bool{
+		0: false,
+		1: false,
+		2: false,
+		3: false,
+		4: false,
+	}
+
+	pots := CalculateSidePots(contributions, folded)
+
+	if len(pots) != 5 {
+		t.Fatalf("Expected 5 pots, got %d", len(pots))
+	}
+
+	// Pot 1: 100 * 5 = 500
+	if pots[0].Amount != 500 {
+		t.Errorf("Expected pot[0] amount 500, got %d", pots[0].Amount)
+	}
+	if len(pots[0].EligibleSeats) != 5 {
+		t.Errorf("Expected pot[0] 5 eligible seats, got %d", len(pots[0].EligibleSeats))
+	}
+
+	// Pot 2: (200 - 100) * 4 = 400
+	if pots[1].Amount != 400 {
+		t.Errorf("Expected pot[1] amount 400, got %d", pots[1].Amount)
+	}
+	if len(pots[1].EligibleSeats) != 4 {
+		t.Errorf("Expected pot[1] 4 eligible seats, got %d", len(pots[1].EligibleSeats))
+	}
+
+	// Pot 3: (300 - 200) * 3 = 300
+	if pots[2].Amount != 300 {
+		t.Errorf("Expected pot[2] amount 300, got %d", pots[2].Amount)
+	}
+	if len(pots[2].EligibleSeats) != 3 {
+		t.Errorf("Expected pot[2] 3 eligible seats, got %d", len(pots[2].EligibleSeats))
+	}
+
+	// Pot 4: (400 - 300) * 2 = 200
+	if pots[3].Amount != 200 {
+		t.Errorf("Expected pot[3] amount 200, got %d", pots[3].Amount)
+	}
+	if len(pots[3].EligibleSeats) != 2 {
+		t.Errorf("Expected pot[3] 2 eligible seats, got %d", len(pots[3].EligibleSeats))
+	}
+
+	// Pot 5: (500 - 400) * 1 = 100
+	if pots[4].Amount != 100 {
+		t.Errorf("Expected pot[4] amount 100, got %d", pots[4].Amount)
+	}
+	if len(pots[4].EligibleSeats) != 1 || pots[4].EligibleSeats[0] != 4 {
+		t.Errorf("Expected pot[4] eligible seat [4], got %v", pots[4].EligibleSeats)
+	}
+}
+
+// Test5PlayerWithMultipleFolds: Five players with multiple folds
+func TestCalculateSidePots5PlayerWithMultipleFolds(t *testing.T) {
+	contributions := map[int]int{
+		0: 100,
+		1: 200,
+		2: 200,
+		3: 200,
+		4: 100,
+	}
+	folded := map[int]bool{
+		0: true,
+		1: true,
+		2: false,
+		3: false,
+		4: true,
+	}
+
+	pots := CalculateSidePots(contributions, folded)
+
+	if len(pots) != 2 {
+		t.Fatalf("Expected 2 pots, got %d", len(pots))
+	}
+
+	// Pot 1: 100 * 5 = 500 (only seats 2 and 3 eligible)
+	if pots[0].Amount != 500 {
+		t.Errorf("Expected pot[0] amount 500, got %d", pots[0].Amount)
+	}
+	if len(pots[0].EligibleSeats) != 2 {
+		t.Errorf("Expected pot[0] 2 eligible seats, got %d", len(pots[0].EligibleSeats))
+	}
+
+	// Pot 2: (200 - 100) * 3 = 300 (only seats 2 and 3 eligible)
+	if pots[1].Amount != 300 {
+		t.Errorf("Expected pot[1] amount 300, got %d", pots[1].Amount)
+	}
+	if len(pots[1].EligibleSeats) != 2 {
+		t.Errorf("Expected pot[1] 2 eligible seats, got %d", len(pots[1].EligibleSeats))
+	}
+}
+
+// Test6PlayerComplexMultiWay: Six players with complex contribution pattern
+func TestCalculateSidePots6PlayerComplexMultiWay(t *testing.T) {
+	contributions := map[int]int{
+		0: 50,
+		1: 150,
+		2: 100,
+		3: 200,
+		4: 150,
+		5: 200,
+	}
+	folded := map[int]bool{
+		0: false,
+		1: true,
+		2: false,
+		3: false,
+		4: false,
+		5: false,
+	}
+
+	pots := CalculateSidePots(contributions, folded)
+
+	if len(pots) != 4 {
+		t.Fatalf("Expected 4 pots, got %d", len(pots))
+	}
+
+	// Pot 1: 50 * 6 = 300
+	if pots[0].Amount != 300 {
+		t.Errorf("Expected pot[0] amount 300, got %d", pots[0].Amount)
+	}
+	if len(pots[0].EligibleSeats) != 5 {
+		t.Errorf("Expected pot[0] 5 eligible seats, got %d", len(pots[0].EligibleSeats))
+	}
+
+	// Pot 2: (100 - 50) * 5 = 250 (seats 1,2,3,4,5 contributed at 100+, but 1 folded, so 4 eligible)
+	if pots[1].Amount != 250 {
+		t.Errorf("Expected pot[1] amount 250, got %d", pots[1].Amount)
+	}
+	if len(pots[1].EligibleSeats) != 4 {
+		t.Errorf("Expected pot[1] 4 eligible seats, got %d", len(pots[1].EligibleSeats))
+	}
+
+	// Pot 3: (150 - 100) * 4 = 200 (seats 1, 3, 4, 5 contributed at 150+, but 1 folded, so 3 eligible)
+	if pots[2].Amount != 200 {
+		t.Errorf("Expected pot[2] amount 200, got %d", pots[2].Amount)
+	}
+	if len(pots[2].EligibleSeats) != 3 {
+		t.Errorf("Expected pot[2] 3 eligible seats, got %d", len(pots[2].EligibleSeats))
+	}
+
+	// Pot 4: (200 - 150) * 2 = 100 (seats 3, 5 contributed at 200+, both not folded)
+	if pots[3].Amount != 100 {
+		t.Errorf("Expected pot[3] amount 100, got %d", pots[3].Amount)
+	}
+	if len(pots[3].EligibleSeats) != 2 {
+		t.Errorf("Expected pot[3] 2 eligible seats, got %d", len(pots[3].EligibleSeats))
+	}
+}
+
+// Test6PlayerWhaleScenario: One whale with massive stack vs shorter stacks
+func TestCalculateSidePots6PlayerWhaleScenario(t *testing.T) {
+	contributions := map[int]int{
+		0: 50,
+		1: 50,
+		2: 50,
+		3: 50,
+		4: 50,
+		5: 1000, // Whale
+	}
+	folded := map[int]bool{
+		0: false,
+		1: false,
+		2: false,
+		3: false,
+		4: false,
+		5: false,
+	}
+
+	pots := CalculateSidePots(contributions, folded)
+
+	if len(pots) != 2 {
+		t.Fatalf("Expected 2 pots, got %d", len(pots))
+	}
+
+	// Pot 1: 50 * 6 = 300 (all eligible)
+	if pots[0].Amount != 300 {
+		t.Errorf("Expected pot[0] amount 300, got %d", pots[0].Amount)
+	}
+	if len(pots[0].EligibleSeats) != 6 {
+		t.Errorf("Expected pot[0] 6 eligible seats, got %d", len(pots[0].EligibleSeats))
+	}
+
+	// Pot 2: (1000 - 50) * 1 = 950 (only whale eligible)
+	if pots[1].Amount != 950 {
+		t.Errorf("Expected pot[1] amount 950, got %d", pots[1].Amount)
+	}
+	if len(pots[1].EligibleSeats) != 1 || pots[1].EligibleSeats[0] != 5 {
+		t.Errorf("Expected pot[1] eligible seat [5], got %v", pots[1].EligibleSeats)
+	}
+}
+
+// TestCalculateSidePotsAllEqualContributions: All players with equal contributions
+func TestCalculateSidePotsAllEqualContributions(t *testing.T) {
+	contributions := map[int]int{
+		0: 100,
+		1: 100,
+		2: 100,
+		3: 100,
+		4: 100,
+		5: 100,
+	}
+	folded := map[int]bool{
+		0: false,
+		1: false,
+		2: false,
+		3: false,
+		4: false,
+		5: false,
+	}
+
+	pots := CalculateSidePots(contributions, folded)
+
+	if len(pots) != 1 {
+		t.Fatalf("Expected 1 pot, got %d", len(pots))
+	}
+
+	if pots[0].Amount != 600 {
+		t.Errorf("Expected pot amount 600, got %d", pots[0].Amount)
+	}
+
+	if len(pots[0].EligibleSeats) != 6 {
+		t.Errorf("Expected 6 eligible seats, got %d", len(pots[0].EligibleSeats))
+	}
+}
+
+// TestCalculateSidePotsAllFoldedExceptOne: Only one player didn't fold
+func TestCalculateSidePotsAllFoldedExceptOne(t *testing.T) {
+	contributions := map[int]int{
+		0: 100,
+		1: 100,
+		2: 100,
+		3: 100,
+		4: 100,
+		5: 100,
+	}
+	folded := map[int]bool{
+		0: true,
+		1: true,
+		2: true,
+		3: true,
+		4: true,
+		5: false, // Only player 5 didn't fold
+	}
+
+	pots := CalculateSidePots(contributions, folded)
+
+	if len(pots) != 1 {
+		t.Fatalf("Expected 1 pot, got %d", len(pots))
+	}
+
+	if pots[0].Amount != 600 {
+		t.Errorf("Expected pot amount 600, got %d", pots[0].Amount)
+	}
+
+	if len(pots[0].EligibleSeats) != 1 || pots[0].EligibleSeats[0] != 5 {
+		t.Errorf("Expected pot eligible seat [5], got %v", pots[0].EligibleSeats)
+	}
+}
+
+// TestCalculateSidePotsZeroContributions: No one contributed (edge case)
+func TestCalculateSidePotsZeroContributions(t *testing.T) {
+	contributions := map[int]int{
+		0: 0,
+		1: 0,
+		2: 0,
+	}
+	folded := map[int]bool{
+		0: false,
+		1: false,
+		2: false,
+	}
+
+	pots := CalculateSidePots(contributions, folded)
+
+	if len(pots) != 0 {
+		t.Fatalf("Expected 0 pots, got %d", len(pots))
+	}
+}
