@@ -9714,6 +9714,8 @@ func TestAreAllActivePlayersAllIn_TwoPlayersAllIn(t *testing.T) {
 }
 
 // TestAreAllActivePlayersAllIn_OnePlayerHasChips tests when one player has chips remaining
+// This should return TRUE because at least one player is all-in (stack = 0),
+// which means no further betting is possible and remaining streets should auto-deal.
 func TestAreAllActivePlayersAllIn_OnePlayerHasChips(t *testing.T) {
 	table := NewTable("table-1", "Table 1", nil)
 
@@ -9733,8 +9735,8 @@ func TestAreAllActivePlayersAllIn_OnePlayerHasChips(t *testing.T) {
 	}
 
 	result := hand.AreAllActivePlayersAllIn(table.Seats)
-	if result {
-		t.Error("expected false when one player has chips remaining")
+	if !result {
+		t.Error("expected true when at least one player is all-in (no further betting possible)")
 	}
 }
 
@@ -9817,5 +9819,92 @@ func TestAreAllActivePlayersAllIn_OnlyOnePlayer(t *testing.T) {
 	result := hand.AreAllActivePlayersAllIn(table.Seats)
 	if result {
 		t.Error("expected false when only one player remains (need 2+ for all-in to matter)")
+	}
+}
+
+// TestAreAllActivePlayersAllIn_OnePlayerAllIn tests the scenario where
+// Player B (500) goes all-in, Player A (1000) calls.
+// After the call, Player A has 500 left, Player B has 0.
+// This should return TRUE because at least one player is all-in.
+func TestAreAllActivePlayersAllIn_OnePlayerAllIn(t *testing.T) {
+	hand := &Hand{
+		FoldedPlayers: make(map[int]bool),
+	}
+
+	seats := [6]Seat{
+		{Status: "active", Stack: 500}, // Player A called 500, has 500 left
+		{Status: "active", Stack: 0},   // Player B went all-in, has 0 left
+		{Status: "empty"},
+		{Status: "empty"},
+		{Status: "empty"},
+		{Status: "empty"},
+	}
+
+	result := hand.AreAllActivePlayersAllIn(seats)
+	if !result {
+		t.Errorf("Expected true when one player is all-in and betting is complete, got false")
+	}
+}
+
+// TestAreAllActivePlayersAllIn_BothAllIn tests when both players go all-in
+func TestAreAllActivePlayersAllIn_BothAllIn(t *testing.T) {
+	hand := &Hand{
+		FoldedPlayers: make(map[int]bool),
+	}
+
+	seats := [6]Seat{
+		{Status: "active", Stack: 0}, // Both all-in
+		{Status: "active", Stack: 0},
+		{Status: "empty"},
+		{Status: "empty"},
+		{Status: "empty"},
+		{Status: "empty"},
+	}
+
+	result := hand.AreAllActivePlayersAllIn(seats)
+	if !result {
+		t.Errorf("Expected true when both players are all-in, got false")
+	}
+}
+
+// TestAreAllActivePlayersAllIn_NoAllIn tests when no players are all-in
+func TestAreAllActivePlayersAllIn_NoAllIn(t *testing.T) {
+	hand := &Hand{
+		FoldedPlayers: make(map[int]bool),
+	}
+
+	seats := [6]Seat{
+		{Status: "active", Stack: 500}, // Both have chips
+		{Status: "active", Stack: 500},
+		{Status: "empty"},
+		{Status: "empty"},
+		{Status: "empty"},
+		{Status: "empty"},
+	}
+
+	result := hand.AreAllActivePlayersAllIn(seats)
+	if result {
+		t.Errorf("Expected false when no players are all-in, got true")
+	}
+}
+
+// TestAreAllActivePlayersAllIn_ThreePlayersOneAllIn tests three players where one is all-in
+func TestAreAllActivePlayersAllIn_ThreePlayersOneAllIn(t *testing.T) {
+	hand := &Hand{
+		FoldedPlayers: make(map[int]bool),
+	}
+
+	seats := [6]Seat{
+		{Status: "active", Stack: 1000}, // Player A has chips
+		{Status: "active", Stack: 0},    // Player B all-in
+		{Status: "active", Stack: 500},  // Player C has chips
+		{Status: "empty"},
+		{Status: "empty"},
+		{Status: "empty"},
+	}
+
+	result := hand.AreAllActivePlayersAllIn(seats)
+	if !result {
+		t.Errorf("Expected true when at least one player is all-in, got false")
 	}
 }

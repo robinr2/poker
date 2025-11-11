@@ -1583,9 +1583,23 @@ func (h *Hand) IsBettingRoundComplete(seats [6]Seat) bool {
 	return true
 }
 
-// AreAllActivePlayersAllIn checks if all non-folded players are all-in (stack = 0)
-// Returns true if 2+ players remain and ALL are all-in
-// Returns false if any player has chips remaining to act
+// AreAllActivePlayersAllIn checks if at least one player is all-in
+// and therefore no further betting action is possible on future streets.
+//
+// This function is called AFTER IsBettingRoundComplete returns true,
+// meaning all players have matched bets for the current street.
+//
+// Returns true if:
+// - 2+ players remain (not folded), AND
+// - At least one player is all-in (stack = 0)
+//
+// When this returns true, remaining streets should be auto-dealt without
+// prompting for action, since at least one player cannot act.
+//
+// Example scenarios where this returns true:
+// - Player A (1000 stack) calls Player B (500 stack all-in) → Player A has 500 left, Player B has 0
+// - Both players go all-in with equal stacks → Both have 0 left
+// - Three players: A all-in (0), B all-in (0), C has chips (500) → At least one all-in
 func (h *Hand) AreAllActivePlayersAllIn(seats [6]Seat) bool {
 	activePlayers := []int{}
 	for i := 0; i < 6; i++ {
@@ -1599,16 +1613,18 @@ func (h *Hand) AreAllActivePlayersAllIn(seats [6]Seat) bool {
 		return false
 	}
 
-	// Check if all active players are all-in (stack = 0)
+	// Check if at least one active player is all-in (stack = 0)
+	// If so, no further betting is possible on future streets
 	for _, seatNum := range activePlayers {
-		if seats[seatNum].Stack > 0 {
-			// Found a player with chips remaining, not all-in
-			return false
+		if seats[seatNum].Stack == 0 {
+			// Found at least one all-in player
+			// Since betting is complete (caller verified this), auto-deal remaining streets
+			return true
 		}
 	}
 
-	// All active players are all-in
-	return true
+	// No players are all-in - normal betting continues on next streets
+	return false
 }
 
 // AdvanceAction moves the current actor to the next active player

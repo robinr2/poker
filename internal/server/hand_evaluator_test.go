@@ -378,6 +378,140 @@ func TestEvaluateHand_AllSevenCards(t *testing.T) {
 	}
 }
 
+func TestEvaluateHand_TwoPairBug_JJvsA5(t *testing.T) {
+	// Test the specific scenario: JJ vs A5 on board 66422
+	// Expected: JJ wins with J-J-6-6-4 (two pair: jacks and sixes)
+	// A5 has 6-6-2-2-A (two pair: sixes and twos)
+
+	// Player 1: JJ
+	holeCards1 := []Card{
+		{Rank: "J", Suit: "s"},
+		{Rank: "J", Suit: "c"},
+	}
+
+	// Player 2: A5
+	holeCards2 := []Card{
+		{Rank: "A", Suit: "s"},
+		{Rank: "5", Suit: "c"},
+	}
+
+	// Board: 66422
+	boardCards := []Card{
+		{Rank: "6", Suit: "s"},
+		{Rank: "6", Suit: "c"},
+		{Rank: "4", Suit: "s"},
+		{Rank: "2", Suit: "s"},
+		{Rank: "2", Suit: "c"},
+	}
+
+	hand1 := EvaluateHand(holeCards1, boardCards)
+	hand2 := EvaluateHand(holeCards2, boardCards)
+
+	// Both should be two pair
+	if hand1.Rank != 2 {
+		t.Errorf("Player 1 (JJ) expected rank 2 (two pair), got %d", hand1.Rank)
+	}
+	if hand2.Rank != 2 {
+		t.Errorf("Player 2 (A5) expected rank 2 (two pair), got %d", hand2.Rank)
+	}
+
+	// Player 1 kickers should be [11, 6, 4] - jacks and sixes (sorted descending) with 4 kicker
+	// Player 2 kickers should be [6, 2, 14] - sixes and twos (sorted descending) with ace kicker
+	t.Logf("Player 1 (JJ) kickers: %v (expected [11, 6, 4])", hand1.Kickers)
+	t.Logf("Player 2 (A5) kickers: %v (expected [6, 2, 14])", hand2.Kickers)
+
+	// Verify kickers are correct
+	expectedKickers1 := []int{11, 6, 4}
+	expectedKickers2 := []int{6, 2, 14}
+
+	if !sliceEqual(hand1.Kickers, expectedKickers1) {
+		t.Errorf("Player 1 (JJ) expected kickers %v, got %v", expectedKickers1, hand1.Kickers)
+	}
+	if !sliceEqual(hand2.Kickers, expectedKickers2) {
+		t.Errorf("Player 2 (A5) expected kickers %v, got %v", expectedKickers2, hand2.Kickers)
+	}
+
+	// Compare hands - Player 1 (JJ) should win
+	// First pair: 11 (J) > 6 (6), so JJ wins
+	result := CompareHands(hand1, hand2)
+	if result <= 0 {
+		t.Errorf("Expected Player 1 (JJ) to win, but got result %d", result)
+		t.Errorf("Player 1 kickers: %v", hand1.Kickers)
+		t.Errorf("Player 2 kickers: %v", hand2.Kickers)
+	}
+}
+
+func TestEvaluateHand_TwoPairShowdownSimulation(t *testing.T) {
+	// Simulate a full showdown scenario with JJ vs A5
+	// This mimics what happens in DetermineWinner
+
+	// Setup board: 66422
+	boardCards := []Card{
+		{Rank: "6", Suit: "s"},
+		{Rank: "6", Suit: "c"},
+		{Rank: "4", Suit: "s"},
+		{Rank: "2", Suit: "s"},
+		{Rank: "2", Suit: "c"},
+	}
+
+	// Player hands
+	players := []struct {
+		name      string
+		holeCards []Card
+	}{
+		{
+			name: "Player 1 (JJ)",
+			holeCards: []Card{
+				{Rank: "J", Suit: "s"},
+				{Rank: "J", Suit: "c"},
+			},
+		},
+		{
+			name: "Player 2 (A5)",
+			holeCards: []Card{
+				{Rank: "A", Suit: "s"},
+				{Rank: "5", Suit: "c"},
+			},
+		},
+	}
+
+	// Evaluate all hands
+	var bestHand *HandRank
+	winnerIndex := -1
+
+	for i, player := range players {
+		hand := EvaluateHand(player.holeCards, boardCards)
+		t.Logf("%s hand: Rank=%d, Kickers=%v", player.name, hand.Rank, hand.Kickers)
+
+		if bestHand == nil {
+			bestHand = &hand
+			winnerIndex = i
+		} else {
+			comparison := CompareHands(hand, *bestHand)
+			if comparison > 0 {
+				bestHand = &hand
+				winnerIndex = i
+				t.Logf("%s beats previous best", player.name)
+			} else if comparison == 0 {
+				t.Logf("%s ties with previous best", player.name)
+			} else {
+				t.Logf("%s loses to previous best", player.name)
+			}
+		}
+	}
+
+	// Assert Player 1 (JJ) wins
+	if winnerIndex != 0 {
+		t.Errorf("Expected Player 1 (JJ) to win, but Player %d won", winnerIndex+1)
+		for _, player := range players {
+			hand := EvaluateHand(player.holeCards, boardCards)
+			t.Errorf("  %s: Rank=%d, Kickers=%v", player.name, hand.Rank, hand.Kickers)
+		}
+	}
+
+	t.Logf("Winner: %s", players[winnerIndex].name)
+}
+
 // Helper function for test assertions
 func sliceEqual(a, b []int) bool {
 	if len(a) != len(b) {
