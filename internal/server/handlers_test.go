@@ -1020,7 +1020,7 @@ func TestTableStateGameStateFields(t *testing.T) {
 	expectedDealerSeat := activeDealerSeat
 	expectedSmallBlindSeat := activeHand.SmallBlindSeat
 	expectedBigBlindSeat := activeHand.BigBlindSeat
-	expectedPot := activeHand.Pot
+	expectedPot := activeHand.GetDisplayPot() // Use GetDisplayPot() which includes PlayerBets
 
 	// Create a mock client
 	mockClient := &Client{

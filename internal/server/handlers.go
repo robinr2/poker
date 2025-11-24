@@ -1542,49 +1542,60 @@ func (c *Client) HandlePlayerActionMessage(sm *SessionManager, server *Server, l
 	return nil
 }
 
-// handleBustOutNotifications sends seat_cleared messages to busted players and updates their sessions
+// handleBustOutNotifications sends notifications and broadcasts table state when players are kicked
+// Players who run out of chips are kicked out of the game
 // Assumes the table lock has already been released
 func (s *Server) handleBustOutNotifications(table *Table, bustedTokens []string) {
 	if s == nil || s.hub == nil {
 		return
 	}
 
+	// Log each bust-out, send seat_cleared message, and clear session
 	for _, token := range bustedTokens {
-		// Find the client for this token
-		var client *Client
+		s.logger.Info("player busted out (kicked from table)", "token", token, "tableID", table.ID)
+
+		// Find the client with this token
 		s.hub.mu.RLock()
-		for c := range s.hub.clients {
-			if c.Token == token {
-				client = c
+		var bustedClient *Client
+		for client := range s.hub.clients {
+			if client.Token == token {
+				bustedClient = client
 				break
 			}
 		}
 		s.hub.mu.RUnlock()
 
-		// If client is connected, send seat_cleared message
-		if client != nil {
-			err := client.SendSeatCleared(s.logger)
+		if bustedClient != nil {
+			// Send seat_cleared message to busted player
+			err := bustedClient.SendSeatCleared(s.logger)
 			if err != nil {
 				s.logger.Warn("failed to send seat_cleared to busted player", "token", token, "error", err)
 			}
+
+			// Send lobby_state to busted player (so they see the lobby again)
+			err = bustedClient.SendLobbyState(s, s.logger)
+			if err != nil {
+				s.logger.Warn("failed to send lobby_state to busted player", "token", token, "error", err)
+			}
 		}
 
-		// Update the player's session (clear table and seat index)
+		// Update session to clear table/seat info
 		_, err := s.sessionManager.UpdateSession(token, nil, nil)
 		if err != nil {
-			s.logger.Warn("failed to update session for busted player", "token", token, "error", err)
+			s.logger.Warn("failed to clear session for busted player", "token", token, "error", err)
 		}
 	}
 
-	// Broadcast the updated table state to all players at the table
+	// Broadcast the updated table state to remaining players
+	// This will show the seats as empty for busted players
 	err := s.broadcastTableState(table.ID, nil)
 	if err != nil {
 		s.logger.Warn("failed to broadcast table state after bust-outs", "error", err)
 	}
 
-	// Broadcast updated lobby state to all clients
-	err = s.broadcastLobbyState()
+	// Broadcast lobby_state to other clients (to show updated table info)
+	err = s.broadcastLobbyStateExcluding(nil)
 	if err != nil {
-		s.logger.Warn("failed to broadcast lobby state after bust-outs", "error", err)
+		s.logger.Warn("failed to broadcast lobby_state after bust-outs", "error", err)
 	}
 }

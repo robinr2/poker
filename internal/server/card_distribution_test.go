@@ -109,12 +109,15 @@ func TestDealHoleCardsDistribution(t *testing.T) {
 
 	table.Seats[0].Token = &token1
 	table.Seats[0].Status = "active"
+	table.Seats[0].Stack = 1000
 
 	table.Seats[1].Token = &token2
 	table.Seats[1].Status = "active"
+	table.Seats[1].Stack = 1000
 
 	table.Seats[2].Token = &token3
 	table.Seats[2].Status = "active"
+	table.Seats[2].Stack = 1000
 
 	// Track suits in dealt hole cards
 	suitCounts := map[string]int{

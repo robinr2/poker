@@ -4190,7 +4190,8 @@ func TestNewHand_InitializesLastRaise(t *testing.T) {
 }
 
 // TestAdvanceStreet_ResetsLastRaise verifies LastRaise is reset when advancing to next street
-// After advancing from preflop to flop, LastRaise is preserved for postflop minimum raise calculation
+// After advancing from preflop to flop, LastRaise is always reset to 20 (big blind)
+// This ensures players can always raise on postflop streets
 func TestAdvanceStreet_ResetsLastRaise(t *testing.T) {
 	hand := &Hand{
 		DealerSeat:     0,
@@ -4213,9 +4214,9 @@ func TestAdvanceStreet_ResetsLastRaise(t *testing.T) {
 		t.Errorf("Street = %s, want flop", hand.Street)
 	}
 
-	// LastRaise is now preserved on postflop streets (flop, turn, river) for minimum raise calculation
-	if hand.LastRaise != 50 {
-		t.Errorf("LastRaise = %d, want 50 after street advance (preserved for postflop)", hand.LastRaise)
+	// LastRaise is now reset to 20 (big blind) on postflop streets for minimum raise calculation
+	if hand.LastRaise != 20 {
+		t.Errorf("LastRaise = %d, want 20 after street advance (reset to big blind)", hand.LastRaise)
 	}
 
 	if hand.CurrentBet != 0 {
@@ -6620,12 +6621,13 @@ func TestHandleShowdown_EarlyWinner_AllFold(t *testing.T) {
 		t.Errorf("expected winner stack 1050, got %d", table.Seats[0].Stack)
 	}
 
-	// Verify bust-out seat (seat 1 with stack 0) is cleared
-	if table.Seats[1].Status != "empty" {
-		t.Errorf("expected bust-out seat to be 'empty', got '%s'", table.Seats[1].Status)
+	// Verify bust-out seat (seat 1 with stack 0) is NOT cleared yet
+	// Players stay at table until next StartHand()
+	if table.Seats[1].Status != "active" {
+		t.Errorf("expected bust-out seat to still be 'active', got '%s'", table.Seats[1].Status)
 	}
-	if table.Seats[1].Token != nil {
-		t.Errorf("expected bust-out seat Token to be nil, got %v", table.Seats[1].Token)
+	if table.Seats[1].Token == nil {
+		t.Errorf("expected bust-out seat to keep Token, got nil")
 	}
 }
 
@@ -6675,12 +6677,13 @@ func TestHandleShowdown_EarlyWinner_OpponentBustsOut(t *testing.T) {
 		t.Errorf("expected winner stack 1000, got %d", table.Seats[0].Stack)
 	}
 
-	// Verify bust-out opponent seat is cleared (stack was 0, stays 0)
-	if table.Seats[1].Status != "empty" {
-		t.Errorf("expected bust-out opponent seat Status to be 'empty', got '%s'", table.Seats[1].Status)
+	// Verify bust-out opponent seat is NOT cleared yet
+	// Players stay at table until next StartHand()
+	if table.Seats[1].Status != "active" {
+		t.Errorf("expected bust-out opponent seat Status to still be 'active', got '%s'", table.Seats[1].Status)
 	}
-	if table.Seats[1].Token != nil {
-		t.Errorf("expected bust-out opponent seat Token to be nil, got %v", table.Seats[1].Token)
+	if table.Seats[1].Token == nil {
+		t.Errorf("expected bust-out opponent seat to keep Token, got nil")
 	}
 	if table.Seats[1].Stack != 0 {
 		t.Errorf("expected bust-out opponent stack to remain 0, got %d", table.Seats[1].Stack)
@@ -6759,23 +6762,24 @@ func TestHandleBustOutsWithNotificationsLocked_SinglePlayerBusted(t *testing.T) 
 	table.Seats[1].Status = "active"
 	table.Seats[1].Stack = 0 // This player busted
 
-	// Call handleBustOutsWithNotificationsLocked - should return the busted token
+	// Call handleBustOutsWithNotificationsLocked - should return the busted token for notification
 	bustedTokens := table.handleBustOutsWithNotificationsLocked()
 
-	// Verify busted player token is returned
+	// Verify busted player token is returned for notification
 	if len(bustedTokens) != 1 {
-		t.Errorf("expected 1 busted token, got %d", len(bustedTokens))
+		t.Errorf("expected 1 busted token for notification, got %d", len(bustedTokens))
 	}
 	if len(bustedTokens) > 0 && bustedTokens[0] != token1 {
 		t.Errorf("expected busted token '%s', got '%s'", token1, bustedTokens[0])
 	}
 
-	// Verify seat 1 is cleared
-	if table.Seats[1].Status != "empty" {
-		t.Errorf("expected busted seat to be 'empty', got '%s'", table.Seats[1].Status)
+	// Verify seat 1 is NOT cleared yet (handleBustOutsWithNotificationsLocked doesn't clear)
+	// Players stay at table until next StartHand()
+	if table.Seats[1].Status != "active" {
+		t.Errorf("expected seat 1 to still be 'active', got '%s'", table.Seats[1].Status)
 	}
-	if table.Seats[1].Token != nil {
-		t.Errorf("expected busted seat Token to be nil, got %v", table.Seats[1].Token)
+	if table.Seats[1].Token == nil {
+		t.Errorf("expected seat 1 to keep Token, got nil")
 	}
 
 	// Verify seat 0 (winner) is untouched
@@ -6820,9 +6824,9 @@ func TestHandleBustOutsWithNotificationsLocked_MultiplePlayersBusted(t *testing.
 	// Call handleBustOutsWithNotificationsLocked
 	bustedTokens := table.handleBustOutsWithNotificationsLocked()
 
-	// Verify 2 busted tokens are returned
+	// Verify 2 busted tokens are returned for notification
 	if len(bustedTokens) != 2 {
-		t.Errorf("expected 2 busted tokens, got %d", len(bustedTokens))
+		t.Errorf("expected 2 busted tokens for notification, got %d", len(bustedTokens))
 	}
 
 	// Verify busted tokens are correct (order may vary)
@@ -6837,19 +6841,20 @@ func TestHandleBustOutsWithNotificationsLocked_MultiplePlayersBusted(t *testing.
 		t.Errorf("expected busted token '%s' in result", token3)
 	}
 
-	// Verify seats 1 and 3 are cleared
-	if table.Seats[1].Status != "empty" {
-		t.Errorf("seat 1: expected 'empty', got '%s'", table.Seats[1].Status)
+	// Verify seats 1 and 3 are NOT cleared yet (handleBustOutsWithNotificationsLocked doesn't clear)
+	// Players stay at table until next StartHand()
+	if table.Seats[1].Status != "active" {
+		t.Errorf("seat 1: expected 'active', got '%s'", table.Seats[1].Status)
 	}
-	if table.Seats[1].Token != nil {
-		t.Errorf("seat 1: expected Token nil, got %v", table.Seats[1].Token)
+	if table.Seats[1].Token == nil {
+		t.Errorf("seat 1: expected to keep Token, got nil")
 	}
 
-	if table.Seats[3].Status != "empty" {
-		t.Errorf("seat 3: expected 'empty', got '%s'", table.Seats[3].Status)
+	if table.Seats[3].Status != "active" {
+		t.Errorf("seat 3: expected 'active', got '%s'", table.Seats[3].Status)
 	}
-	if table.Seats[3].Token != nil {
-		t.Errorf("seat 3: expected Token nil, got %v", table.Seats[3].Token)
+	if table.Seats[3].Token == nil {
+		t.Errorf("seat 3: expected to keep Token, got nil")
 	}
 
 	// Verify other seats are untouched
@@ -6997,12 +7002,12 @@ func TestShowdown_AllInPlayerBustsOut(t *testing.T) {
 		t.Fatalf("expected player 1 to bust out (stack == 0), but got stack %d", table.Seats[1].Stack)
 	}
 
-	// Verify seat 1 is cleared (auto-kicked)
-	if table.Seats[1].Token != nil {
-		t.Errorf("expected seat 1 (busted out) to have Token == nil, got %v", table.Seats[1].Token)
+	// Verify seat 1 is NOT cleared yet (players stay at table until next StartHand)
+	if table.Seats[1].Token == nil {
+		t.Errorf("expected seat 1 (busted out) to keep Token until next hand, got nil")
 	}
-	if table.Seats[1].Status != "empty" {
-		t.Errorf("expected seat 1 (busted out) to have Status 'empty', got '%s'", table.Seats[1].Status)
+	if table.Seats[1].Status != "active" {
+		t.Errorf("expected seat 1 (busted out) to stay 'active' until next hand, got '%s'", table.Seats[1].Status)
 	}
 
 	// Verify player 0 won and has increased stack (should have initial + pot)
@@ -7132,19 +7137,19 @@ func TestShowdown_MultiplePlayersBustOut(t *testing.T) {
 		t.Fatalf("expected player 2 to bust out (stack == 0), but got stack %d", table.Seats[2].Stack)
 	}
 
-	// Verify seats 1 and 2 are cleared (auto-kicked)
-	if table.Seats[1].Token != nil {
-		t.Errorf("expected seat 1 (busted out) to have Token == nil, got %v", table.Seats[1].Token)
+	// Verify seats 1 and 2 are NOT cleared yet (players stay at table until next StartHand)
+	if table.Seats[1].Token == nil {
+		t.Errorf("expected seat 1 (busted out) to keep Token until next hand, got nil")
 	}
-	if table.Seats[1].Status != "empty" {
-		t.Errorf("expected seat 1 (busted out) to have Status 'empty', got '%s'", table.Seats[1].Status)
+	if table.Seats[1].Status != "active" {
+		t.Errorf("expected seat 1 (busted out) to stay 'active' until next hand, got '%s'", table.Seats[1].Status)
 	}
 
-	if table.Seats[2].Token != nil {
-		t.Errorf("expected seat 2 (busted out) to have Token == nil, got %v", table.Seats[2].Token)
+	if table.Seats[2].Token == nil {
+		t.Errorf("expected seat 2 (busted out) to keep Token until next hand, got nil")
 	}
-	if table.Seats[2].Status != "empty" {
-		t.Errorf("expected seat 2 (busted out) to have Status 'empty', got '%s'", table.Seats[2].Status)
+	if table.Seats[2].Status != "active" {
+		t.Errorf("expected seat 2 (busted out) to stay 'active' until next hand, got '%s'", table.Seats[2].Status)
 	}
 
 	// Verify player 0 won and has increased stack (should have initial + pot)
@@ -7349,12 +7354,12 @@ func TestShowdown_AllInWinnerNotKicked(t *testing.T) {
 		t.Errorf("expected player 1 to bust out (stack == 0), got %d", table.Seats[1].Stack)
 	}
 
-	// Verify seat 1 is cleared (auto-kicked as busted player)
-	if table.Seats[1].Token != nil {
-		t.Errorf("expected seat 1 (busted out) to have Token == nil, got %v", table.Seats[1].Token)
+	// Verify seat 1 is NOT cleared yet (players stay at table until next StartHand)
+	if table.Seats[1].Token == nil {
+		t.Errorf("expected seat 1 (busted out) to keep Token until next hand, got nil")
 	}
-	if table.Seats[1].Status != "empty" {
-		t.Errorf("expected seat 1 (busted out) to have Status 'empty', got '%s'", table.Seats[1].Status)
+	if table.Seats[1].Status != "active" {
+		t.Errorf("expected seat 1 (busted out) to stay 'active' until next hand, got '%s'", table.Seats[1].Status)
 	}
 
 	// Verify hand is cleared
@@ -8864,7 +8869,7 @@ func TestGetNextActiveSeat_AllInScenarios(t *testing.T) {
 	t.Run("two_players_one_allin", func(t *testing.T) {
 		table := NewTable("table-1", "Table 1", nil)
 
-		// Set up 2 active players (seats 0, 1)
+		// Set up 2 active players (seats 0, 1) with chips
 		token0 := "player-0"
 		token1 := "player-1"
 		table.Seats[0].Token = &token0
@@ -8872,13 +8877,16 @@ func TestGetNextActiveSeat_AllInScenarios(t *testing.T) {
 		table.Seats[0].Stack = 1000 // Active with chips
 		table.Seats[1].Token = &token1
 		table.Seats[1].Status = "active"
-		table.Seats[1].Stack = 0 // All-in
+		table.Seats[1].Stack = 100 // Start with chips
 
 		// Start hand
 		err := table.StartHand()
 		if err != nil {
 			t.Fatalf("expected no error starting hand, got %v", err)
 		}
+
+		// NOW simulate player 1 going all-in DURING the hand
+		table.Seats[1].Stack = 0 // All-in
 
 		// Initialize folded players map
 		if table.CurrentHand.FoldedPlayers == nil {
@@ -8902,21 +8910,25 @@ func TestGetNextActiveSeat_AllInScenarios(t *testing.T) {
 	t.Run("two_players_both_allin", func(t *testing.T) {
 		table := NewTable("table-1", "Table 1", nil)
 
-		// Set up 2 active players, both all-in
+		// Set up 2 active players with chips
 		token0 := "player-0"
 		token1 := "player-1"
 		table.Seats[0].Token = &token0
 		table.Seats[0].Status = "active"
-		table.Seats[0].Stack = 0 // All-in
+		table.Seats[0].Stack = 100 // Start with chips
 		table.Seats[1].Token = &token1
 		table.Seats[1].Status = "active"
-		table.Seats[1].Stack = 0 // All-in
+		table.Seats[1].Stack = 100 // Start with chips
 
 		// Start hand
 		err := table.StartHand()
 		if err != nil {
 			t.Fatalf("expected no error starting hand, got %v", err)
 		}
+
+		// NOW simulate both players going all-in DURING the hand
+		table.Seats[0].Stack = 0 // All-in
+		table.Seats[1].Stack = 0 // All-in
 
 		// Initialize folded players map
 		if table.CurrentHand.FoldedPlayers == nil {
@@ -8940,16 +8952,12 @@ func TestGetNextActiveSeat_AllInScenarios(t *testing.T) {
 	t.Run("three_players_one_allin", func(t *testing.T) {
 		table := NewTable("table-1", "Table 1", nil)
 
-		// Set up 3 active players (seats 0, 1, 2)
+		// Set up 3 active players (seats 0, 1, 2) all with chips initially
 		for i := 0; i < 3; i++ {
 			token := "player-" + string(rune('0'+i))
 			table.Seats[i].Token = &token
 			table.Seats[i].Status = "active"
-			if i == 1 {
-				table.Seats[i].Stack = 0 // Seat 1 is all-in
-			} else {
-				table.Seats[i].Stack = 1000 // Others active
-			}
+			table.Seats[i].Stack = 1000 // All start with chips
 		}
 
 		// Start hand
@@ -8957,6 +8965,9 @@ func TestGetNextActiveSeat_AllInScenarios(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected no error starting hand, got %v", err)
 		}
+
+		// NOW simulate seat 1 going all-in DURING the hand
+		table.Seats[1].Stack = 0 // Seat 1 is all-in
 
 		// Initialize folded players map
 		if table.CurrentHand.FoldedPlayers == nil {
@@ -8986,16 +8997,12 @@ func TestGetNextActiveSeat_AllInScenarios(t *testing.T) {
 	t.Run("three_players_two_allin", func(t *testing.T) {
 		table := NewTable("table-1", "Table 1", nil)
 
-		// Set up 3 active players (seats 0, 1, 2)
+		// Set up 3 active players (seats 0, 1, 2) all with chips initially
 		for i := 0; i < 3; i++ {
 			token := "player-" + string(rune('0'+i))
 			table.Seats[i].Token = &token
 			table.Seats[i].Status = "active"
-			if i == 1 || i == 2 {
-				table.Seats[i].Stack = 0 // Seats 1 and 2 are all-in
-			} else {
-				table.Seats[i].Stack = 1000 // Only seat 0 has chips
-			}
+			table.Seats[i].Stack = 1000 // All start with chips
 		}
 
 		// Start hand
@@ -9003,6 +9010,11 @@ func TestGetNextActiveSeat_AllInScenarios(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected no error starting hand, got %v", err)
 		}
+
+		// NOW simulate seats 1 and 2 going all-in DURING the hand
+		table.Seats[1].Stack = 0 // Seat 1 all-in
+		table.Seats[2].Stack = 0 // Seat 2 all-in
+		// Only seat 0 has chips left
 
 		// Initialize folded players map
 		if table.CurrentHand.FoldedPlayers == nil {
@@ -9032,16 +9044,12 @@ func TestGetNextActiveSeat_AllInScenarios(t *testing.T) {
 	t.Run("four_players_mixed_allin_folded", func(t *testing.T) {
 		table := NewTable("table-1", "Table 1", nil)
 
-		// Set up 4 active players (seats 0, 1, 2, 3)
+		// Set up 4 active players (seats 0, 1, 2, 3) all with chips initially
 		for i := 0; i < 4; i++ {
 			token := "player-" + string(rune('0'+i))
 			table.Seats[i].Token = &token
 			table.Seats[i].Status = "active"
-			if i == 1 {
-				table.Seats[i].Stack = 0 // Seat 1 is all-in
-			} else {
-				table.Seats[i].Stack = 1000 // Others active
-			}
+			table.Seats[i].Stack = 1000 // All start with chips
 		}
 
 		// Start hand
@@ -9049,6 +9057,9 @@ func TestGetNextActiveSeat_AllInScenarios(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected no error starting hand, got %v", err)
 		}
+
+		// NOW simulate seat 1 going all-in DURING the hand
+		table.Seats[1].Stack = 0 // Seat 1 is all-in
 
 		// Initialize folded players map
 		if table.CurrentHand.FoldedPlayers == nil {
@@ -12364,9 +12375,9 @@ func TestGetDisplayPot_PreflopBetting(t *testing.T) {
 	hand := &Hand{
 		Pot: 0, // Pot is 0 until AdvanceStreet
 		PlayerBets: map[int]int{
-			0: 10,  // SB
-			1: 20,  // BB
-			2: 60,  // UTG raised to 60
+			0: 10, // SB
+			1: 20, // BB
+			2: 60, // UTG raised to 60
 		},
 	}
 
@@ -12472,7 +12483,7 @@ func TestGetValidActions_FlopAfterLargePreflopRaise(t *testing.T) {
 	// Setup table with 2 players who called a 600 raise preflop
 	server := NewServer(slog.Default())
 	table := NewTable("table-1", "Test Table", server)
-	
+
 	// Assign 2 seats
 	token1 := "player1-token"
 	token2 := "player2-token"

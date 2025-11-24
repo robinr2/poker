@@ -205,8 +205,9 @@ func (t *Table) HandleShowdown() {
 					t.Seats[seatIdx].Stack += amount
 				}
 
-				// Handle bust-outs and collect busted tokens
-				bustedTokens := t.handleBustOutsWithNotificationsLocked()
+				// Collect busted tokens but don't clear seats or send notifications yet
+				// Players will see the final board state and be kicked when next hand starts
+				_ = t.handleBustOutsWithNotificationsLocked()
 
 				// Rotate dealer for next hand and clear hand
 				t.assignDealerLocked()
@@ -218,11 +219,6 @@ func (t *Table) HandleShowdown() {
 				if t.Server != nil {
 					t.Server.broadcastShowdown(t, []int{i}, nil, distribution)
 					t.Server.broadcastHandComplete(t)
-
-					// Send bust-out notifications if any
-					if len(bustedTokens) > 0 {
-						t.Server.handleBustOutNotifications(t, bustedTokens)
-					}
 				}
 				return
 			}
@@ -275,8 +271,9 @@ func (t *Table) HandleShowdown() {
 		t.Seats[seatIdx].Stack += amount
 	}
 
-	// Handle bust-outs and collect busted tokens
-	bustedTokens := t.handleBustOutsWithNotificationsLocked()
+	// Collect busted tokens but don't clear seats or send notifications yet
+	// Players will see the final board state and be kicked when next hand starts
+	_ = t.handleBustOutsWithNotificationsLocked()
 
 	// Rotate dealer for next hand and clear hand
 	t.assignDealerLocked()
@@ -288,11 +285,6 @@ func (t *Table) HandleShowdown() {
 	if t.Server != nil {
 		t.Server.broadcastShowdown(t, winners, winningRank, distribution)
 		t.Server.broadcastHandComplete(t)
-
-		// Send bust-out notifications if any
-		if len(bustedTokens) > 0 {
-			t.Server.handleBustOutNotifications(t, bustedTokens)
-		}
 	}
 }
 
@@ -372,7 +364,8 @@ func (t *Table) DistributePot(winners []int) map[int]int {
 	return result
 }
 
-// HandleBustOuts clears seats with stack == 0 (Token = nil, Status = "empty")
+// handleBustOutsLocked clears seats with stack == 0
+// This kicks players out of the game completely
 // This version assumes the lock is already held (use for internal calls within locked sections)
 func (t *Table) handleBustOutsLocked() {
 	for i := 0; i < 6; i++ {
@@ -383,27 +376,27 @@ func (t *Table) handleBustOutsLocked() {
 	}
 }
 
-// handleBustOutsWithNotificationsLocked identifies players with stack == 0, clears their seats,
-// and returns their tokens for notification purposes.
+// handleBustOutsWithNotificationsLocked identifies players with stack == 0, collects their tokens,
+// but DOES NOT clear them yet. They will be cleared when the next hand starts.
 // Assumes the lock is already held (use for internal calls within locked sections).
-// Returns a slice of tokens for players who busted out.
+// Returns a slice of tokens for players who busted out (for notification purposes).
 func (t *Table) handleBustOutsWithNotificationsLocked() []string {
 	var bustedTokens []string
 
-	// First, collect tokens of players with stack == 0
+	// Collect tokens of players with stack == 0
+	// But DON'T clear them yet - let them see the final board state
+	// They will be kicked when StartHand() is called for the next hand
 	for i := 0; i < 6; i++ {
 		if t.Seats[i].Stack == 0 && t.Seats[i].Token != nil {
 			bustedTokens = append(bustedTokens, *t.Seats[i].Token)
 		}
 	}
 
-	// Then call the existing handleBustOutsLocked to clear the seats
-	t.handleBustOutsLocked()
-
 	return bustedTokens
 }
 
-// HandleBustOuts clears seats with stack == 0 (Token = nil, Status = "empty") - thread-safe
+// HandleBustOuts clears seats with stack == 0 (thread-safe)
+// Players with no chips are kicked out of the game
 func (t *Table) HandleBustOuts() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -603,14 +596,14 @@ func ShuffleDeck(deck []Card) error {
 }
 
 // DealHoleCards deals 2 cards to each active player from the deck
-// Only seats with Status == "active" receive cards
+// Only seats with Status == "active" AND Stack > 0 receive cards
 // Updates h.HoleCards and removes cards from h.Deck
 // Returns error if unable to shuffle or if not enough cards in deck
 func (h *Hand) DealHoleCards(seats [6]Seat) error {
-	// Identify active seats
+	// Identify active seats with chips
 	activeSeats := []int{}
 	for i := 0; i < 6; i++ {
-		if seats[i].Status == "active" {
+		if seats[i].Status == "active" && seats[i].Stack > 0 {
 			activeSeats = append(activeSeats, i)
 		}
 	}
@@ -743,7 +736,19 @@ func (t *Table) CanStartHand() bool {
 func (t *Table) StartHand() error {
 	t.mu.Lock()
 
-	// Step 0: Transition all "waiting" players to "active" status
+	// Step 0a: Kick out players with stack == 0 from the previous hand
+	// This allows busted players to see the final board state before being kicked
+	// when the next hand starts
+	var kickedTokens []string
+	for i := 0; i < 6; i++ {
+		if t.Seats[i].Stack == 0 && t.Seats[i].Token != nil {
+			kickedTokens = append(kickedTokens, *t.Seats[i].Token)
+			t.Seats[i].Token = nil
+			t.Seats[i].Status = "empty"
+		}
+	}
+
+	// Step 0b: Transition all "waiting" players to "active" status
 	// Players become active when the first/next hand starts
 	for i := 0; i < 6; i++ {
 		if t.Seats[i].Status == "waiting" {
@@ -752,10 +757,10 @@ func (t *Table) StartHand() error {
 	}
 
 	// Check if hand can be started (must do this with lock held)
-	// Count active players
+	// Count active players with chips
 	activeCount := 0
 	for i := 0; i < 6; i++ {
-		if t.Seats[i].Status == "active" {
+		if t.Seats[i].Status == "active" && t.Seats[i].Stack > 0 {
 			activeCount++
 		}
 	}
@@ -819,10 +824,10 @@ func (t *Table) StartHand() error {
 		TotalContributions: make(map[int]int),
 	}
 
-	// Initialize TotalContributions for all active players (even if they haven't acted yet)
+	// Initialize TotalContributions for all active players with chips
 	// This ensures they're included in side pot calculations
 	for i := 0; i < 6; i++ {
-		if t.Seats[i].Status == "active" {
+		if t.Seats[i].Status == "active" && t.Seats[i].Stack > 0 {
 			hand.TotalContributions[i] = 0
 		}
 	}
@@ -955,6 +960,11 @@ func (t *Table) StartHand() error {
 				t.Server.logger.Warn("failed to broadcast first action_request", "error", err)
 			}
 		}
+
+		// Send bust-out notifications for players who were kicked at the start of this hand
+		if len(kickedTokens) > 0 {
+			t.Server.handleBustOutNotifications(t, kickedTokens)
+		}
 	}
 
 	return nil
@@ -963,27 +973,27 @@ func (t *Table) StartHand() error {
 // assignDealerLocked assigns the next dealer seat (internal, must be called with lock held)
 // For the first hand (DealerSeat is nil), it finds the first active seat.
 // For subsequent hands, it rotates clockwise to the next active seat.
-// Only seats with "active" status are eligible for dealer position.
+// Only seats with "active" status AND Stack > 0 are eligible for dealer position.
 func (t *Table) assignDealerLocked() int {
 	var nextDealer int
 
-	// If no dealer assigned yet (first hand), find first active seat
+	// If no dealer assigned yet (first hand), find first active seat with chips
 	if t.DealerSeat == nil {
 		for i := 0; i < 6; i++ {
-			if t.Seats[i].Status == "active" {
+			if t.Seats[i].Status == "active" && t.Seats[i].Stack > 0 {
 				nextDealer = i
 				break
 			}
 		}
 	} else {
-		// Find next active seat after current dealer
+		// Find next active seat with chips after current dealer
 		currentDealer := *t.DealerSeat
 		nextDealer = currentDealer
 
-		// Search for next active seat starting after current dealer
+		// Search for next active seat with chips starting after current dealer
 		for j := 0; j < 6; j++ {
 			checkSeat := (currentDealer + 1 + j) % 6
-			if t.Seats[checkSeat].Status == "active" {
+			if t.Seats[checkSeat].Status == "active" && t.Seats[checkSeat].Stack > 0 {
 				nextDealer = checkSeat
 				break
 			}
@@ -996,14 +1006,14 @@ func (t *Table) assignDealerLocked() int {
 }
 
 // getBlindPositionsLocked returns the seat numbers for small blind and big blind (internal, must be called with lock held)
-// - Returns error if fewer than 2 active players
+// - Returns error if fewer than 2 active players with Stack > 0
 // - For heads-up (exactly 2 active players): dealer is small blind, other is big blind
 // - For normal (3+ active players): small blind is next active after dealer, big blind is next after small blind
 func (t *Table) getBlindPositionsLocked(dealerSeat int) (int, int, error) {
-	// Count active players and find their seat numbers
+	// Count active players with chips and find their seat numbers
 	activePlayers := []int{}
 	for i := 0; i < 6; i++ {
-		if t.Seats[i].Status == "active" {
+		if t.Seats[i].Status == "active" && t.Seats[i].Stack > 0 {
 			activePlayers = append(activePlayers, i)
 		}
 	}
