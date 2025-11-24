@@ -15,7 +15,14 @@ RUN npm ci --only=production && npm ci --only=development
 COPY frontend/ ./
 
 # Build the frontend (outputs to ../web/static)
-RUN npm run build && ls -la ../web/static/
+RUN echo "===== STARTING FRONTEND BUILD =====" && \
+    npm run build && \
+    echo "===== BUILD COMPLETE, CHECKING OUTPUT =====" && \
+    ls -la ../web/ && \
+    ls -la ../web/static/ && \
+    ls -la ../web/static/assets/ && \
+    echo "===== ASSET COUNT: $(find ../web/static/assets -type f | wc -l) files =====" && \
+    echo "===== TOTAL SIZE: $(du -sh ../web/static) ====="
 
 # Stage 2: Build Backend
 FROM golang:1.24-alpine AS backend-builder
@@ -58,6 +65,14 @@ COPY --from=backend-builder /app/poker .
 # The Vite config builds to ../web/static relative to /app/frontend
 # So the build output is at /app/web/static
 COPY --from=frontend-builder --chown=poker:poker /app/web/static ./web/static/
+
+# Verify assets were copied
+RUN echo "===== VERIFYING COPIED ASSETS =====" && \
+    ls -la ./web/static/ && \
+    ls -la ./web/static/assets/ && \
+    echo "===== ASSET FILES =====" && \
+    find ./web/static/assets -type f -exec ls -lh {} \; && \
+    echo "===== VERIFICATION COMPLETE ====="
 
 # Switch to non-root user
 USER poker
