@@ -72,52 +72,46 @@ func (s *Server) RegisterRoutes() {
 
 // serveStaticFiles configures static file serving with SPA fallback to index.html
 func (s *Server) serveStaticFiles() {
-	// Create a handler for serving static files
-	staticHandler := s.serveStaticHandler()
+	// Create a file server for the static directory
+	fileServer := http.FileServer(http.Dir("web/static"))
 
-	// Mount the handler for both root and all subpaths
-	s.router.Get("/", staticHandler)
-	s.router.Get("/*", staticHandler)
-}
-
-// serveStaticHandler returns an http.HandlerFunc for serving static files with SPA fallback
-func (s *Server) serveStaticHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Get the requested file path
+	// Create a handler that tries to serve files, then falls back to index.html for SPA
+	staticHandler := func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		s.logger.Debug("static handler", "path", path)
+		s.logger.Debug("static handler request", "path", path, "method", r.Method)
 
-		// Handle root path
-		if path == "/" {
-			path = "/index.html"
-		}
+		// Build the full file path
+		fullPath := "web/static" + path
 
-		// Try to open the file from web/static
-		filePath := "web/static" + path
-		s.logger.Debug("checking file", "filePath", filePath)
-		fileInfo, err := os.Stat(filePath)
+		// Check if file exists
+		fileInfo, err := os.Stat(fullPath)
 
+		// If file exists and is not a directory, serve it directly
 		if err == nil && !fileInfo.IsDir() {
-			// File exists and is not a directory, serve it
-			s.logger.Debug("serving file", "filePath", filePath)
-			http.ServeFile(w, r, filePath)
+			s.logger.Debug("serving static file", "path", fullPath)
+			fileServer.ServeHTTP(w, r)
 			return
 		}
 
-		s.logger.Debug("file not found, trying SPA fallback", "err", err)
-
-		// File doesn't exist, try to serve index.html (SPA fallback)
-		indexPath := "web/static/index.html"
-		if _, err := os.Stat(indexPath); err == nil {
-			s.logger.Debug("serving SPA fallback", "indexPath", indexPath)
-			http.ServeFile(w, r, indexPath)
-			return
+		// If it's a directory, check for index.html in that directory
+		if err == nil && fileInfo.IsDir() {
+			indexPath := fullPath + "/index.html"
+			if _, err := os.Stat(indexPath); err == nil {
+				s.logger.Debug("serving directory index", "path", indexPath)
+				fileServer.ServeHTTP(w, r)
+				return
+			}
 		}
 
-		s.logger.Debug("no SPA fallback available")
-		// No index.html fallback available
-		http.Error(w, "404 page not found", http.StatusNotFound)
+		// File doesn't exist - serve index.html for SPA routing
+		// This allows client-side routing to work
+		s.logger.Debug("serving SPA fallback for route", "path", path)
+		http.ServeFile(w, r, "web/static/index.html")
 	}
+
+	// Mount the handler for all paths
+	s.router.Get("/", http.HandlerFunc(staticHandler))
+	s.router.Get("/*", http.HandlerFunc(staticHandler))
 }
 
 // Start starts the HTTP server on the specified address.
