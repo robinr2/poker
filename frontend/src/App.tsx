@@ -20,7 +20,14 @@ interface SeatInfo {
   stack?: number;
 }
 
-const WS_URL = 'ws://localhost:8080/ws';
+// Determine WebSocket URL based on environment
+const getWebSocketUrl = () => {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const host = window.location.host;
+  return `${protocol}//${host}/ws`;
+};
+
+const WS_URL = getWebSocketUrl();
 
 function App() {
   const [playerName, setPlayerName] = useState<string | null>(null);
