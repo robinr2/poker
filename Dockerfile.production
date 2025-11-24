@@ -14,8 +14,8 @@ RUN npm ci --only=production && npm ci --only=development
 # Copy frontend source code
 COPY frontend/ ./
 
-# Build the frontend (outputs to dist/)
-RUN npm run build
+# Build the frontend (outputs to ../web/static)
+RUN npm run build && ls -la ../web/static/
 
 # Stage 2: Build Backend
 FROM golang:1.24-alpine AS backend-builder
@@ -42,7 +42,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-w -s" -o 
 FROM alpine:latest
 
 # Install runtime dependencies
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata wget
 
 WORKDIR /app
 
