@@ -1,0 +1,31 @@
+services:
+  # Main poker web service
+  - type: web
+    name: poker-app
+    runtime: docker
+    dockerfilePath: ./Dockerfile.production
+    plan: free
+    region: frankfurt  # Change to your preferred region: oregon, frankfurt, singapore, ohio
+    
+    # Environment variables
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: LOG_LEVEL
+        value: info
+    
+    # Health check endpoint
+    healthCheckPath: /health
+    
+    # Auto-deploy settings
+    autoDeploy: true
+    
+    # Build settings
+    buildFilter:
+      paths:
+        - cmd/**
+        - internal/**
+        - frontend/**
+        - go.mod
+        - go.sum
+        - Dockerfile.production

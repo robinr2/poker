@@ -32,6 +32,7 @@ coverage/
 
 # Documentation (keep critical ones)
 *.md
+!README.md
 
 # Environment files
 .env
@@ -53,3 +54,12 @@ scripts/
 .gitkeep
 plans/
 AGENTS.md
+*.log
+server
+poker
+test_*.js
+test_*.html
+test_*.txt
+*.txt
+!go.mod
+!go.sum
