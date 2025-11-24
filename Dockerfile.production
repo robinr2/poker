@@ -61,6 +61,10 @@ RUN addgroup -g 1000 poker && \
 # Copy backend binary from builder
 COPY --from=backend-builder /app/poker .
 
+# Copy healthcheck script
+COPY healthcheck.sh .
+RUN chmod +x healthcheck.sh
+
 # Copy frontend build from frontend-builder
 # The Vite config builds to ../web/static relative to /app/frontend
 # So the build output is at /app/web/static
@@ -84,9 +88,9 @@ EXPOSE 8080
 ENV PORT=8080 \
     LOG_LEVEL=info
 
-# Health check
+# Health check - use PORT environment variable (defaults to 8080)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+    CMD ./healthcheck.sh
 
 # Run the binary
 CMD ["./poker"]
