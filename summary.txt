@@ -1,0 +1,25 @@
+Tool, das aus Anforderung fertiges MR generiert.
+
+- Context
+- Agent-Orchestrierung (https://github.com/ShepAlderson/copilot-orchestra)
+- MCP (Browser-Automation, Language-References, PSQL, Odoo XML-RPC)
+- Rules
+- Permissions
+- Custom Tools -> Odoo Translations
+- TDD
+- Review
+- Cursor? -> non-interactive mode
+- andere Tools -> Claude Code
+- Forschungsfokus?
+-
+
+
+
+- zweitgutachter eti z.B. bunse
+- studienordnung sieht exposee vor?
+- exposee (zielstellung -> warum interessant, motivation, titel, zielsetzung z.B. ist es möglich mit so einem agentensystem... (validierbar), teilfragen/unterfragen der zielstellung, kurze Zusammenfassung des methodischen vorgehens, erstes ergebnis eines literaturreviews -> literatur rausschen, zeitplan)
+
+- 3 seiten exposee -> E-Mail
+- ba formular hochschule -> vertraulich
+- bei HR vertrag anfragen
+- ba formular signiert durch gerold an bunse
