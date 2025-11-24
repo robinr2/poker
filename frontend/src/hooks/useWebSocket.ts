@@ -53,6 +53,7 @@ interface GameState {
   foldedPlayers: number[];
   roundOver: boolean | null;
   handInProgress?: boolean;
+  canStartHand?: boolean; // Whether enough players are present to start a hand
   minRaise?: number;
   maxRaise?: number;
   playerBets: Record<number, number>; // Track each player's bet amount in current round
@@ -226,6 +227,7 @@ export function useWebSocket(
               cardCount?: number;
             }>;
             handInProgress?: boolean;
+            canStartHand?: boolean;
             dealerSeat?: number;
             smallBlindSeat?: number;
             bigBlindSeat?: number;
@@ -249,7 +251,8 @@ export function useWebSocket(
             payload.smallBlindSeat !== undefined ||
             payload.bigBlindSeat !== undefined ||
             payload.pot !== undefined ||
-            payload.holeCards !== undefined
+            payload.holeCards !== undefined ||
+            payload.canStartHand !== undefined
           ) {
             setGameState((prev) => {
               const updated = { ...prev };
@@ -266,6 +269,9 @@ export function useWebSocket(
               }
               if (payload.pot !== undefined) {
                 updated.pot = payload.pot;
+              }
+              if (payload.canStartHand !== undefined) {
+                updated.canStartHand = payload.canStartHand;
               }
 
               // Update hole cards if present

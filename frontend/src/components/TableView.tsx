@@ -20,6 +20,7 @@ interface GameState {
   foldedPlayers?: number[];
   roundOver?: boolean | null;
   handInProgress?: boolean;
+  canStartHand?: boolean; // Whether enough players are present to start a hand
   minRaise?: number;
   maxRaise?: number;
   playerBets?: Record<number, number>;
@@ -116,13 +117,14 @@ export function TableView({
   );
 
   // Determine if Start Hand button should be visible
-  // Show when: player is seated AND (no hand in progress OR hand complete)
+  // Show when: player is seated AND (no hand in progress OR hand complete) AND canStartHand is true
   const isSeated = currentSeatIndex !== null && currentSeatIndex !== undefined;
   const hasHoleCards = gameState?.holeCards !== null && gameState?.holeCards !== undefined;
   const hasDealer = gameState?.dealerSeat !== null && gameState?.dealerSeat !== undefined;
   const handInProgress = hasHoleCards || hasDealer;
   const isHandComplete = gameState?.handComplete !== undefined;
-  const showStartHandButton = isSeated && (!handInProgress || isHandComplete);
+  const canStartHand = gameState?.canStartHand ?? false; // Default to false if not provided
+  const showStartHandButton = isSeated && (!handInProgress || isHandComplete) && canStartHand;
 
   const handleStartHand = () => {
     if (sendStartHand) {

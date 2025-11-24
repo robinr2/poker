@@ -84,14 +84,64 @@ This document summarizes all bugs fixed in this debugging session.
 
 ---
 
+## Bug 4: Start Hand Button Shows When Only One Player Remains ✅ FIXED
+
+**Problem**: 
+1. When two players went all-in and one lost all their money, the "Start Hand" button was still shown even though only one player remained
+2. The button didn't show when players first joined the table
+3. After a hand completed (e.g., A goes all-in, B calls, C folds, B wins), the button didn't appear even though B and C both had money
+
+**Root Causes**:
+1. Initial calculation only checked "active" players, not "waiting" players (new joiners)
+2. After hand completion, no `table_state` message was sent to update the `canStartHand` flag on the frontend
+
+**Desired Behavior**: 
+- "Start Hand" button should only show when there are at least 2 players with chips (waiting or active status)
+- After a bust-out that leaves only 1 player, no button should appear
+- When players first join the table (before first hand), button should appear
+- After any hand completes, button should appear if 2+ players remain
+
+**Solution Implemented**:
+
+### Backend: Add `canStartHand` Field
+- Added `canStartHand` boolean field to `TableStatePayload` struct
+- Calculates if hand can start: `playersWithChips >= 2 && table.CurrentHand == nil`
+- Counts **both "waiting" and "active"** players (waiting = just joined, active = played at least one hand)
+- Updated both `SendTableState()` and `sendPersonalizedTableState()` to populate this field
+- **Added `broadcastTableState()` calls after hand completion** to send updated `canStartHand` to frontend
+
+### Frontend: Use `canStartHand` Field
+- Added `canStartHand?: boolean` to `GameState` interface in both `TableView.tsx` and `useWebSocket.ts`
+- Updated button visibility logic: `showStartHandButton = isSeated && (!handInProgress || isHandComplete) && canStartHand`
+- Updated `useWebSocket.ts` to extract and set `canStartHand` from `table_state` messages
+- Button only appears when server confirms enough players are present
+
+**Files Modified**:
+- `internal/server/handlers.go` - Added `canStartHand` field to `TableStatePayload`, updated calculation to include "waiting" players
+- `internal/server/table.go` - Added `broadcastTableState()` calls after all showdown completion paths (3 locations: early winner, multi-player showdown, no winners)
+- `frontend/src/components/TableView.tsx` - Added `canStartHand` to `GameState`, updated button visibility logic
+- `frontend/src/hooks/useWebSocket.ts` - Added `canStartHand` to `GameState` interface and extraction from `table_state` payload
+- `frontend/src/components/TableView.test.tsx` - Updated 7 tests to include `canStartHand: true` in mock data
+
+**Tests**: 
+- ✅ Backend: All 189 tests passing
+- ✅ Frontend: All 250 tests passing
+- ✅ Build succeeds (both frontend and backend)
+
+---
+
 ## Summary
 
-All three bugs have been fixed:
+All four bugs have been fixed:
 1. ✅ Pot now displays correctly during preflop betting
 2. ✅ Players can raise normally after large preflop raises
 3. ✅ Busted players see final board state and receive proper kick notifications
+4. ✅ "Start Hand" button only shows when 2+ players with chips are present
 
-**Test Status**: ✅ All 189 tests passing
+**Test Status**: 
+- ✅ Backend: All 189 tests passing
+- ✅ Frontend: All 250 tests passing
+
 **Build Status**: ✅ Build succeeds
 
-The game should now handle bust-outs gracefully, with proper timing and notifications.
+The game now handles bust-outs gracefully with proper timing, notifications, and UI state management.

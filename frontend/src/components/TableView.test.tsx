@@ -601,6 +601,7 @@ describe('TableView', () => {
         bigBlindSeat: null,
         holeCards: null,
         pot: 0,
+        canStartHand: true, // Enough players present
       };
 
       render(
@@ -629,6 +630,7 @@ describe('TableView', () => {
         bigBlindSeat: 5,
         holeCards: null,
         pot: 50, // Hand was active
+        canStartHand: true, // Enough players present
         handComplete: {
           message: 'Hand complete',
         },
@@ -688,6 +690,7 @@ describe('TableView', () => {
         bigBlindSeat: 5,
         holeCards: null,
         pot: 50,
+        canStartHand: true, // Enough players present
         showdown: {
           winnerSeats: [1],
           winningHand: 'Pair of Aces',
@@ -760,6 +763,7 @@ describe('TableView', () => {
         bigBlindSeat: null,
         holeCards: null,
         pot: 0,
+        canStartHand: true, // Enough players present
       };
 
       render(
@@ -794,6 +798,7 @@ describe('TableView', () => {
         bigBlindSeat: null,
         holeCards: null,
         pot: 0,
+        canStartHand: true, // Enough players present
       };
 
       render(
@@ -921,6 +926,7 @@ describe('TableView', () => {
         bigBlindSeat: 5,
         holeCards: null,
         pot: 50,
+        canStartHand: false, // Can't start during active hand
       };
 
       const { rerender } = render(
@@ -947,6 +953,7 @@ describe('TableView', () => {
         bigBlindSeat: 5,
         holeCards: null,
         pot: 50,
+        canStartHand: true, // Can start after hand completes
         handComplete: {
           message: 'Hand complete',
         },
@@ -3399,6 +3406,7 @@ describe('Phase 5: Street Indicator', () => {
           bigBlindSeat: 2,
           holeCards: null,
           pot: 300,
+          canStartHand: true, // Enough players present
           boardCards: ['As', 'Kh', 'Qd', 'Jc', 'Ts'],
           street: 'river',
           showdown: {

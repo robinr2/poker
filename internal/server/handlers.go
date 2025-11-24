@@ -597,6 +597,7 @@ type TableStatePayload struct {
 	TableId        string           `json:"tableId"`
 	Seats          []TableStateSeat `json:"seats"`
 	HandInProgress bool             `json:"handInProgress"`
+	CanStartHand   bool             `json:"canStartHand"` // Whether enough players (with chips) are present to start
 	DealerSeat     *int             `json:"dealerSeat,omitempty"`
 	SmallBlindSeat *int             `json:"smallBlindSeat,omitempty"`
 	BigBlindSeat   *int             `json:"bigBlindSeat,omitempty"`
@@ -688,6 +689,17 @@ func (c *Client) SendTableState(server *Server, tableID string, logger *slog.Log
 
 	table.mu.RUnlock()
 
+	// Calculate if hand can be started: need at least 2 players with chips (waiting or active)
+	table.mu.RLock()
+	playersWithChips := 0
+	for i := 0; i < 6; i++ {
+		if (table.Seats[i].Status == "active" || table.Seats[i].Status == "waiting") && table.Seats[i].Stack > 0 {
+			playersWithChips++
+		}
+	}
+	canStartHand := playersWithChips >= 2 && table.CurrentHand == nil
+	table.mu.RUnlock()
+
 	// Populate hole cards - only if client is seated and hand is active
 	var holeCards map[int][]Card
 	if clientSeatIndex != nil && table.CurrentHand != nil {
@@ -705,6 +717,7 @@ func (c *Client) SendTableState(server *Server, tableID string, logger *slog.Log
 		TableId:        tableID,
 		Seats:          seats,
 		HandInProgress: handInProgress,
+		CanStartHand:   canStartHand,
 		DealerSeat:     dealerSeat,
 		SmallBlindSeat: smallBlindSeat,
 		BigBlindSeat:   bigBlindSeat,
@@ -843,6 +856,17 @@ func (s *Server) sendPersonalizedTableState(client *Client, table *Table) error 
 
 	table.mu.RUnlock()
 
+	// Calculate if hand can be started: need at least 2 players with chips (waiting or active)
+	table.mu.RLock()
+	playersWithChips := 0
+	for i := 0; i < 6; i++ {
+		if (table.Seats[i].Status == "active" || table.Seats[i].Status == "waiting") && table.Seats[i].Stack > 0 {
+			playersWithChips++
+		}
+	}
+	canStartHand := playersWithChips >= 2 && table.CurrentHand == nil
+	table.mu.RUnlock()
+
 	// Populate hole cards - only if client is seated and hand is active
 	var holeCards map[int][]Card
 	if clientSeatIndex != nil && table.CurrentHand != nil {
@@ -860,6 +884,7 @@ func (s *Server) sendPersonalizedTableState(client *Client, table *Table) error 
 		TableId:        table.ID,
 		Seats:          seats,
 		HandInProgress: handInProgress,
+		CanStartHand:   canStartHand,
 		DealerSeat:     dealerSeat,
 		SmallBlindSeat: smallBlindSeat,
 		BigBlindSeat:   bigBlindSeat,

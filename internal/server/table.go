@@ -219,6 +219,8 @@ func (t *Table) HandleShowdown() {
 				if t.Server != nil {
 					t.Server.broadcastShowdown(t, []int{i}, nil, distribution)
 					t.Server.broadcastHandComplete(t)
+					// Broadcast table state to update canStartHand flag
+					t.Server.broadcastTableState(t.ID, nil)
 				}
 				return
 			}
@@ -245,6 +247,8 @@ func (t *Table) HandleShowdown() {
 		// Broadcast hand complete even with no winners
 		if t.Server != nil {
 			t.Server.broadcastHandComplete(t)
+			// Broadcast table state to update canStartHand flag
+			t.Server.broadcastTableState(t.ID, nil)
 		}
 		return
 	}
@@ -285,6 +289,8 @@ func (t *Table) HandleShowdown() {
 	if t.Server != nil {
 		t.Server.broadcastShowdown(t, winners, winningRank, distribution)
 		t.Server.broadcastHandComplete(t)
+		// Broadcast table state to update canStartHand flag
+		t.Server.broadcastTableState(t.ID, nil)
 	}
 }
 
