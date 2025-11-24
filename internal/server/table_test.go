@@ -12328,3 +12328,194 @@ func TestHandleShowdown_Integration_AllInLadder_FiveWay(t *testing.T) {
 		t.Error("expected CurrentHand to be nil after showdown")
 	}
 }
+
+// TestGetDisplayPot_EmptyPlayerBets verifies GetDisplayPot returns Pot when PlayerBets is empty
+func TestGetDisplayPot_EmptyPlayerBets(t *testing.T) {
+	hand := &Hand{
+		Pot:        100,
+		PlayerBets: make(map[int]int),
+	}
+
+	displayPot := hand.GetDisplayPot()
+	if displayPot != 100 {
+		t.Errorf("Expected displayPot=100, got %d", displayPot)
+	}
+}
+
+// TestGetDisplayPot_WithPlayerBets verifies GetDisplayPot returns Pot + sum(PlayerBets)
+func TestGetDisplayPot_WithPlayerBets(t *testing.T) {
+	hand := &Hand{
+		Pot: 50,
+		PlayerBets: map[int]int{
+			0: 20, // SB posted
+			1: 40, // BB posted
+		},
+	}
+
+	displayPot := hand.GetDisplayPot()
+	expected := 50 + 20 + 40 // 110
+	if displayPot != expected {
+		t.Errorf("Expected displayPot=%d, got %d", expected, displayPot)
+	}
+}
+
+// TestGetDisplayPot_PreflopBetting verifies correct pot display during preflop betting
+func TestGetDisplayPot_PreflopBetting(t *testing.T) {
+	hand := &Hand{
+		Pot: 0, // Pot is 0 until AdvanceStreet
+		PlayerBets: map[int]int{
+			0: 10,  // SB
+			1: 20,  // BB
+			2: 60,  // UTG raised to 60
+		},
+	}
+
+	displayPot := hand.GetDisplayPot()
+	expected := 0 + 10 + 20 + 60 // 90
+	if displayPot != expected {
+		t.Errorf("Expected displayPot=%d (preflop with bets in PlayerBets), got %d", expected, displayPot)
+	}
+}
+
+// TestGetDisplayPot_AfterAdvanceStreet verifies pot after street advancement
+func TestGetDisplayPot_AfterAdvanceStreet(t *testing.T) {
+	hand := &Hand{
+		Pot: 0,
+		PlayerBets: map[int]int{
+			0: 10, // SB
+			1: 20, // BB
+		},
+		Street: "preflop",
+	}
+
+	// Simulate AdvanceStreet (sweeps PlayerBets into Pot)
+	for _, bet := range hand.PlayerBets {
+		hand.Pot += bet
+	}
+	hand.PlayerBets = make(map[int]int)
+	hand.Street = "flop"
+
+	displayPot := hand.GetDisplayPot()
+	if displayPot != 30 {
+		t.Errorf("Expected displayPot=30 after AdvanceStreet (Pot=30, PlayerBets=empty), got %d", displayPot)
+	}
+}
+
+// TestGetDisplayPot_NilPlayerBets verifies GetDisplayPot handles nil PlayerBets
+func TestGetDisplayPot_NilPlayerBets(t *testing.T) {
+	hand := &Hand{
+		Pot:        100,
+		PlayerBets: nil,
+	}
+
+	displayPot := hand.GetDisplayPot()
+	if displayPot != 100 {
+		t.Errorf("Expected displayPot=100 when PlayerBets is nil, got %d", displayPot)
+	}
+}
+
+// TestAdvanceStreet_ResetsLastRaiseAfterLargePreflopRaise verifies LastRaise resets to 20 on postflop
+// even after a large preflop raise (e.g., raise to 600)
+// This fixes the bug where players couldn't raise on flop after large preflop raises
+func TestAdvanceStreet_ResetsLastRaiseAfterLargePreflopRaise(t *testing.T) {
+	// Scenario: Player raises to 600 preflop (LastRaise = 580)
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 1,
+		BigBlindSeat:   2,
+		Pot:            0,
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+		Street:         "preflop",
+		CurrentBet:     600,
+		PlayerBets: map[int]int{
+			0: 600, // Raiser
+			1: 600, // Caller
+		},
+		FoldedPlayers: make(map[int]bool),
+		ActedPlayers:  make(map[int]bool),
+		LastRaise:     580, // 600 - 20 = 580
+	}
+
+	// Advance to flop
+	hand.AdvanceStreet()
+
+	// Verify LastRaise is reset to 20 (big blind), not preserved at 580
+	if hand.LastRaise != 20 {
+		t.Errorf("LastRaise = %d after advancing to flop, want 20 (big blind)", hand.LastRaise)
+	}
+
+	// Verify GetMinRaise returns 20 (0 + 20), not 580
+	minRaise := hand.GetMinRaise()
+	expectedMinRaise := 20 // CurrentBet (0) + LastRaise (20)
+	if minRaise != expectedMinRaise {
+		t.Errorf("GetMinRaise() = %d on flop, want %d", minRaise, expectedMinRaise)
+	}
+
+	// Verify a player with 400 chips can raise on flop
+	// They should need 20 chips to raise (minRaise - playerBet = 20 - 0)
+	chipsNeeded := minRaise - hand.PlayerBets[0] // PlayerBets[0] is now 0 after AdvanceStreet
+	if chipsNeeded != 20 {
+		t.Errorf("chipsNeeded to raise = %d, want 20", chipsNeeded)
+	}
+
+	// Player with 400 stack should be able to raise
+	playerStack := 400
+	if chipsNeeded > playerStack {
+		t.Errorf("Player with stack=%d cannot raise (needs %d chips), but should be able to", playerStack, chipsNeeded)
+	}
+}
+
+// TestGetValidActions_FlopAfterLargePreflopRaise verifies players can raise on flop
+// after calling a large preflop raise
+func TestGetValidActions_FlopAfterLargePreflopRaise(t *testing.T) {
+	// Setup table with 2 players who called a 600 raise preflop
+	server := NewServer(slog.Default())
+	table := NewTable("table-1", "Test Table", server)
+	
+	// Assign 2 seats
+	token1 := "player1-token"
+	token2 := "player2-token"
+	table.Seats[0] = Seat{Index: 0, Token: &token1, Status: "active", Stack: 400} // 1000 - 600 = 400
+	table.Seats[1] = Seat{Index: 1, Token: &token2, Status: "active", Stack: 400} // 1000 - 600 = 400
+
+	// Create hand state after preflop raise to 600 and call, now on flop
+	hand := &Hand{
+		DealerSeat:     0,
+		SmallBlindSeat: 0,
+		BigBlindSeat:   1,
+		Pot:            1200, // 600 + 600 swept into pot
+		Deck:           NewDeck(),
+		HoleCards:      make(map[int][]Card),
+		BoardCards:     []Card{{Rank: "A", Suit: "s"}, {Rank: "K", Suit: "h"}, {Rank: "Q", Suit: "d"}},
+		Street:         "flop",
+		CurrentBet:     0,
+		PlayerBets:     make(map[int]int), // Cleared after AdvanceStreet
+		FoldedPlayers:  make(map[int]bool),
+		ActedPlayers:   make(map[int]bool),
+		LastRaise:      20, // Should be reset to big blind
+	}
+
+	table.CurrentHand = hand
+
+	// Get valid actions for player at seat 1 (BB, acts first on flop)
+	validActions := hand.GetValidActions(1, table.Seats[1].Stack, table.Seats)
+
+	// Player should be able to check, fold, AND raise (with 400 chips remaining)
+	expectedActions := []string{"check", "fold", "raise"}
+	if len(validActions) != len(expectedActions) {
+		t.Errorf("validActions = %v, want %v", validActions, expectedActions)
+	}
+
+	// Verify "raise" is in validActions
+	hasRaise := false
+	for _, action := range validActions {
+		if action == "raise" {
+			hasRaise = true
+			break
+		}
+	}
+	if !hasRaise {
+		t.Errorf("validActions = %v, should include 'raise' but doesn't", validActions)
+	}
+}

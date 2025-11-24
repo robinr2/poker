@@ -291,13 +291,15 @@ func (s *Server) BroadcastActionRequest(tableID string, seatIndex int, validActi
 		return fmt.Errorf("table not found: %s", tableID)
 	}
 
-	// Calculate minRaise and maxRaise
+	// Calculate minRaise, maxRaise, and displayPot
 	minRaise := 0
 	maxRaise := 0
+	displayPot := pot
 	table.mu.RLock()
 	if table.CurrentHand != nil {
 		minRaise = table.CurrentHand.GetMinRaise()
 		maxRaise = table.GetMaxRaise(seatIndex, table.CurrentHand)
+		displayPot = table.CurrentHand.GetDisplayPot()
 	}
 	table.mu.RUnlock()
 
@@ -308,7 +310,7 @@ func (s *Server) BroadcastActionRequest(tableID string, seatIndex int, validActi
 		CallAmount:   callAmount,
 		CurrentBet:   currentBet,
 		PlayerBet:    currentBet,
-		Pot:          pot,
+		Pot:          displayPot,
 		MinRaise:     minRaise,
 		MaxRaise:     maxRaise,
 	}

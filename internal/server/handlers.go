@@ -667,7 +667,7 @@ func (c *Client) SendTableState(server *Server, tableID string, logger *slog.Log
 		dealerSeat = table.DealerSeat
 		sbSeat := table.CurrentHand.SmallBlindSeat
 		bbSeat := table.CurrentHand.BigBlindSeat
-		potAmount := table.CurrentHand.Pot
+		potAmount := table.CurrentHand.GetDisplayPot()
 		smallBlindSeat = &sbSeat
 		bigBlindSeat = &bbSeat
 		pot = &potAmount
@@ -822,7 +822,7 @@ func (s *Server) sendPersonalizedTableState(client *Client, table *Table) error 
 		dealerSeat = table.DealerSeat
 		sbSeat := table.CurrentHand.SmallBlindSeat
 		bbSeat := table.CurrentHand.BigBlindSeat
-		potAmount := table.CurrentHand.Pot
+		potAmount := table.CurrentHand.GetDisplayPot()
 		smallBlindSeat = &sbSeat
 		bigBlindSeat = &bbSeat
 		pot = &potAmount
@@ -1356,9 +1356,10 @@ func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, sea
 	if table.CurrentHand.IsBettingRoundComplete(table.Seats) {
 		// Betting round is over - broadcast with no next actor
 		// Temporarily unlock to broadcast
+		displayPot := table.CurrentHand.GetDisplayPot()
 		table.mu.Unlock()
 		err = server.BroadcastActionResult(
-			table.ID, seatIndex, action, amountActed, newStack, table.CurrentHand.Pot,
+			table.ID, seatIndex, action, amountActed, newStack, displayPot,
 			nil, true, nil,
 		)
 		table.mu.Lock()
@@ -1436,12 +1437,13 @@ func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, sea
 				// Get valid actions and call amount for the first actor of the new street
 				nextValidActions := table.CurrentHand.GetValidActions(firstActor, table.Seats[firstActor].Stack, table.Seats)
 				nextCallAmount := table.CurrentHand.GetCallAmount(firstActor)
+				displayPot := table.CurrentHand.GetDisplayPot()
 
 				// Unlock to broadcast action_request for the new street
 				table.mu.Unlock()
 				err = server.BroadcastActionRequest(
 					table.ID, firstActor, nextValidActions, nextCallAmount,
-					table.CurrentHand.CurrentBet, table.CurrentHand.Pot,
+					table.CurrentHand.CurrentBet, displayPot,
 				)
 				table.mu.Lock()
 				if err != nil {
@@ -1466,9 +1468,10 @@ func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, sea
 
 	if nextActor == nil {
 		// Only one player left (all others folded) - award pot immediately
+		displayPot := table.CurrentHand.GetDisplayPot()
 		table.mu.Unlock()
 		err = server.BroadcastActionResult(
-			table.ID, seatIndex, action, amountActed, newStack, table.CurrentHand.Pot,
+			table.ID, seatIndex, action, amountActed, newStack, displayPot,
 			nil, true, nil,
 		)
 		table.mu.Lock()
@@ -1491,12 +1494,13 @@ func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, sea
 	// Get valid actions and call amount for the next actor
 	nextValidActions := table.CurrentHand.GetValidActions(*nextActor, table.Seats[*nextActor].Stack, table.Seats)
 	nextCallAmount := table.CurrentHand.GetCallAmount(*nextActor)
+	displayPot := table.CurrentHand.GetDisplayPot()
 
 	// Broadcast the action result with the next actor
 	// Temporarily unlock to broadcast
 	table.mu.Unlock()
 	err = server.BroadcastActionResult(
-		table.ID, seatIndex, action, amountActed, newStack, table.CurrentHand.Pot,
+		table.ID, seatIndex, action, amountActed, newStack, displayPot,
 		nextActor, false, nil,
 	)
 	if err != nil {
@@ -1506,7 +1510,7 @@ func (server *Server) HandlePlayerAction(sm *SessionManager, client *Client, sea
 	// Send action_request to the next actor with updated call amount
 	err = server.BroadcastActionRequest(
 		table.ID, *nextActor, nextValidActions, nextCallAmount,
-		table.CurrentHand.CurrentBet, table.CurrentHand.Pot,
+		table.CurrentHand.CurrentBet, displayPot,
 	)
 	table.mu.Lock()
 	if err != nil {

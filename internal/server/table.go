@@ -938,7 +938,7 @@ func (t *Table) StartHand() error {
 			validActions = t.CurrentHand.GetValidActions(seatIndex, playerStack, t.Seats)
 			callAmount = t.CurrentHand.GetCallAmount(seatIndex)
 			currentBet = t.CurrentHand.CurrentBet
-			pot = t.CurrentHand.Pot
+			pot = t.CurrentHand.GetDisplayPot()
 		}
 		t.mu.RUnlock()
 
@@ -1324,6 +1324,22 @@ func (h *Hand) ValidateRaise(seatIndex, raiseAmount, playerStack int, seats [6]S
 	}
 
 	return nil
+}
+
+// GetDisplayPot returns the total chips in play (Pot + sum of all PlayerBets)
+// This is used for UI display during betting rounds
+// During betting, chips are held in PlayerBets and only moved to Pot when AdvanceStreet() is called
+// This method provides the correct total for display purposes
+func (h *Hand) GetDisplayPot() int {
+	if h.PlayerBets == nil {
+		return h.Pot
+	}
+
+	total := h.Pot
+	for _, bet := range h.PlayerBets {
+		total += bet
+	}
+	return total
 }
 
 // GetMaxOpponentCoverage returns the maximum amount active opponents can cover
@@ -1751,17 +1767,16 @@ func (h *Hand) AdvanceStreet() {
 	}
 
 	// Reset betting state for new street
-	// Preserve LastRaise from preflop (big blind) for postflop minimum raise calculation
-	lastRaiseBeforeReset := h.LastRaise
 	h.CurrentBet = 0
 	h.PlayerBets = make(map[int]int)
 	h.ActedPlayers = make(map[int]bool)
 	h.CurrentActor = nil
 	h.BigBlindHasOption = false
 
-	// On postflop streets, preserve the big blind as minimum raise increment
+	// On postflop streets, set LastRaise to big blind (20) as minimum raise increment
+	// This ensures consistent minimum raise amounts regardless of preflop action
 	if h.Street != "preflop" {
-		h.LastRaise = lastRaiseBeforeReset
+		h.LastRaise = 20 // Big blind amount
 	} else {
 		h.LastRaise = 0
 	}
