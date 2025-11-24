@@ -9,8 +9,6 @@ services:
     
     # Environment variables
     envVars:
-      - key: PORT
-        value: 8080
       - key: LOG_LEVEL
         value: info
     
