@@ -21,15 +21,17 @@ Test mode enables special API endpoints:
 
 ### 2. Run Tests
 
+**Note:** Running the full test suite takes 4-5 minutes. Prefer running specific test files during development. Only run the full suite when verifying a fix or feature that could affect multiple areas, or before merging.
+
 ```bash
-# Run all e2e tests (headless, fast - good for CI)
+# Run a specific test file (PREFERRED for development)
+npx playwright test e2e/deterministic-winner.spec.ts
+
+# Run all e2e tests (headless - takes 4-5 minutes)
 npx playwright test e2e/
 
 # Run with visible browser (headed mode - good for debugging)
 npx playwright test e2e/ --headed
-
-# Run a specific test file
-npx playwright test e2e/deterministic-winner.spec.ts
 
 # Run with cleaner output
 npx playwright test e2e/ --reporter=line
@@ -37,10 +39,12 @@ npx playwright test e2e/ --reporter=line
 
 ### 3. Test Results (Last Run)
 
-All 5 tests pass in headless mode (~3-4 minutes total):
+All 13 tests pass in headless mode (~4-5 minutes total):
 - `deterministic-winner.spec.ts` (3 tests) - Pocket Aces vs Kings, Flush vs Trips, 3-player Quads
 - `three-player-complete-hand.spec.ts` (1 test) - Full hand through all streets to showdown
 - `three-player-fold-to-win.spec.ts` (1 test) - Fold-to-win scenario with chip accounting
+- `fold-scenarios.spec.ts` (5 tests) - Various fold-to-win scenarios across all streets
+- `allin-scenarios.spec.ts` (3 tests) - All-in scenarios including heads-up showdowns
 
 ## File Structure
 
@@ -49,10 +53,14 @@ e2e/
   helpers/
     browser-helpers.ts        # launchBrowser(), positionWindow() - USE THESE
     deterministic-helpers.ts  # setDeck(), resetTable(), buildDeck()
+    poker-helpers.ts          # verifyPot(), verifyStack(), verifyStreet() - state verification
   deterministic-winner.spec.ts      # 3 tests - card outcome verification
   three-player-complete-hand.spec.ts # 1 test - full hand through all streets
   three-player-fold-to-win.spec.ts   # 1 test - fold-to-win + chip accounting
+  fold-scenarios.spec.ts             # 5 tests - fold-to-win across all streets
+  allin-scenarios.spec.ts            # 3 tests - all-in scenarios + showdowns
   README.md
+  test-scenarios.md
 ```
 
 ## Writing Tests - Use the Helpers!
