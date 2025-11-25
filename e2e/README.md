@@ -39,12 +39,13 @@ npx playwright test e2e/ --reporter=line
 
 ### 3. Test Results (Last Run)
 
-All 13 tests pass in headless mode (~4-5 minutes total):
+All 15 tests pass in headless mode (~5-6 minutes total):
 - `deterministic-winner.spec.ts` (3 tests) - Pocket Aces vs Kings, Flush vs Trips, 3-player Quads
 - `three-player-complete-hand.spec.ts` (1 test) - Full hand through all streets to showdown
 - `three-player-fold-to-win.spec.ts` (1 test) - Fold-to-win scenario with chip accounting
 - `fold-scenarios.spec.ts` (5 tests) - Various fold-to-win scenarios across all streets
 - `allin-scenarios.spec.ts` (3 tests) - All-in scenarios including heads-up showdowns
+- `elimination-continuation.spec.ts` (2 tests) - Player elimination and multiple consecutive hands
 
 ## File Structure
 
@@ -59,6 +60,7 @@ e2e/
   three-player-fold-to-win.spec.ts   # 1 test - fold-to-win + chip accounting
   fold-scenarios.spec.ts             # 5 tests - fold-to-win across all streets
   allin-scenarios.spec.ts            # 3 tests - all-in scenarios + showdowns
+  elimination-continuation.spec.ts   # 2 tests - elimination + consecutive hands
   README.md
   test-scenarios.md
 ```

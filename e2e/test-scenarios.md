@@ -43,17 +43,15 @@
 - 2-player mutual all-in showdown (heads-up)
 - **Tests:** All-in mechanics, showdown after all-in, pot distribution
 
+### 6. Elimination and Continuation
+**File:** `elimination-continuation.spec.ts`
+- 3 players, one gets eliminated via all-in, remaining 2 continue playing
+- 3 players play 3 consecutive hands with chip tracking
+- **Tests:** Player elimination, continuation with fewer players, chip conservation across hands
+
 ---
 
 ## To Implement
-
-### 6. Multiple Consecutive Hands
-**File:** `three-player-multiple-hands.spec.ts`
-- 3 players play 3 consecutive hands
-- Verify dealer button rotates correctly
-- Verify blinds are posted from correct positions each hand
-- Verify chip stacks update correctly between hands
-- **Tests:** Button rotation, blind posting, state reset between hands
 
 ### 7. Check-Raise Scenario
 **File:** `three-player-check-raise.spec.ts`
@@ -83,10 +81,11 @@
 - Verify they see correct game state and can continue playing
 - **Tests:** Identity persistence, mid-game state sync, reconnection handling
 
-### 10. Heads-Up After Elimination
-**File:** `three-player-to-headsup.spec.ts`
+### 10. Heads-Up After Elimination (Partially Covered)
+**File:** `elimination-continuation.spec.ts` (partially covers this)
 - Start with 3 players
 - One player loses all chips and is eliminated
 - Verify game continues heads-up with 2 players
 - Play another hand heads-up
 - **Tests:** Player elimination, seat management, heads-up blind structure
+- **Status:** Basic scenario covered, may need additional edge case testing
