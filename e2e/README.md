@@ -37,14 +37,10 @@ npx playwright test e2e/ --reporter=line
 
 ### 3. Test Results (Last Run)
 
-All 9 tests pass in headless mode (~5 minutes total):
-- `deterministic-winner.spec.ts` (3 tests) - Pocket Aces vs Kings, Flush vs Trips, Quads wins
-- `three-player-complete-hand.spec.ts` - Full hand to showdown
-- `three-player-fold-to-win.spec.ts` - Fold-to-win scenario
-- `smoke-test.spec.ts` - Basic 3-player connectivity
-- `quick-deterministic-test.spec.ts` - Quick deck injection verify
-- `single-player-test.spec.ts` - Single player table join
-- `diagnostic.spec.ts` - Page load diagnostic
+All 5 tests pass in headless mode (~3-4 minutes total):
+- `deterministic-winner.spec.ts` (3 tests) - Pocket Aces vs Kings, Flush vs Trips, 3-player Quads
+- `three-player-complete-hand.spec.ts` (1 test) - Full hand through all streets to showdown
+- `three-player-fold-to-win.spec.ts` (1 test) - Fold-to-win scenario with chip accounting
 
 ## File Structure
 
@@ -53,13 +49,9 @@ e2e/
   helpers/
     browser-helpers.ts        # launchBrowser(), positionWindow() - USE THESE
     deterministic-helpers.ts  # setDeck(), resetTable(), buildDeck()
-  deterministic-winner.spec.ts
-  three-player-complete-hand.spec.ts
-  three-player-fold-to-win.spec.ts
-  smoke-test.spec.ts
-  single-player-test.spec.ts
-  quick-deterministic-test.spec.ts
-  diagnostic.spec.ts
+  deterministic-winner.spec.ts      # 3 tests - card outcome verification
+  three-player-complete-hand.spec.ts # 1 test - full hand through all streets
+  three-player-fold-to-win.spec.ts   # 1 test - fold-to-win + chip accounting
   README.md
 ```
 
