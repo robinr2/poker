@@ -53,7 +53,7 @@ func TestHealthCheckHandler(t *testing.T) {
 // TestGetLobbyState verifies GetLobbyState returns correct table info for all 4 tables with 0 occupied seats
 func TestGetLobbyState(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 
 	lobbyState := server.GetLobbyState()
 
@@ -103,7 +103,7 @@ func TestGetLobbyState(t *testing.T) {
 // TestGetLobbyStateWithOccupiedSeats verifies GetLobbyState reflects occupied seats correctly
 func TestGetLobbyStateWithOccupiedSeats(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 
 	// Manually occupy some seats on different tables
 	token1 := "token-1"
@@ -144,7 +144,7 @@ func TestGetLobbyStateWithOccupiedSeats(t *testing.T) {
 // TestGetLobbyStateThreadSafety verifies concurrent calls to GetLobbyState while modifying seats
 func TestGetLobbyStateThreadSafety(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 
 	const numGoroutines = 10
 	const operationsPerGoroutine = 50
@@ -268,7 +268,7 @@ func TestFilterHoleCardsForPlayer(t *testing.T) {
 // TestBroadcastHandStarted verifies hand_started message broadcast with dealer and blind info
 func TestBroadcastHandStarted(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 	go hub.Run()
 
@@ -317,7 +317,7 @@ func TestBroadcastHandStarted(t *testing.T) {
 // TestBroadcastBlindPosted verifies blind_posted message broadcast
 func TestBroadcastBlindPosted(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 	go hub.Run()
 
@@ -363,7 +363,7 @@ func TestBroadcastBlindPosted(t *testing.T) {
 // TestBroadcastCardsDealt verifies cards_dealt message with privacy filtering
 func TestBroadcastCardsDealt(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 	go hub.Run()
 
@@ -402,7 +402,7 @@ func TestBroadcastCardsDealt(t *testing.T) {
 // TestHandleStartHand verifies start_hand message handler successfully starts a hand
 func TestHandleStartHand(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()
@@ -461,7 +461,7 @@ func TestHandleStartHand(t *testing.T) {
 // TestHandleStartHandNotSeated verifies error when player is not seated
 func TestHandleStartHandNotSeated(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()
@@ -487,7 +487,7 @@ func TestHandleStartHandNotSeated(t *testing.T) {
 // TestHandleStartHandInsufficientPlayers verifies error with < 2 players
 func TestHandleStartHandInsufficientPlayers(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()
@@ -526,7 +526,7 @@ func TestHandleStartHandInsufficientPlayers(t *testing.T) {
 // TestTableStateSeatIncludesStack verifies that stack field is included in table_state payload
 func TestTableStateSeatIncludesStack(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 
 	// Get first table
@@ -602,7 +602,7 @@ func TestTableStateSeatIncludesStack(t *testing.T) {
 // TestTableStateSerializationWithStacks verifies JSON serialization includes stack values
 func TestTableStateSerializationWithStacks(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 
 	// Get first table
@@ -700,7 +700,7 @@ func TestTableStateSerializationWithStacks(t *testing.T) {
 // TestBroadcastTableStateIncludesStack verifies Stack is included when broadcasting table state
 func TestBroadcastTableStateIncludesStack(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()
@@ -807,7 +807,7 @@ func TestBroadcastTableStateIncludesStack(t *testing.T) {
 // TestTableStateIncludesGameStateWhenHandActive verifies game state fields are populated when hand is active
 func TestTableStateIncludesGameStateWhenHandActive(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 
 	// Get first table
 	server.mu.RLock()
@@ -899,7 +899,7 @@ func TestTableStateIncludesGameStateWhenHandActive(t *testing.T) {
 // TestTableStateOmitsGameStateWhenNoHand verifies fields are nil/zero when no hand active
 func TestTableStateOmitsGameStateWhenNoHand(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 
 	// Get first table
 	server.mu.RLock()
@@ -980,7 +980,7 @@ func TestTableStateOmitsGameStateWhenNoHand(t *testing.T) {
 // TestTableStateGameStateFields verifies dealer, blinds, and pot are correctly set
 func TestTableStateGameStateFields(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 
 	// Get first table
 	server.mu.RLock()
@@ -1089,7 +1089,7 @@ func TestTableStateGameStateFields(t *testing.T) {
 // TestTableStateIncludesHoleCardsForSeatedPlayer verifies seated player receives their hole cards
 func TestTableStateIncludesHoleCardsForSeatedPlayer(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 
 	// Get first table
 	server.mu.RLock()
@@ -1189,7 +1189,7 @@ func TestTableStateIncludesHoleCardsForSeatedPlayer(t *testing.T) {
 // TestTableStateOmitsHoleCardsForUnseatedPlayer verifies spectators don't get hole cards but see card counts
 func TestTableStateOmitsHoleCardsForUnseatedPlayer(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 
 	// Get first table
 	server.mu.RLock()
@@ -1286,7 +1286,7 @@ func TestTableStateOmitsHoleCardsForUnseatedPlayer(t *testing.T) {
 // TestTableStateHoleCardsPrivacy verifies player only sees their own cards
 func TestTableStateHoleCardsPrivacy(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 
 	// Get first table
 	server.mu.RLock()
@@ -1401,7 +1401,7 @@ func TestTableStateHoleCardsPrivacy(t *testing.T) {
 // TestTableStateCardCountsForSpectators verifies card counts are populated for all seats
 func TestTableStateCardCountsForSpectators(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 
 	// Get first table
 	server.mu.RLock()
@@ -1523,7 +1523,7 @@ func TestTableStateCardCountsForSpectators(t *testing.T) {
 // TestHandlePlayerAction_ValidCall verifies call action processes
 func TestHandlePlayerAction_ValidCall(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()
@@ -1599,7 +1599,7 @@ func TestHandlePlayerAction_ValidCall(t *testing.T) {
 // TestHandlePlayerAction_ValidCheck verifies check action processes
 func TestHandlePlayerAction_ValidCheck(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()
@@ -1693,7 +1693,7 @@ func TestHandlePlayerAction_ValidCheck(t *testing.T) {
 // TestHandlePlayerAction_ValidFold verifies fold action marks player folded
 func TestHandlePlayerAction_ValidFold(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()
@@ -1761,7 +1761,7 @@ func TestHandlePlayerAction_ValidFold(t *testing.T) {
 // TestHandlePlayerAction_InvalidAction verifies error on invalid action
 func TestHandlePlayerAction_InvalidAction(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()
@@ -1813,7 +1813,7 @@ func TestHandlePlayerAction_InvalidAction(t *testing.T) {
 // TestHandlePlayerAction_OutOfTurn verifies error when not current actor
 func TestHandlePlayerAction_OutOfTurn(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()
@@ -1865,7 +1865,7 @@ func TestHandlePlayerAction_OutOfTurn(t *testing.T) {
 // TestHandlePlayerAction_BroadcastsResult verifies action_result is broadcast after action
 func TestHandlePlayerAction_BroadcastsResult(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()
@@ -1969,7 +1969,7 @@ func TestHandlePlayerAction_BroadcastsResult(t *testing.T) {
 // TestHandlePlayerAction_RaiseWithAmount verifies handler extracts amount and calls ProcessAction correctly for raises
 func TestHandlePlayerAction_RaiseWithAmount(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()
@@ -2048,7 +2048,7 @@ func TestHandlePlayerAction_RaiseWithAmount(t *testing.T) {
 // TestHandlePlayerAction_RaiseMissingAmount verifies handler returns error when raise lacks amount
 func TestHandlePlayerAction_RaiseMissingAmount(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()
@@ -2114,7 +2114,7 @@ func TestHandlePlayerAction_RaiseMissingAmount(t *testing.T) {
 // TestBroadcastActionRequest_IncludesMinMaxRaise verifies action_request payload includes minRaise and maxRaise fields
 func TestBroadcastActionRequest_IncludesMinMaxRaise(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()
@@ -2210,7 +2210,7 @@ func TestBroadcastActionRequest_IncludesMinMaxRaise(t *testing.T) {
 // TestBroadcastActionRequest_MinMaxCalculation verifies MinRaise and MaxRaise are calculated correctly
 func TestBroadcastActionRequest_MinMaxCalculation(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()
@@ -2363,7 +2363,7 @@ func TestBroadcastActionRequest_MinMaxCalculation(t *testing.T) {
 // TestBroadcastBoardDealt_SendsToAllTablePlayers verifies board_dealt message is sent to all players at the table
 func TestBroadcastBoardDealt_SendsToAllTablePlayers(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 	go hub.Run()
 
@@ -2468,7 +2468,7 @@ func TestBroadcastBoardDealt_SendsToAllTablePlayers(t *testing.T) {
 // TestBroadcastBoardDealt_IncludesCorrectBoardCards verifies board_dealt includes the correct board cards
 func TestBroadcastBoardDealt_IncludesCorrectBoardCards(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 	go hub.Run()
 
@@ -2556,7 +2556,7 @@ func TestBroadcastBoardDealt_IncludesCorrectBoardCards(t *testing.T) {
 // TestBroadcastBoardDealt_IncludesStreetIndicator verifies board_dealt includes the correct street indicator
 func TestBroadcastBoardDealt_IncludesStreetIndicator(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 	go hub.Run()
 
@@ -2638,7 +2638,7 @@ func TestBroadcastBoardDealt_IncludesStreetIndicator(t *testing.T) {
 // completes, the street is advanced and board cards are dealt and broadcast
 func TestHandlePlayerAction_AdvancesStreetAfterRoundComplete(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()
@@ -2938,7 +2938,7 @@ func TestHandlerFlow_AllFoldBeforeShowdown(t *testing.T) {
 // TestHandlerFlow_FullHandCycle_ManualNextHand verifies complete hand flow with manual "Start Hand" button
 func TestHandlerFlow_FullHandCycle_ManualNextHand(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	table := server.tables[0]
 
 	// Set up 2 active players
@@ -3007,7 +3007,7 @@ func TestHandlerFlow_FullHandCycle_ManualNextHand(t *testing.T) {
 // TestHandlerFlow_HandEndsWithBustOut verifies bust-out handling at showdown
 func TestHandlerFlow_HandEndsWithBustOut(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	table := server.tables[0]
 
 	// Set up 2 players: seat 0 wins 100, seat 1 has exactly 100 (will bust)
@@ -3063,7 +3063,7 @@ func TestHandlerFlow_HandEndsWithBustOut(t *testing.T) {
 // TestHandlerFlow_DealerRotatesAfterShowdown verifies dealer position rotates correctly after showdown
 func TestHandlerFlow_DealerRotatesAfterShowdown(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	table := server.tables[0]
 
 	// Set up 3 active players at seats 1, 3, 5
@@ -3144,7 +3144,7 @@ func TestHandlerFlow_DealerRotatesAfterShowdown(t *testing.T) {
 // TestHandlerFlow_StartHandButtonWorksAfterShowdown verifies "Start Hand" works after showdown cleanup
 func TestHandlerFlow_StartHandButtonWorksAfterShowdown(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	table := server.tables[0]
 
 	// Set up 2 active players
@@ -3216,7 +3216,7 @@ func TestHandleAction_RiverBettingCompleteTriggersShowdown(t *testing.T) {
 	// where both players have acted and matched the bet
 
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()
@@ -3326,7 +3326,7 @@ func TestHandleAction_RiverNoShowdownIfNotComplete(t *testing.T) {
 	// showdown is not triggered yet
 
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()
@@ -3432,7 +3432,7 @@ func TestHandleAction_RiverNoShowdownIfNotComplete(t *testing.T) {
 // the remaining player wins immediately without advancing to flop
 func TestHandlePlayerAction_AllFoldPreflop_EarlyWinner(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()
@@ -3540,7 +3540,7 @@ func TestHandlePlayerAction_AllFoldPreflop_EarlyWinner(t *testing.T) {
 // the remaining player wins immediately without advancing to turn
 func TestHandlePlayerAction_AllFoldFlop_EarlyWinner(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()
@@ -3642,7 +3642,7 @@ func TestHandlePlayerAction_AllFoldFlop_EarlyWinner(t *testing.T) {
 // the remaining player wins immediately without advancing to river
 func TestHandlePlayerAction_AllFoldTurn_EarlyWinner(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()
@@ -3745,7 +3745,7 @@ func TestHandlePlayerAction_AllFoldTurn_EarlyWinner(t *testing.T) {
 // the remaining player wins immediately (should already work as river is final street)
 func TestHandlePlayerAction_AllFoldRiver_EarlyWinner(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	sm := NewSessionManager(logger)
 	hub := server.hub
 	go hub.Run()

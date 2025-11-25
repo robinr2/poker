@@ -15,7 +15,7 @@ import (
 func TestWebSocketUpgrade(t *testing.T) {
 	logger := slog.Default()
 	hub := NewHub(logger)
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 
 	// Create a test HTTP server with the WebSocket handler
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +42,7 @@ func TestWebSocketUpgrade(t *testing.T) {
 
 func TestWebSocketRouteRegistered(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 
 	// Create a test HTTP request to /ws
 	req := httptest.NewRequest("GET", "/ws", nil)
@@ -169,7 +169,7 @@ func TestHubBroadcast(t *testing.T) {
 
 func TestWebSocketRoute_PlayerActionRouted(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a mock WebSocket connection

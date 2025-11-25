@@ -11,7 +11,7 @@ import (
 
 func TestNewServer(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 
 	if server == nil {
 		t.Fatal("expected server to be initialized, got nil")
@@ -36,7 +36,7 @@ func TestNewServer(t *testing.T) {
 
 func TestServerStart(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 
 	// Channel to signal that server started
 	done := make(chan error, 1)
@@ -75,7 +75,7 @@ func TestServerStart(t *testing.T) {
 // TestServerFindPlayerSeat verifies FindPlayerSeat finds player across all 4 tables
 func TestServerFindPlayerSeat(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 
 	token1 := "player-1"
 	token2 := "player-2"
@@ -139,7 +139,7 @@ func TestServerFindPlayerSeat(t *testing.T) {
 // TestServerFindPlayerSeatNotFound verifies returns nil when player not seated
 func TestServerFindPlayerSeatNotFound(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 
 	tokenNotSeated := "player-not-seated"
 
@@ -162,7 +162,7 @@ func TestServerFindPlayerSeatNotFound(t *testing.T) {
 // TestBroadcastActionRequest verifies action_request is sent to all clients at table
 func TestBroadcastActionRequest(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Start the hub
@@ -249,7 +249,7 @@ func TestBroadcastActionRequest(t *testing.T) {
 // TestBroadcastActionResult verifies action_result is sent to all clients at table
 func TestBroadcastActionResult(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Start the hub

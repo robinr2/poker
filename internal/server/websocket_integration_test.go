@@ -43,7 +43,7 @@ func sendMessage(t *testing.T, ws *websocket.Conn, msgType string, payload inter
 // TestHandleWebSocket_WithoutToken tests new connection without token
 func TestHandleWebSocket_WithoutToken(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a test HTTP server with the WebSocket handler
@@ -97,7 +97,7 @@ func TestHandleWebSocket_WithoutToken(t *testing.T) {
 // TestHandleWebSocket_WithValidToken tests connection with existing valid token
 func TestHandleWebSocket_WithValidToken(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a session first
@@ -145,7 +145,7 @@ func TestHandleWebSocket_WithValidToken(t *testing.T) {
 // TestHandleWebSocket_WithInvalidToken tests connection with invalid/expired token
 func TestHandleWebSocket_WithInvalidToken(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a test HTTP server with the WebSocket handler
@@ -191,7 +191,7 @@ func TestHandleWebSocket_WithInvalidToken(t *testing.T) {
 // TestSetNameMessage tests set_name message handling
 func TestSetNameMessage(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a test HTTP server with the WebSocket handler
@@ -238,7 +238,7 @@ func TestSetNameMessage(t *testing.T) {
 // TestSessionCreatedMessage tests session_created response format
 func TestSessionCreatedMessage(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a test HTTP server with the WebSocket handler
@@ -287,7 +287,7 @@ func TestSessionCreatedMessage(t *testing.T) {
 // TestSessionRestoredMessage tests session_restored for rejoin with table/seat
 func TestSessionRestoredMessage(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a session and set table/seat info
@@ -350,7 +350,7 @@ func TestSessionRestoredMessage(t *testing.T) {
 // TestSessionRestoredMessageWithoutTableSeat tests session_restored without table/seat
 func TestSessionRestoredMessageWithoutTableSeat(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a session without table/seat info
@@ -406,7 +406,7 @@ func TestSessionRestoredMessageWithoutTableSeat(t *testing.T) {
 // TestMultipleConnectionsSameToken tests concurrent connections with same token
 func TestMultipleConnectionsSameToken(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a session
@@ -468,7 +468,7 @@ func TestMultipleConnectionsSameToken(t *testing.T) {
 // TestInvalidSetNameMessage tests set_name with invalid name
 func TestInvalidSetNameMessage(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a test HTTP server with the WebSocket handler
@@ -513,7 +513,7 @@ func TestInvalidSetNameMessage(t *testing.T) {
 // TestInvalidJSONMessage tests handling of invalid JSON
 func TestInvalidJSONMessage(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a test HTTP server with the WebSocket handler
@@ -549,7 +549,7 @@ func TestInvalidJSONMessage(t *testing.T) {
 // TestWebSocketSendsLobbyStateOnConnect verifies client receives lobby_state after connection
 func TestWebSocketSendsLobbyStateOnConnect(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a test HTTP server with the WebSocket handler
@@ -599,7 +599,7 @@ func TestWebSocketSendsLobbyStateOnConnect(t *testing.T) {
 // TestLobbyStateMessageFormat verifies JSON structure of lobby_state message
 func TestLobbyStateMessageFormat(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a test HTTP server with the WebSocket handler
@@ -666,7 +666,7 @@ func TestLobbyStateMessageFormat(t *testing.T) {
 // TestWebSocketSendsLobbyStateOnRestore verifies lobby_state sent after session_restored
 func TestWebSocketSendsLobbyStateOnRestore(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a session
@@ -719,7 +719,7 @@ func TestWebSocketSendsLobbyStateOnRestore(t *testing.T) {
 // TestHandleJoinTableSuccess tests successful join_table with seat assignment
 func TestHandleJoinTableSuccess(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a session
@@ -798,7 +798,7 @@ func TestHandleJoinTableSuccess(t *testing.T) {
 // TestHandleJoinTableFull tests join_table returns error when table is full
 func TestHandleJoinTableFull(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Fill all 6 seats on table-1 with dummy tokens
@@ -861,7 +861,7 @@ func TestHandleJoinTableFull(t *testing.T) {
 // TestHandleJoinTableAlreadySeated tests join_table returns error when player already seated
 func TestHandleJoinTableAlreadySeated(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a session
@@ -922,7 +922,7 @@ func TestHandleJoinTableAlreadySeated(t *testing.T) {
 // TestHandleJoinTableInvalidTableID tests join_table returns error for non-existent table
 func TestHandleJoinTableInvalidTableID(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a session
@@ -979,7 +979,7 @@ func TestHandleJoinTableInvalidTableID(t *testing.T) {
 // TestSeatAssignedMessage tests seat_assigned message format
 func TestSeatAssignedMessage(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a session
@@ -1044,7 +1044,7 @@ func TestSeatAssignedMessage(t *testing.T) {
 // TestJoinTableUpdatesSession tests that session is updated with TableID and SeatIndex
 func TestJoinTableUpdatesSession(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a session
@@ -1106,7 +1106,7 @@ func TestJoinTableUpdatesSession(t *testing.T) {
 // TestJoinTableBroadcastsLobbyState tests that lobby_state is broadcast after join
 func TestJoinTableBroadcastsLobbyState(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create two sessions
@@ -1201,7 +1201,7 @@ func TestJoinTableBroadcastsLobbyState(t *testing.T) {
 // TestHandleLeaveTableSuccess tests successful leave_table with seat clearing
 func TestHandleLeaveTableSuccess(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a session
@@ -1280,7 +1280,7 @@ func TestHandleLeaveTableSuccess(t *testing.T) {
 // TestHandleLeaveTableNotSeated tests leave_table returns error when player not seated
 func TestHandleLeaveTableNotSeated(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a session
@@ -1337,7 +1337,7 @@ func TestHandleLeaveTableNotSeated(t *testing.T) {
 // TestLeaveTableBroadcastsLobbyState tests that lobby_state is broadcast after leave
 func TestLeaveTableBroadcastsLobbyState(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create two sessions
@@ -1444,7 +1444,7 @@ func TestLeaveTableBroadcastsLobbyState(t *testing.T) {
 // TestHandleDisconnectClearsSeat tests that disconnect clears seat if player was seated
 func TestHandleDisconnectClearsSeat(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a session
@@ -1513,7 +1513,7 @@ func TestHandleDisconnectClearsSeat(t *testing.T) {
 // TestHandleDisconnectNoSeat tests that disconnect doesn't error when player has no seat
 func TestHandleDisconnectNoSeat(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a session
@@ -1566,7 +1566,7 @@ func TestHandleDisconnectNoSeat(t *testing.T) {
 // TestDisconnectBroadcastsLobbyState tests that remaining clients receive updated lobby_state on disconnect
 func TestDisconnectBroadcastsLobbyState(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create two sessions
@@ -1667,7 +1667,7 @@ func TestDisconnectBroadcastsLobbyState(t *testing.T) {
 // TestHandleLeaveTableReceivesLobbyState tests that the leaving client receives updated lobby_state
 func TestHandleLeaveTableReceivesLobbyState(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a session for the player
@@ -1789,7 +1789,7 @@ func TestSessionManager_GetPlayerName_NotFound(t *testing.T) {
 // TestGetClientsAtTable tests GetClientsAtTable returns clients at specific table
 func TestServer_GetClientsAtTable(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create two sessions
@@ -1861,7 +1861,7 @@ func TestServer_GetClientsAtTable(t *testing.T) {
 // TestTableStatePayload tests table_state message contains all seat information
 func TestTableStateMessage(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create a session for a player
@@ -1990,7 +1990,7 @@ func TestTableStateMessage(t *testing.T) {
 // TestTableStateBroadcastOnJoin tests that table_state is broadcast to all players at table when someone joins
 func TestTableStateBroadcastOnJoin(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create two sessions
@@ -2120,7 +2120,7 @@ func TestTableStateBroadcastOnJoin(t *testing.T) {
 // TestLeaveTableBroadcastsTableStateToRemaining tests that remaining players receive table_state when someone leaves
 func TestLeaveTableBroadcastsTableStateToRemaining(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create two sessions
@@ -2229,7 +2229,7 @@ func TestLeaveTableBroadcastsTableStateToRemaining(t *testing.T) {
 // TestDisconnectBroadcastsTableStateToRemaining tests that remaining players receive table_state when someone disconnects
 func TestDisconnectBroadcastsTableStateToRemaining(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create two sessions
@@ -2335,7 +2335,7 @@ func TestDisconnectBroadcastsTableStateToRemaining(t *testing.T) {
 // TestStartHandBroadcastsMessages verifies StartHand() broadcasts hand_started, blind_posted, and cards_dealt
 func TestStartHandBroadcastsMessages(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create two sessions
@@ -2455,7 +2455,7 @@ func TestStartHandBroadcastsMessages(t *testing.T) {
 // TestStartHandBroadcastsCardPrivacy verifies each player only receives their own hole cards
 func TestStartHandBroadcastsCardPrivacy(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 
 	// Create two sessions
@@ -2581,7 +2581,7 @@ func TestStartHandBroadcastsCardPrivacy(t *testing.T) {
 // TestWebSocketFlow_FlopBroadcast_AfterPreflopComplete verifies board_dealt is broadcast after preflop
 func TestWebSocketFlow_FlopBroadcast_AfterPreflopComplete(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 	go hub.Run()
 
@@ -2646,7 +2646,7 @@ func TestWebSocketFlow_FlopBroadcast_AfterPreflopComplete(t *testing.T) {
 // TestWebSocketFlow_TurnBroadcast_AfterFlopComplete verifies board_dealt is broadcast for turn
 func TestWebSocketFlow_TurnBroadcast_AfterFlopComplete(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 	go hub.Run()
 
@@ -2716,7 +2716,7 @@ func TestWebSocketFlow_TurnBroadcast_AfterFlopComplete(t *testing.T) {
 // TestWebSocketFlow_RiverBroadcast_AfterTurnComplete verifies board_dealt is broadcast for river
 func TestWebSocketFlow_RiverBroadcast_AfterTurnComplete(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 	go hub.Run()
 
@@ -2798,7 +2798,7 @@ func TestWebSocketFlow_RiverBroadcast_AfterTurnComplete(t *testing.T) {
 // 6. After BB checks, betting round completes and can advance to flop
 func TestWebSocketFlow_BBGetsActionAfterSBCalls(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 	go hub.Run()
 
@@ -2929,7 +2929,7 @@ func TestWebSocketFlow_BBGetsActionAfterSBCalls(t *testing.T) {
 // This tests that UI receives correct valid actions when a player can check-raise on flop
 func TestWebSocketFlow_CheckRaiseOnFlop(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	hub := server.hub
 	go hub.Run()
 

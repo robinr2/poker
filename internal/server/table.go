@@ -76,6 +76,7 @@ type Table struct {
 	CurrentHand            *Hand   // Currently active hand (nil = no hand running)
 	DealerRotatedThisRound bool    // True if dealer has been rotated after this hand (prevents double-rotation in StartHand)
 	Server                 *Server // Reference to the server for broadcasting events
+	TestDeck               []Card  // TEST MODE ONLY: Predetermined deck for deterministic testing (nil = use random shuffle)
 	mu                     sync.RWMutex
 }
 
@@ -98,6 +99,17 @@ func NewTable(id, name string, server *Server) *Table {
 	}
 
 	return table
+}
+
+// SetTestDeck sets a predetermined deck for deterministic testing
+// The deck will be used once on the next StartHand call, then cleared
+// Cards should be in deal order: first cards dealt first
+// Thread-safe method
+func (t *Table) SetTestDeck(deck []Card) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.TestDeck = make([]Card, len(deck))
+	copy(t.TestDeck, deck)
 }
 
 // DetermineWinner evaluates all non-folded players' hands and returns the winner(s)
@@ -838,11 +850,20 @@ func (t *Table) StartHand() error {
 		}
 	}
 
-	// Step 4: Shuffle the deck
-	err = ShuffleDeck(hand.Deck)
-	if err != nil {
-		t.mu.Unlock()
-		return fmt.Errorf("failed to shuffle deck: %w", err)
+	// Step 4: Shuffle the deck (or use test deck if set)
+	if len(t.TestDeck) > 0 {
+		// TEST MODE: Use predetermined deck instead of shuffling
+		hand.Deck = make([]Card, len(t.TestDeck))
+		copy(hand.Deck, t.TestDeck)
+		// Clear TestDeck after use (one-time use per hand)
+		t.TestDeck = nil
+	} else {
+		// Normal mode: Shuffle the deck
+		err = ShuffleDeck(hand.Deck)
+		if err != nil {
+			t.mu.Unlock()
+			return fmt.Errorf("failed to shuffle deck: %w", err)
+		}
 	}
 
 	// Step 5: Post blinds (handle all-in if necessary)

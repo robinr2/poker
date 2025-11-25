@@ -1,40 +1,22 @@
 import { test, expect, chromium, Browser, BrowserContext, Page } from '@playwright/test';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-
-const execAsync = promisify(exec);
 
 /**
- * Helper to restart the Go server (clears in-memory state)
+ * Verify server is running and ready
+ * Assumes server is already running (start with: POKER_TEST_MODE=true ./server)
  */
-async function restartServer() {
-  console.log('Restarting server to clear state...');
-  
-  // Kill existing server by finding PID on port 8080
+async function verifyServerReady() {
+  console.log('Verifying server is ready...');
+
   try {
-    const { stdout } = await execAsync('lsof -ti :8080 2>/dev/null || true');
-    if (stdout.trim()) {
-      await execAsync(`kill -9 ${stdout.trim()}`);
-      console.log('Killed existing server');
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    const response = await fetch('http://localhost:8080/health');
+    if (!response.ok) {
+      throw new Error('Server health check failed');
     }
-  } catch (e) {
-    // Server might not be running, that's ok
-  }
-  
-  // Start server
-  exec('cd /home/roeschkerobin/Workspace/github-personal/poker && go run cmd/server/main.go > /tmp/poker-server-test.log 2>&1 &');
-  
-  // Wait for server to be ready
-  await new Promise(resolve => setTimeout(resolve, 4000));
-  
-  // Verify server is responding
-  try {
-    await execAsync('curl -s http://localhost:8080 > /dev/null');
-    console.log('✓ Server restarted and ready');
-  } catch (e) {
-    console.error('⚠ Server may not have started properly');
-    throw new Error('Server failed to start');
+    console.log('Server is ready');
+  } catch (error) {
+    throw new Error(
+      'Server not running. Start with: POKER_TEST_MODE=true ./server (or go run ./cmd/server)'
+    );
   }
 }
 
@@ -65,8 +47,8 @@ test.describe('Poker Application - Smoke Test', () => {
   });
 
   test.beforeEach(async () => {
-    // Restart server before each test to clear state
-    await restartServer();
+    // Verify server is running (assume already started)
+    await verifyServerReady();
   });
 
   test.afterAll(async () => {

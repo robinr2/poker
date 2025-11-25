@@ -31,7 +31,7 @@ func TestStaticFileServing(t *testing.T) {
 		}
 	}()
 
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 
 	t.Run("serves index.html at root", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)

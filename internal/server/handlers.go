@@ -1624,3 +1624,105 @@ func (s *Server) handleBustOutNotifications(table *Table, bustedTokens []string)
 		s.logger.Warn("failed to broadcast lobby_state after bust-outs", "error", err)
 	}
 }
+
+// SetDeckPayload represents the payload for the test set_deck endpoint
+type SetDeckPayload struct {
+	TableID string   `json:"tableId"`
+	Deck    []string `json:"deck"` // Array of card strings like ["As", "Kh", "Qd", ...]
+}
+
+// SetDeckResponse represents the response for the test set_deck endpoint
+type SetDeckResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// HandleSetDeck handles the POST /api/test/set-deck endpoint
+// This endpoint is only available when POKER_TEST_MODE=true
+// It sets a predetermined deck for deterministic testing
+func (s *Server) HandleSetDeck() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		// Verify test mode is enabled
+		if !s.testMode {
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(SetDeckResponse{
+				Success: false,
+				Message: "Test mode is not enabled. Set POKER_TEST_MODE=true to use this endpoint.",
+			})
+			return
+		}
+
+		// Only accept POST
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			json.NewEncoder(w).Encode(SetDeckResponse{
+				Success: false,
+				Message: "Method not allowed",
+			})
+			return
+		}
+
+		// Parse request body
+		var payload SetDeckPayload
+		err := json.NewDecoder(r.Body).Decode(&payload)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(SetDeckResponse{
+				Success: false,
+				Message: "Invalid JSON payload: " + err.Error(),
+			})
+			return
+		}
+
+		// Validate deck has 52 cards
+		if len(payload.Deck) != 52 {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(SetDeckResponse{
+				Success: false,
+				Message: fmt.Sprintf("Deck must contain exactly 52 cards, got %d", len(payload.Deck)),
+			})
+			return
+		}
+
+		// Find the table
+		table := s.GetTableByID(payload.TableID)
+		if table == nil {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(SetDeckResponse{
+				Success: false,
+				Message: "Table not found: " + payload.TableID,
+			})
+			return
+		}
+
+		// Parse card strings into Card structs
+		deck := make([]Card, 52)
+		for i, cardStr := range payload.Deck {
+			if len(cardStr) != 2 {
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(SetDeckResponse{
+					Success: false,
+					Message: fmt.Sprintf("Invalid card format at index %d: '%s' (expected 2 characters like 'As')", i, cardStr),
+				})
+				return
+			}
+			deck[i] = Card{
+				Rank: string(cardStr[0]),
+				Suit: string(cardStr[1]),
+			}
+		}
+
+		// Set the test deck on the table
+		table.SetTestDeck(deck)
+
+		s.logger.Info("test deck set", "tableId", payload.TableID, "deckSize", len(deck))
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(SetDeckResponse{
+			Success: true,
+			Message: "Test deck set successfully. It will be used on the next hand start.",
+		})
+	}
+}

@@ -1,42 +1,24 @@
 import { test, expect, chromium, Browser, BrowserContext, Page } from '@playwright/test';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { resetTable } from './helpers/deterministic-helpers';
 
-const execAsync = promisify(exec);
+const TABLE_ID = 'table-1';
 
 /**
- * Restart Docker backend container to clear in-memory state
+ * Verify server is running and ready
  */
-async function restartDockerServer() {
-  console.log('Restarting Docker backend container...');
-  
+async function verifyServerReady() {
+  console.log('Verifying server is ready...');
+
   try {
-    await execAsync('docker restart poker-backend-dev');
-    console.log('Backend container restarted');
-    
-    // Wait for the server to be ready
-    let serverReady = false;
-    const maxAttempts = 30;
-    
-    for (let i = 0; i < maxAttempts; i++) {
-      try {
-        await execAsync('curl -s http://localhost:8080 > /dev/null');
-        serverReady = true;
-        break;
-      } catch {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
+    const response = await fetch('http://localhost:8080/health');
+    if (!response.ok) {
+      throw new Error('Server health check failed');
     }
-    
-    if (!serverReady) {
-      throw new Error('Server failed to become ready after restart');
-    }
-    
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    console.log('Docker backend server ready');
+    console.log('Server is ready');
   } catch (error) {
-    console.error('Failed to restart Docker server:', error);
-    throw error;
+    throw new Error(
+      'Server not running. Start with: POKER_TEST_MODE=true ./server (or go run ./cmd/server)'
+    );
   }
 }
 
@@ -233,8 +215,11 @@ test.describe('Three Player Fold to Win', () => {
   });
 
   test.beforeEach(async () => {
-    await restartDockerServer();
-    
+    await verifyServerReady();
+
+    // Reset the table state before each test to ensure clean state
+    await resetTable(TABLE_ID);
+
     for (const player of players) {
       await player.close().catch(() => {});
     }

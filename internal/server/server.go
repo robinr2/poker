@@ -22,16 +22,19 @@ type Server struct {
 	hub            *Hub
 	sessionManager *SessionManager
 	tables         [4]*Table
+	testMode       bool // TEST MODE: When true, enables test-only API endpoints
 	mu             sync.RWMutex
 }
 
 // NewServer creates and returns a new Server instance.
-func NewServer(logger *slog.Logger) *Server {
+// If testMode is true, test-only API endpoints will be enabled.
+func NewServer(logger *slog.Logger, testMode bool) *Server {
 	hub := NewHub(logger)
 	sessionManager := NewSessionManager(logger)
 	s := &Server{
-		router: chi.NewRouter(),
-		logger: logger,
+		router:   chi.NewRouter(),
+		logger:   logger,
+		testMode: testMode,
 		upgrader: &websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				// CheckOrigin: true allows all origins for development.
@@ -65,9 +68,103 @@ func (s *Server) RegisterRoutes() {
 	s.router.Get("/health", HealthCheckHandler(s.logger))
 	s.router.HandleFunc("/ws", s.HandleWebSocket(s.hub))
 
+	// Test-only endpoints (only registered when test mode is enabled)
+	if s.testMode {
+		s.router.Post("/api/test/set-deck", s.HandleSetDeck())
+		s.router.Post("/api/test/reset-table", s.HandleResetTable())
+		s.logger.Info("test mode enabled - registered test endpoints")
+	}
+
 	// Serve static files from web/static directory
+	// NOTE: Static file routes MUST be registered AFTER API routes
+	// because they use a catch-all pattern
 	s.logger.Debug("registering static file routes")
 	s.serveStaticFiles()
+}
+
+// HandleResetTable handles the POST /api/test/reset-table endpoint
+// This endpoint is only available when POKER_TEST_MODE=true
+// It resets a table to its initial state (clears hand, seats, and all state)
+func (s *Server) HandleResetTable() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		// Verify test mode is enabled
+		if !s.testMode {
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"message": "Test mode is not enabled",
+			})
+			return
+		}
+
+		// Only accept POST
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"message": "Method not allowed",
+			})
+			return
+		}
+
+		// Parse request body
+		var payload struct {
+			TableID string `json:"tableId"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"message": "Invalid JSON: " + err.Error(),
+			})
+			return
+		}
+
+		// Find the table
+		table := s.GetTableByID(payload.TableID)
+		if table == nil {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"message": "Table not found: " + payload.TableID,
+			})
+			return
+		}
+
+		// Reset the table state completely
+		table.mu.Lock()
+		table.CurrentHand = nil
+		table.DealerSeat = nil
+		table.TestDeck = nil
+		// Clear all seats and reset to initial state
+		for i := 0; i < len(table.Seats); i++ {
+			if table.Seats[i].Token != nil {
+				// Clear session's table/seat info for players who were seated
+				token := *table.Seats[i].Token
+				_, err := s.sessionManager.UpdateSession(token, nil, nil)
+				if err != nil {
+					s.logger.Warn("failed to clear session during table reset", "token", token, "error", err)
+				}
+			}
+			table.Seats[i] = Seat{
+				Index:  i,
+				Token:  nil,
+				Status: "empty",
+				Stack:  1000, // Reset to initial stack
+			}
+		}
+		table.mu.Unlock()
+
+		s.logger.Info("table reset via test endpoint", "tableId", payload.TableID)
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": "Table reset successfully",
+		})
+	}
 }
 
 // serveStaticFiles configures static file serving with SPA fallback to index.html
@@ -148,6 +245,24 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // Router returns the chi router for testing purposes
 func (s *Server) Router() chi.Router {
 	return s.router
+}
+
+// IsTestMode returns whether the server is running in test mode
+func (s *Server) IsTestMode() bool {
+	return s.testMode
+}
+
+// GetTableByID returns a table by its ID (thread-safe)
+// Returns nil if table is not found
+func (s *Server) GetTableByID(tableID string) *Table {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, t := range s.tables {
+		if t != nil && t.ID == tableID {
+			return t
+		}
+	}
+	return nil
 }
 
 // FindPlayerSeat searches across all tables for a player token and returns their seat (thread-safe)

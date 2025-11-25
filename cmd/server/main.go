@@ -23,6 +23,9 @@ func main() {
 		logLevel = "info"
 	}
 
+	// Check for test mode (enables deterministic testing endpoints)
+	testMode := os.Getenv("POKER_TEST_MODE") == "true"
+
 	// Parse log level
 	var level slog.Level
 	switch logLevel {
@@ -46,10 +49,10 @@ func main() {
 	slog.SetDefault(logger)
 
 	// Log the configuration on startup
-	logger.Info("starting poker application", "port", port, "log_level", logLevel)
+	logger.Info("starting poker application", "port", port, "log_level", logLevel, "test_mode", testMode)
 
 	// Create and start the server
-	srv := server.NewServer(logger)
+	srv := server.NewServer(logger, testMode)
 
 	// Start server in a goroutine
 	// Bind to 0.0.0.0 to be accessible from Docker containers and external hosts

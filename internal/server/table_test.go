@@ -170,7 +170,7 @@ func TestTableThreadSafety(t *testing.T) {
 // TestServerTablesPreseeded verifies NewServer creates 4 tables with correct IDs/names
 func TestServerTablesPreseeded(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 
 	if server == nil {
 		t.Fatal("expected server to be initialized, got nil")
@@ -2200,7 +2200,7 @@ func TestDistributePot_TwoWayTie_OddPot(t *testing.T) {
 // TestHandleShowdown_UpdatesStacks verifies stack values are updated after showdown
 func TestHandleShowdown_UpdatesStacks(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	table := server.tables[0]
 
 	// Set up 3 active players
@@ -2279,7 +2279,7 @@ func TestHandleShowdown_UpdatesStacks(t *testing.T) {
 // TestHandleShowdown_DetectsBustOut verifies HandleShowdown identifies players with stack == 0 as bust-outs
 func TestHandleShowdown_DetectsBustOut(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	table := server.tables[0]
 
 	// Set up 2 active players
@@ -2330,7 +2330,7 @@ func TestHandleShowdown_DetectsBustOut(t *testing.T) {
 // TestHandleShowdown_ClearsBustOutSeat verifies bust-out seats are cleared (Token = nil, Status = "empty")
 func TestHandleShowdown_ClearsBustOutSeat(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	table := server.tables[0]
 
 	// Set up 2 active players
@@ -3948,7 +3948,7 @@ func TestAdvanceAction_ReturnNilWhenOnlyOnePlayerLeft(t *testing.T) {
 // TestStartHand_InitializesActionState verifies action fields are initialized correctly
 func TestStartHand_InitializesActionState(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	table := NewTable("table-1", "Test Table", server)
 
 	// Set up 3 active players (waiting status)
@@ -4014,7 +4014,7 @@ func TestStartHand_InitializesActionState(t *testing.T) {
 // This just tests that the pattern is set up correctly in StartHand for later broadcast
 func TestStartHandBroadcastsFirstActionRequest(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 
 	// Get first table
 	server.mu.RLock()
@@ -4151,7 +4151,7 @@ func TestGetMinRaise_HeadsUp(t *testing.T) {
 // When StartHand creates a new Hand, LastRaise should be set to bigBlind amount
 func TestNewHand_InitializesLastRaise(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 
 	server.mu.RLock()
 	table := server.tables[0]
@@ -6914,7 +6914,7 @@ func TestHandleBustOutsWithNotificationsLocked_NoBustOuts(t *testing.T) {
 // Uses specific hole cards to GUARANTEE deterministic outcome: player 0 wins, player 1 busts
 func TestShowdown_AllInPlayerBustsOut(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	table := server.tables[0]
 
 	// Set up 2 players: player 0 with 1000, player 1 with exactly 30 (enough for SB+remaining to bet all)
@@ -7027,7 +7027,7 @@ func TestShowdown_AllInPlayerBustsOut(t *testing.T) {
 // Uses specific hole cards to GUARANTEE deterministic outcome: player 0 wins, players 1 and 2 bust
 func TestShowdown_MultiplePlayersBustOut(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	table := server.tables[0]
 
 	// Set up 3 players: player 0 with 1000, players 1 and 2 with 30 each (enough for blinds + all-in)
@@ -7169,7 +7169,7 @@ func TestShowdown_MultiplePlayersBustOut(t *testing.T) {
 // Player 1: KQ (pair of Kings with board) - loses but has remaining stack, not kicked
 func TestShowdown_WinnerWithStackNotKicked(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	table := server.tables[0]
 
 	// Set up 2 players
@@ -7251,7 +7251,7 @@ func TestShowdown_WinnerWithStackNotKicked(t *testing.T) {
 // After pot distribution, should have stack > 0 and NOT be kicked (not an empty seat)
 func TestShowdown_AllInWinnerNotKicked(t *testing.T) {
 	logger := slog.Default()
-	server := NewServer(logger)
+	server := NewServer(logger, false)
 	table := server.tables[0]
 
 	// Set up 2 players: both with small all-in stacks
@@ -10006,7 +10006,7 @@ func TestAreAllActivePlayersAllIn_ThreePlayersOneAllIn(t *testing.T) {
 
 // TestTotalContributions_InitializedOnStartHand verifies TotalContributions is initialized as empty map
 func TestTotalContributions_InitializedOnStartHand(t *testing.T) {
-	server := NewServer(slog.Default())
+	server := NewServer(slog.Default(), false)
 	table := NewTable("table-1", "Test Table", server)
 
 	// Add 2 active players
@@ -10045,7 +10045,7 @@ func TestTotalContributions_InitializedOnStartHand(t *testing.T) {
 
 // TestTotalContributions_TracksBlindPosting verifies blinds are tracked in TotalContributions after StartHand
 func TestTotalContributions_TracksBlindPosting(t *testing.T) {
-	server := NewServer(slog.Default())
+	server := NewServer(slog.Default(), false)
 	table := NewTable("table-1", "Test Table", server)
 
 	// Add 3 active players
@@ -10097,7 +10097,7 @@ func TestTotalContributions_TracksBlindPosting(t *testing.T) {
 
 // TestTotalContributions_PersistsAcrossStreets verifies TotalContributions persists through streets
 func TestTotalContributions_PersistsAcrossStreets(t *testing.T) {
-	server := NewServer(slog.Default())
+	server := NewServer(slog.Default(), false)
 	table := NewTable("table-1", "Test Table", server)
 
 	// Add 2 active players
@@ -10161,7 +10161,7 @@ func TestTotalContributions_PersistsAcrossStreets(t *testing.T) {
 
 // TestTotalContributions_TracksCallAmount verifies that calls are tracked in TotalContributions
 func TestTotalContributions_TracksCallAmount(t *testing.T) {
-	server := NewServer(slog.Default())
+	server := NewServer(slog.Default(), false)
 	table := NewTable("table-1", "Test Table", server)
 
 	// Add 2 active players
@@ -10209,7 +10209,7 @@ func TestTotalContributions_TracksCallAmount(t *testing.T) {
 
 // TestTotalContributions_TracksRaiseAmount verifies that raises are tracked in TotalContributions
 func TestTotalContributions_TracksRaiseAmount(t *testing.T) {
-	server := NewServer(slog.Default())
+	server := NewServer(slog.Default(), false)
 	table := NewTable("table-1", "Test Table", server)
 
 	// Add 2 active players
@@ -10257,7 +10257,7 @@ func TestTotalContributions_TracksRaiseAmount(t *testing.T) {
 
 // TestTotalContributions_TracksAllInAmount verifies that all-ins are tracked in TotalContributions
 func TestTotalContributions_TracksAllInAmount(t *testing.T) {
-	server := NewServer(slog.Default())
+	server := NewServer(slog.Default(), false)
 	table := NewTable("table-1", "Test Table", server)
 
 	// Add 2 active players with small stacks
@@ -10306,7 +10306,7 @@ func TestTotalContributions_TracksAllInAmount(t *testing.T) {
 
 // TestTotalContributions_AccumulatesAcrossStreets verifies contributions accumulate across streets
 func TestTotalContributions_AccumulatesAcrossStreets(t *testing.T) {
-	server := NewServer(slog.Default())
+	server := NewServer(slog.Default(), false)
 	table := NewTable("table-1", "Test Table", server)
 
 	// Add 2 active players
@@ -10379,7 +10379,7 @@ func TestTotalContributions_AccumulatesAcrossStreets(t *testing.T) {
 
 // TestTotalContributions_HandlesMultipleRaisesPerPlayer verifies multiple raises same street accumulate
 func TestTotalContributions_HandlesMultipleRaisesPerPlayer(t *testing.T) {
-	server := NewServer(slog.Default())
+	server := NewServer(slog.Default(), false)
 	table := NewTable("table-1", "Test Table", server)
 
 	// Add 2 active players
@@ -12481,7 +12481,7 @@ func TestAdvanceStreet_ResetsLastRaiseAfterLargePreflopRaise(t *testing.T) {
 // after calling a large preflop raise
 func TestGetValidActions_FlopAfterLargePreflopRaise(t *testing.T) {
 	// Setup table with 2 players who called a 600 raise preflop
-	server := NewServer(slog.Default())
+	server := NewServer(slog.Default(), false)
 	table := NewTable("table-1", "Test Table", server)
 
 	// Assign 2 seats
