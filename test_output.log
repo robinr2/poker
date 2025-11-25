@@ -1,0 +1,45 @@
+
+> test:e2e:smoke
+> playwright test smoke-test.spec.ts
+
+
+Running 1 test using 1 worker
+
+Creating 3 browser contexts...
+Navigating players to the application...
+Players entering their names...
+  ✘  1 [chromium] › e2e/smoke-test.spec.ts:36:7 › Poker Application - Smoke Test › should allow 3 players to join table and start a hand (13.8s)
+
+
+  1) [chromium] › e2e/smoke-test.spec.ts:36:7 › Poker Application - Smoke Test › should allow 3 players to join table and start a hand 
+
+    TimeoutError: page.waitForSelector: Timeout 10000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('input[type="text"]') to be visible[22m
+
+
+      64 |       
+      65 |       // Wait for name input
+    > 66 |       await page.waitForSelector('input[type="text"]', { timeout: 10000 });
+         |                  ^
+      67 |       await page.fill('input[type="text"]', playerName);
+      68 |       
+      69 |       // Submit (look for button or press Enter)
+        at /home/roeschkerobin/Workspace/github-personal/poker/e2e/smoke-test.spec.ts:66:18
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/smoke-test-Poker-Applicati-7224b-join-table-and-start-a-hand-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/smoke-test-Poker-Applicati-7224b-join-table-and-start-a-hand-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/smoke-test-Poker-Applicati-7224b-join-table-and-start-a-hand-chromium/test-failed-3.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium] › e2e/smoke-test.spec.ts:36:7 › Poker Application - Smoke Test › should allow 3 players to join table and start a hand 
+
+[36m  Serving HTML report at http://localhost:9323. Press Ctrl+C to quit.[39m
