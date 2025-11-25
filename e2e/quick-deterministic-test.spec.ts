@@ -2,7 +2,8 @@
  * Quick deterministic test to verify deck injection works
  * Run with: npx playwright test e2e/quick-deterministic-test.ts
  */
-import { test, expect, chromium } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { launchBrowser, WINDOW_WIDTH, WINDOW_HEIGHT } from './helpers/browser-helpers';
 
 const BASE_URL = 'http://localhost:8080';
 const TABLE_ID = 'table-1';
@@ -109,14 +110,19 @@ function buildTestDeck(): string[] {
   return deck;
 }
 
-test('Deterministic deck injection - Player1 with Aces beats Player2 with Kings', async ({
-  browser,
-}) => {
+test('Deterministic deck injection - Player1 with Aces beats Player2 with Kings', async () => {
   console.log('\n=== DETERMINISTIC WINNER TEST ===\n');
 
+  // Launch browser with our helper (respects headless/headed mode)
+  const browser = await launchBrowser();
+
   // Create two separate browser contexts (separate localStorage)
-  const context1 = await browser.newContext();
-  const context2 = await browser.newContext();
+  const context1 = await browser.newContext({
+    viewport: { width: WINDOW_WIDTH, height: WINDOW_HEIGHT },
+  });
+  const context2 = await browser.newContext({
+    viewport: { width: WINDOW_WIDTH, height: WINDOW_HEIGHT },
+  });
 
   const page1 = await context1.newPage();
   const page2 = await context2.newPage();
@@ -251,5 +257,6 @@ test('Deterministic deck injection - Player1 with Aces beats Player2 with Kings'
   } finally {
     await context1.close();
     await context2.close();
+    await browser.close();
   }
 });

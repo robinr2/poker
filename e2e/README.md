@@ -1,69 +1,156 @@
 # E2E Testing Guide
 
-This document covers the end-to-end testing setup for the poker application, including lessons learned, common pitfalls, and best practices.
+This document covers the end-to-end testing setup for the poker application. Read this before starting any e2e testing work.
 
-## Prerequisites
+## Quick Start
 
-### Server Setup
-
-The server must be running with test mode enabled:
+### 1. Start the Server (in test mode)
 
 ```bash
+# Build and run with test mode enabled
+go build -o ./server ./cmd/server
+POKER_TEST_MODE=true ./server
+
+# Or run directly
 POKER_TEST_MODE=true go run ./cmd/server
 ```
 
-Or build and run:
-
-```bash
-go build -o ./server ./cmd/server
-POKER_TEST_MODE=true ./server
-```
-
-Test mode enables special API endpoints used by e2e tests:
+Test mode enables special API endpoints:
 - `POST /api/test/set-deck` - Set a predetermined deck for deterministic testing
-- `POST /api/test/reset-table` - Reset a table to initial state
+- `POST /api/test/reset-table` - Reset a table to initial state between tests
 
-### Running Tests
+### 2. Run Tests
 
 ```bash
-# Run all e2e tests
+# Run all e2e tests (headless, fast - good for CI)
 npx playwright test e2e/
+
+# Run with visible browser (headed mode - good for debugging)
+npx playwright test e2e/ --headed
 
 # Run a specific test file
 npx playwright test e2e/deterministic-winner.spec.ts
 
-# Run with visible browser (non-headless)
-npx playwright test e2e/ --headed
-
-# Run with line reporter for cleaner output
+# Run with cleaner output
 npx playwright test e2e/ --reporter=line
 ```
 
-## Test Architecture
+### 3. Test Results (Last Run)
 
-### Test Structure
+All 9 tests pass in headless mode (~5 minutes total):
+- `deterministic-winner.spec.ts` (3 tests) - Pocket Aces vs Kings, Flush vs Trips, Quads wins
+- `three-player-complete-hand.spec.ts` - Full hand to showdown
+- `three-player-fold-to-win.spec.ts` - Fold-to-win scenario
+- `smoke-test.spec.ts` - Basic 3-player connectivity
+- `quick-deterministic-test.spec.ts` - Quick deck injection verify
+- `single-player-test.spec.ts` - Single player table join
+- `diagnostic.spec.ts` - Page load diagnostic
 
-Each test file typically follows this pattern:
+## File Structure
+
+```
+e2e/
+  helpers/
+    browser-helpers.ts        # launchBrowser(), positionWindow() - USE THESE
+    deterministic-helpers.ts  # setDeck(), resetTable(), buildDeck()
+  deterministic-winner.spec.ts
+  three-player-complete-hand.spec.ts
+  three-player-fold-to-win.spec.ts
+  smoke-test.spec.ts
+  single-player-test.spec.ts
+  quick-deterministic-test.spec.ts
+  diagnostic.spec.ts
+  README.md
+```
+
+## Writing Tests - Use the Helpers!
+
+### Browser Helpers (IMPORTANT)
+
+All tests should use the browser helpers for consistent headless/headed behavior:
 
 ```typescript
-test.describe('Test Suite Name', () => {
+import { 
+  launchBrowser, 
+  positionWindow, 
+  WINDOW_WIDTH, 
+  WINDOW_HEIGHT 
+} from './helpers/browser-helpers';
+
+test.describe('My Test Suite', () => {
   let browser: Browser;
-  let players: Player[] = [];
-  const TABLE_ID = 'table-1';
 
   test.beforeAll(async () => {
-    // Launch browser once for all tests
-    browser = await chromium.launch({ headless: false, slowMo: 300 });
+    // This automatically handles headless vs headed mode
+    browser = await launchBrowser();
+  });
+
+  test('my test', async () => {
+    const context = await browser.newContext({
+      viewport: { width: WINDOW_WIDTH, height: WINDOW_HEIGHT },
+    });
+    const page = await context.newPage();
+    
+    // Position window (no-op in headless mode, positions in headed mode)
+    await positionWindow(context, page, 0);  // 0 = first position (left)
+  });
+});
+```
+
+### Deterministic Helpers
+
+For tests that need specific card outcomes:
+
+```typescript
+import { setDeck, buildDeck, resetTable } from './helpers/deterministic-helpers';
+
+// Always reset table in beforeEach for test isolation
+test.beforeEach(async () => {
+  await resetTable('table-1');
+});
+
+test('specific hand outcome', async () => {
+  // Build a deck with specific hole cards and board
+  const deck = buildDeck({
+    holeCards: {
+      0: ['As', 'Ah'],  // Seat 0: Pocket Aces
+      1: ['Ks', 'Kh'],  // Seat 1: Pocket Kings
+    },
+    flop: ['Ad', '2c', '7d'],
+    turn: '3h',
+    river: '9s',
+  });
+
+  // Set deck BEFORE starting the hand
+  await setDeck('table-1', deck);
+  
+  // Now start the hand
+  await player.startHand();
+});
+```
+
+### Standard Test Structure
+
+```typescript
+import { test, expect, Browser, BrowserContext, Page } from '@playwright/test';
+import { resetTable } from './helpers/deterministic-helpers';
+import { launchBrowser, positionWindow, WINDOW_WIDTH, WINDOW_HEIGHT } from './helpers/browser-helpers';
+
+const TABLE_ID = 'table-1';
+
+test.describe('My Test Suite', () => {
+  let browser: Browser;
+  let players: Player[] = [];
+
+  test.beforeAll(async () => {
+    browser = await launchBrowser();
   });
 
   test.beforeEach(async () => {
-    // Verify server is running
-    await verifyServerReady();
-    
     // Reset table state for clean test
     await resetTable(TABLE_ID);
     
-    // Clean up any existing player contexts
+    // Clean up player contexts from previous test
     for (const player of players) {
       await player.close().catch(() => {});
     }
@@ -71,22 +158,33 @@ test.describe('Test Suite Name', () => {
   });
 
   test.afterAll(async () => {
-    // Cleanup
     for (const player of players) {
       await player.close().catch(() => {});
     }
     await browser?.close();
   });
 
-  test('test case', async () => {
-    // Test implementation
+  test('my test case', async () => {
+    // Create players
+    for (let i = 0; i < 2; i++) {
+      const context = await browser.newContext({
+        viewport: { width: WINDOW_WIDTH, height: WINDOW_HEIGHT },
+      });
+      const page = await context.newPage();
+      await positionWindow(context, page, i);
+      
+      const player = new Player(context, page, `Player${i + 1}`, i);
+      players.push(player);
+    }
+    
+    // ... test logic
   });
 });
 ```
 
-### Player Helper Class
+### Player Helper Class Pattern
 
-Tests use a `Player` class to manage browser contexts and common actions:
+Most tests use a Player class for common actions:
 
 ```typescript
 class Player {
@@ -97,248 +195,205 @@ class Player {
     public index: number
   ) {}
 
-  async enterName() { /* ... */ }
-  async joinTable() { /* ... */ }
-  async startHand() { /* ... */ }
-  async fold() { /* ... */ }
-  async call() { /* ... */ }
-  async check() { /* ... */ }
-  async allIn() { /* ... */ }
-  // etc.
+  async goto(url: string) {
+    await this.page.goto(url, { waitUntil: 'domcontentloaded' });
+    await this.page.waitForSelector('.app', { timeout: 15000 });
+  }
+
+  async enterName() {
+    const nameInput = this.page.locator('input[type="text"]');
+    await expect(nameInput).toBeVisible({ timeout: 10000 });
+    await nameInput.fill(this.name);
+    await this.page.locator('button[type="submit"]').click();
+    await this.page.waitForTimeout(1500);
+  }
+
+  async joinTable() {
+    const joinButton = this.page.locator('button.join-button').first();
+    await expect(joinButton).toBeVisible({ timeout: 10000 });
+    await joinButton.click();
+    await this.page.waitForTimeout(2000);
+  }
+
+  async startHand() {
+    const startButton = this.page.locator('button:has-text("Start Hand")');
+    await expect(startButton).toBeVisible({ timeout: 10000 });
+    await startButton.click();
+    await this.page.waitForTimeout(2000);
+  }
+
+  async waitForTurn(timeout = 30000) {
+    const actionBar = this.page.locator('.action-bar');
+    await expect(actionBar).toBeVisible({ timeout });
+  }
+
+  async fold() {
+    await this.waitForTurn();
+    await this.page.locator('button:has-text("Fold")').click();
+    await this.page.waitForTimeout(1500);
+  }
+
+  async call() {
+    await this.waitForTurn();
+    await this.page.locator('button:has-text("Call")').click();
+    await this.page.waitForTimeout(1500);
+  }
+
+  async check() {
+    await this.waitForTurn();
+    await this.page.locator('button:has-text("Check")').click();
+    await this.page.waitForTimeout(1500);
+  }
+
+  async allIn() {
+    await this.waitForTurn();
+    await this.page.locator('button.preset-button:has-text("All-in")').click();
+    await this.page.locator('button.raise-button:has-text("Raise")').click();
+    await this.page.waitForTimeout(1500);
+  }
+
+  async close() {
+    await this.context.close();
+  }
 }
 ```
 
-## Lessons Learned & Caveats
+## Common Patterns
 
-### 1. Server Process Management
+### Finding Current Actor
 
-**Problem:** Tests were failing with "405 Method Not Allowed" even though the endpoint was registered.
-
-**Root Cause:** An old server process (without the new routes) was still running on port 8080.
-
-**Solution:** Always ensure you kill old server processes before starting a new one:
-
-```bash
-# Kill any existing server
-pkill -f "poker" 2>/dev/null
-lsof -i :8080  # Check if port is still in use
-
-# Then start fresh
-POKER_TEST_MODE=true ./server
-```
-
-**Best Practice:** The test's `verifyServerReady()` function only checks if a server is running, not if it has the correct routes. If you add new test endpoints, rebuild and restart the server.
-
-### 2. Test Isolation - Table State
-
-**Problem:** Tests were interfering with each other. A hand started in one test would still be active in the next test, causing "Start Hand" button to not appear.
-
-**Root Cause:** The server maintains state between tests since we don't restart it.
-
-**Solution:** Added a `resetTable` API endpoint and helper that:
-- Clears the current hand
-- Resets all seats to empty with initial stacks
-- Clears dealer position and test deck
-
-```typescript
-// In beforeEach
-await resetTable(TABLE_ID);
-```
-
-**Best Practice:** Always call `resetTable()` in `beforeEach` to ensure each test starts with a clean slate.
-
-### 3. Test Isolation - Browser Contexts
-
-**Problem:** Player sessions from previous tests could persist.
-
-**Solution:** Each player uses a separate `BrowserContext` (not just a new page). Close all contexts in `beforeEach`:
-
-```typescript
-for (const player of players) {
-  await player.close().catch(() => {});  // catch errors from already-closed contexts
-}
-players = [];
-```
-
-### 4. Timing and Race Conditions
-
-**Problem:** Actions happening too fast, elements not ready, or WebSocket messages not yet processed.
-
-**Solutions:**
-- Use `slowMo: 300` in browser launch options for visual debugging
-- Add explicit waits after actions: `await page.waitForTimeout(1500)`
-- Wait for specific elements rather than fixed timeouts when possible:
-  ```typescript
-  await expect(startButton).toBeVisible({ timeout: 10000 });
-  ```
-
-**Best Practice:** Prefer element-based waits over fixed timeouts, but use small fixed waits after actions to let WebSocket messages propagate.
-
-### 5. Finding the Current Actor
-
-**Problem:** In poker, different players act at different times. Tests need to find who should act.
-
-**Solution:** Check which player's action bar is visible:
+In poker, different players act at different times:
 
 ```typescript
 async function findCurrentActor(players: Player[]): Promise<Player | null> {
   for (const player of players) {
     const isMyTurn = await player.page.locator('.action-bar').isVisible().catch(() => false);
-    if (isMyTurn) {
-      return player;
-    }
+    if (isMyTurn) return player;
   }
   return null;
 }
+
+// Usage
+const actor = await findCurrentActor(players);
+if (actor) await actor.call();
 ```
 
-### 6. Deterministic Testing
-
-**Problem:** Poker involves random card dealing, making it hard to verify specific outcomes.
-
-**Solution:** Use the deterministic deck helpers:
+### Verify Showdown Result
 
 ```typescript
-import { setDeck, buildDeck, resetTable } from './helpers/deterministic-helpers';
+const showdownOverlay = player.page.locator('.showdown-overlay');
+await expect(showdownOverlay).toBeVisible({ timeout: 10000 });
+const result = await showdownOverlay.textContent();
 
-// Build a deck with specific hole cards and board
-const deck = buildDeck({
-  holeCards: {
-    0: ['As', 'Ah'],  // Seat 0: Pocket Aces
-    1: ['Ks', 'Kh'],  // Seat 1: Pocket Kings
-  },
-  flop: ['Ad', '2c', '7d'],
-  turn: '3h',
-  river: '9s',
-});
-
-// Set the deck BEFORE starting the hand
-await setDeck('table-1', deck);
-
-// Now start the hand - cards will be dealt in predetermined order
-await player.startHand();
+expect(result).toContain('Player1');
+expect(result.toLowerCase()).toMatch(/three of a kind|trips/i);
 ```
 
-**Important:** The deck must be set BEFORE `startHand()` is called. The deck is consumed on hand start and cleared.
+### Check Stack Changes
 
-### 7. Card String Format
+```typescript
+// Record initial stacks
+const initialStacks: number[] = [];
+for (const player of players) {
+  const stack = await player.getStack();
+  initialStacks.push(stack ?? 0);
+}
 
-Cards are represented as 2-character strings: `Rank + Suit`
+// ... play hand ...
+
+// Verify winner gained chips
+const finalStack = await winner.getStack();
+expect(finalStack).toBeGreaterThan(initialStacks[winner.index]);
+```
+
+## Card String Format
+
+Cards are 2-character strings: `Rank + Suit`
 
 - **Ranks:** A, 2, 3, 4, 5, 6, 7, 8, 9, T, J, Q, K
 - **Suits:** s (spades), h (hearts), d (diamonds), c (clubs)
 
 Examples: `As` = Ace of spades, `Kh` = King of hearts, `Td` = Ten of diamonds
 
-### 8. Window Positioning for Debugging
+## Troubleshooting
 
-When running tests visually, position browser windows side-by-side:
+### Tests Fail with "405 Method Not Allowed"
 
+**Cause:** Old server process running without new routes.
+
+**Fix:**
+```bash
+pkill -f "poker" 2>/dev/null
+lsof -i :8080  # Verify port is free
+POKER_TEST_MODE=true ./server
+```
+
+### Tests Interfere with Each Other
+
+**Cause:** Server state persists between tests.
+
+**Fix:** Always call `resetTable()` in `beforeEach`:
 ```typescript
-const positions = [
-  { x: 0, y: 40 },      // Player 1 - left
-  { x: 950, y: 40 },    // Player 2 - middle  
-  { x: 1900, y: 40 },   // Player 3 - right
-];
-
-// Use CDP to position windows
-const client = await context.newCDPSession(page);
-const { windowId } = await client.send('Browser.getWindowForTarget');
-await client.send('Browser.setWindowBounds', {
-  windowId,
-  bounds: { left: positions[i].x, top: positions[i].y, width: 950, height: 1200 },
+test.beforeEach(async () => {
+  await resetTable(TABLE_ID);
 });
 ```
 
-## Common Test Patterns
+### "Start Hand" Button Not Appearing
 
-### Pattern: Wait for Turn Then Act
+**Cause:** Previous hand still active, or not enough players.
 
-```typescript
-async waitForTurn(timeout = 30000) {
-  const actionBar = this.page.locator('.action-bar');
-  await expect(actionBar).toBeVisible({ timeout });
-}
+**Fix:** 
+1. Ensure `resetTable()` is called
+2. Ensure at least 2 players have joined
 
-async fold() {
-  await this.waitForTurn();
-  const foldButton = this.page.locator('button:has-text("Fold")');
-  await foldButton.click();
-  await this.page.waitForTimeout(1500);
-}
-```
+### Timing Issues / Race Conditions
 
-### Pattern: Verify Showdown Result
+**Fix:** 
+- Use element-based waits: `await expect(button).toBeVisible({ timeout: 10000 })`
+- Add small waits after actions for WebSocket propagation: `await page.waitForTimeout(1500)`
+- Run in headed mode to see what's happening: `--headed`
 
-```typescript
-async getShowdownResult(): Promise<string> {
-  const showdownOverlay = this.page.locator('.showdown-overlay');
-  await expect(showdownOverlay).toBeVisible({ timeout: 10000 });
-  return await showdownOverlay.textContent() || '';
-}
+### Window Positioning Not Working
 
-// In test
-const result = await player.getShowdownResult();
-expect(result).toContain('Player1');
-expect(result.toLowerCase()).toContain('three of a kind');
-```
+**Cause:** Window positioning only works in headed mode.
 
-### Pattern: Check Stack Changes
-
-```typescript
-// Record initial stacks
-const initialStacks = await Promise.all(players.map(p => p.getStack()));
-
-// ... play hand ...
-
-// Verify stack changes
-const finalStacks = await Promise.all(players.map(p => p.getStack()));
-expect(finalStacks[0]).toBeGreaterThan(initialStacks[0]!);  // Winner gained chips
-```
+**Note:** `positionWindow()` is automatically a no-op in headless mode, so this is expected.
 
 ## Debugging Tips
 
-1. **Use `--headed` mode** to see what's happening in the browser
+1. **Run headed:** `npx playwright test e2e/my-test.spec.ts --headed`
 
-2. **Add console.log statements** - they appear in test output:
+2. **Add console.log:** Shows in test output
    ```typescript
    console.log(`${this.name}: Folding...`);
    ```
 
-3. **Take screenshots on failure:**
+3. **Take screenshots:**
    ```typescript
-   await page.screenshot({ path: 'debug-screenshot.png' });
+   await page.screenshot({ path: 'debug.png' });
    ```
 
-4. **Check server logs** for backend issues:
+4. **Check server logs:**
    ```bash
-   tail -f /tmp/server.log
+   # Server logs go to stdout, or check server.log if redirected
    ```
 
-5. **Increase timeouts** when debugging:
+5. **Increase timeout:**
    ```typescript
    test.setTimeout(120000);  // 2 minutes
    ```
 
-## File Structure
-
-```
-e2e/
-  helpers/
-    deterministic-helpers.ts   # setDeck, resetTable, buildDeck utilities
-  deterministic-winner.spec.ts # Tests with predetermined decks
-  three-player-complete-hand.spec.ts
-  three-player-fold-to-win.spec.ts
-  smoke-test.spec.ts           # Basic connectivity tests
-  diagnostic.spec.ts           # Debug/diagnostic tests
-  README.md                    # This file
-```
-
 ## Adding New Tests
 
-1. Create a new `.spec.ts` file in `e2e/`
-2. Import helpers: `import { resetTable } from './helpers/deterministic-helpers'`
-3. Use the standard test structure with `beforeEach` calling `resetTable()`
-4. For deterministic tests, call `setDeck()` before `startHand()`
-5. Run your test in isolation first: `npx playwright test e2e/your-test.spec.ts`
-6. Then run the full suite to ensure no interference
+1. Create `e2e/my-new-test.spec.ts`
+2. Import helpers:
+   ```typescript
+   import { resetTable } from './helpers/deterministic-helpers';
+   import { launchBrowser, positionWindow, WINDOW_WIDTH, WINDOW_HEIGHT } from './helpers/browser-helpers';
+   ```
+3. Use `launchBrowser()` in `beforeAll`
+4. Call `resetTable()` in `beforeEach`
+5. For deterministic tests, call `setDeck()` before `startHand()`
+6. Test in isolation first: `npx playwright test e2e/my-new-test.spec.ts`
+7. Then run full suite: `npx playwright test e2e/`

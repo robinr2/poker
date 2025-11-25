@@ -2,9 +2,12 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * Playwright configuration for poker application testing
- * - Headed mode for visual debugging
- * - Extended timeouts to observe test execution
- * - Multiple browser contexts for simulating different players
+ * 
+ * Run modes:
+ * - Headless (default): npx playwright test e2e/
+ * - Headed (visual):    npx playwright test e2e/ --headed
+ * 
+ * The headed mode includes slowMo for better visibility.
  */
 export default defineConfig({
   testDir: './e2e',
@@ -58,10 +61,11 @@ export default defineConfig({
       name: 'chromium',
       use: { 
         ...devices['Desktop Chrome'],
-        // Run in headed mode so we can watch the tests
-        headless: false,
-        // Slow down by 500ms per action to make it visible
-        slowMo: 500,
+        // Headless by default - use --headed flag for visual mode
+        // When headed, slowMo is applied for better visibility
+        launchOptions: {
+          slowMo: process.env.HEADED ? 300 : 0,
+        },
         // Viewport sized for dual 1920x1080 screens (950px width per window)
         viewport: { width: 950, height: 1200 },
       },

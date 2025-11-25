@@ -1,16 +1,14 @@
-import { test, chromium } from '@playwright/test';
+import { test } from '@playwright/test';
+import { launchBrowser, WINDOW_WIDTH, WINDOW_HEIGHT } from './helpers/browser-helpers';
 
 /**
  * Single client test to check if hand auto-starts
  */
 test('single player - check for auto-start', async () => {
-  const browser = await chromium.launch({
-    headless: false,
-    slowMo: 1000,
-  });
+  const browser = await launchBrowser();
   
   const context = await browser.newContext({
-    viewport: { width: 1200, height: 900 },
+    viewport: { width: WINDOW_WIDTH, height: WINDOW_HEIGHT },
   });
   
   const page = await context.newPage();

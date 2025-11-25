@@ -1,16 +1,14 @@
-import { test, chromium } from '@playwright/test';
+import { test } from '@playwright/test';
+import { launchBrowser, WINDOW_WIDTH, WINDOW_HEIGHT } from './helpers/browser-helpers';
 
 /**
  * Simple diagnostic test to see what's actually loading on the page
  */
 test('diagnostic - check what loads on page', async () => {
-  const browser = await chromium.launch({
-    headless: false,
-    slowMo: 1000,
-  });
+  const browser = await launchBrowser();
   
   const context = await browser.newContext({
-    viewport: { width: 1200, height: 900 },
+    viewport: { width: WINDOW_WIDTH, height: WINDOW_HEIGHT },
   });
   
   const page = await context.newPage();

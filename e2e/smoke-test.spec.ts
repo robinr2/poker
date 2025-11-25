@@ -1,4 +1,10 @@
-import { test, expect, chromium, Browser, BrowserContext, Page } from '@playwright/test';
+import { test, expect, Browser, BrowserContext, Page } from '@playwright/test';
+import {
+  launchBrowser,
+  positionWindow,
+  WINDOW_WIDTH,
+  WINDOW_HEIGHT,
+} from './helpers/browser-helpers';
 
 /**
  * Verify server is running and ready
@@ -36,14 +42,7 @@ test.describe('Poker Application - Smoke Test', () => {
 
   test.beforeAll(async () => {
     // Launch browser once for all tests
-    browser = await chromium.launch({
-      headless: false,
-      slowMo: 500,
-      args: [
-        '--window-size=950,1200',
-        '--window-position=0,0'
-      ],
-    });
+    browser = await launchBrowser();
   });
 
   test.beforeEach(async () => {
@@ -67,47 +66,21 @@ test.describe('Poker Application - Smoke Test', () => {
     // Create 3 separate browser contexts (each with its own localStorage)
     console.log('Creating 3 browser contexts...');
     
-    // Window sizing for dual 1920x1080 screens:
-    // Screen 1: Two windows side by side (950px each)
-    // Screen 2: One window (950px)
-    const windowWidth = 950;
-    const windowHeight = 1200;
-    
-    // Window positions:
-    // Window 0: Left side of screen 1 (x=0)
-    // Window 1: Right side of screen 1 (x=950)
-    // Window 2: Left side of screen 2 (x=1920)
-    const positions = [
-      { x: 0, y: 40 },        // Player 1 - left screen 1
-      { x: 950, y: 40 },      // Player 2 - right screen 1
-      { x: 1920, y: 40 },     // Player 3 - left screen 2
-    ];
-    
     for (let i = 0; i < 3; i++) {
       // Create context with no storage state - completely fresh
       const context = await browser.newContext({
-        viewport: { width: windowWidth, height: windowHeight },
+        viewport: { width: WINDOW_WIDTH, height: WINDOW_HEIGHT },
         storageState: undefined, // Ensure no storage state is loaded
       });
       const page = await context.newPage();
       
-      // Use CDP to set window bounds (position and size)
-      const client = await context.newCDPSession(page);
-      const { windowId } = await client.send('Browser.getWindowForTarget');
-      await client.send('Browser.setWindowBounds', {
-        windowId,
-        bounds: {
-          left: positions[i].x,
-          top: positions[i].y,
-          width: windowWidth,
-          height: windowHeight,
-        },
-      });
+      // Position window (only in headed mode)
+      await positionWindow(context, page, i);
       
       contexts.push(context);
       pages.push(page);
       
-      console.log(`Player ${i + 1} window positioned at x=${positions[i].x}, y=${positions[i].y}`);
+      console.log(`Player ${i + 1} window created`);
     }
 
     // Navigate all players to the app

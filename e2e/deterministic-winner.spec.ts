@@ -1,5 +1,11 @@
-import { test, expect, chromium, Browser, BrowserContext, Page } from '@playwright/test';
+import { test, expect, Browser, BrowserContext, Page } from '@playwright/test';
 import { setDeck, buildDeck, DECK_SCENARIOS, resetTable } from './helpers/deterministic-helpers';
+import {
+  launchBrowser,
+  positionWindow,
+  WINDOW_WIDTH,
+  WINDOW_HEIGHT,
+} from './helpers/browser-helpers';
 
 /**
  * Verify server is running with test mode enabled
@@ -144,21 +150,8 @@ test.describe('Deterministic Winner Tests', () => {
   const baseURL = 'http://localhost:8080';
   const TABLE_ID = 'table-1';
 
-  // Window positioning for players
-  const windowWidth = 950;
-  const windowHeight = 1200;
-  const positions = [
-    { x: 0, y: 40 },
-    { x: 950, y: 40 },
-    { x: 1900, y: 40 },
-  ];
-
   test.beforeAll(async () => {
-    browser = await chromium.launch({
-      headless: false,
-      slowMo: 300,
-      args: ['--window-size=950,1200'],
-    });
+    browser = await launchBrowser();
   });
 
   test.beforeEach(async () => {
@@ -194,22 +187,12 @@ test.describe('Deterministic Winner Tests', () => {
 
     for (let i = 0; i < 2; i++) {
       const context = await browser.newContext({
-        viewport: { width: windowWidth, height: windowHeight },
+        viewport: { width: WINDOW_WIDTH, height: WINDOW_HEIGHT },
       });
       const page = await context.newPage();
 
-      // Position window
-      const client = await context.newCDPSession(page);
-      const { windowId } = await client.send('Browser.getWindowForTarget');
-      await client.send('Browser.setWindowBounds', {
-        windowId,
-        bounds: {
-          left: positions[i].x,
-          top: positions[i].y,
-          width: windowWidth,
-          height: windowHeight,
-        },
-      });
+      // Position window (only in headed mode)
+      await positionWindow(context, page, i);
 
       const player = new Player(context, page, `Player${i + 1}`, i);
       players.push(player);
@@ -327,21 +310,12 @@ test.describe('Deterministic Winner Tests', () => {
 
     for (let i = 0; i < 2; i++) {
       const context = await browser.newContext({
-        viewport: { width: windowWidth, height: windowHeight },
+        viewport: { width: WINDOW_WIDTH, height: WINDOW_HEIGHT },
       });
       const page = await context.newPage();
 
-      const client = await context.newCDPSession(page);
-      const { windowId } = await client.send('Browser.getWindowForTarget');
-      await client.send('Browser.setWindowBounds', {
-        windowId,
-        bounds: {
-          left: positions[i].x,
-          top: positions[i].y,
-          width: windowWidth,
-          height: windowHeight,
-        },
-      });
+      // Position window (only in headed mode)
+      await positionWindow(context, page, i);
 
       const player = new Player(context, page, `FlushPlayer${i + 1}`, i);
       players.push(player);
@@ -422,21 +396,12 @@ test.describe('Deterministic Winner Tests', () => {
     // ==========================================
     for (let i = 0; i < 3; i++) {
       const context = await browser.newContext({
-        viewport: { width: windowWidth, height: windowHeight },
+        viewport: { width: WINDOW_WIDTH, height: WINDOW_HEIGHT },
       });
       const page = await context.newPage();
 
-      const client = await context.newCDPSession(page);
-      const { windowId } = await client.send('Browser.getWindowForTarget');
-      await client.send('Browser.setWindowBounds', {
-        windowId,
-        bounds: {
-          left: positions[i].x,
-          top: positions[i].y,
-          width: windowWidth,
-          height: windowHeight,
-        },
-      });
+      // Position window (only in headed mode)
+      await positionWindow(context, page, i);
 
       const player = new Player(context, page, `TrioPlayer${i + 1}`, i);
       players.push(player);
