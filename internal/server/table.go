@@ -458,6 +458,8 @@ func (t *Table) AssignSeat(token *string) (Seat, error) {
 }
 
 // ClearSeat removes a player from a table by token (thread-safe)
+// If a hand is in progress, the player is marked as folded first.
+// If it's the player's turn, action is advanced to the next player.
 // Returns nil error on success
 // Returns error if token not found
 func (t *Table) ClearSeat(token *string) error {
@@ -465,17 +467,58 @@ func (t *Table) ClearSeat(token *string) error {
 	defer t.mu.Unlock()
 
 	// Find seat with matching token
+	seatIndex := -1
 	for i := 0; i < 6; i++ {
 		if t.Seats[i].Token != nil && *t.Seats[i].Token == *token {
-			t.Seats[i].Token = nil
-			t.Seats[i].Status = "empty"
-			t.Seats[i].Stack = 0
-			return nil
+			seatIndex = i
+			break
 		}
 	}
 
-	// Token not found
-	return fmt.Errorf("seat not found")
+	if seatIndex == -1 {
+		return fmt.Errorf("seat not found")
+	}
+
+	// If a hand is active and the player is in it, mark them as folded
+	if t.CurrentHand != nil && t.Seats[seatIndex].Status == "active" {
+		// Initialize FoldedPlayers if nil
+		if t.CurrentHand.FoldedPlayers == nil {
+			t.CurrentHand.FoldedPlayers = make(map[int]bool)
+		}
+
+		// Mark as folded (if not already)
+		if !t.CurrentHand.FoldedPlayers[seatIndex] {
+			t.CurrentHand.FoldedPlayers[seatIndex] = true
+
+			// If it was this player's turn, we need to advance action
+			if t.CurrentHand.CurrentActor != nil && *t.CurrentHand.CurrentActor == seatIndex {
+				// Count remaining non-folded players
+				nonFoldedCount := 0
+				for i := 0; i < 6; i++ {
+					if t.Seats[i].Status == "active" && !t.CurrentHand.FoldedPlayers[i] {
+						nonFoldedCount++
+					}
+				}
+
+				// If only one player left, they win - set CurrentActor to nil
+				// HandleShowdown will be triggered by the caller after broadcast
+				if nonFoldedCount <= 1 {
+					t.CurrentHand.CurrentActor = nil
+				} else {
+					// Find next actor using AdvanceAction
+					nextActor, _ := t.CurrentHand.AdvanceAction(t.Seats)
+					t.CurrentHand.CurrentActor = nextActor
+				}
+			}
+		}
+	}
+
+	// Clear the seat
+	t.Seats[seatIndex].Token = nil
+	t.Seats[seatIndex].Status = "empty"
+	t.Seats[seatIndex].Stack = 0
+
+	return nil
 }
 
 // GetSeatByToken returns the seat occupied by a player token (thread-safe)

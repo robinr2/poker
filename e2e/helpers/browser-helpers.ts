@@ -15,10 +15,12 @@ import { chromium, Browser, BrowserContext, Page, LaunchOptions } from '@playwri
  * Playwright sets this when --headed flag is used
  */
 export function isHeadedMode(): boolean {
-  // Playwright sets PWDEBUG or we can check for --headed in process args
-  // The most reliable way is to check process.env.HEADED which we set in playwright.config.ts
-  // or check if PWDEBUG is set (used by Playwright's debug mode)
-  return process.env.HEADED === 'true' || process.env.PWDEBUG === '1';
+  // Check multiple ways to detect headed mode:
+  // 1. HEADED env var explicitly set
+  // 2. PWDEBUG for debug mode
+  // 3. Check process.argv for --headed flag
+  const hasHeadedFlag = process.argv.includes('--headed');
+  return process.env.HEADED === 'true' || process.env.PWDEBUG === '1' || hasHeadedFlag;
 }
 
 /**

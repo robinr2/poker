@@ -47,13 +47,18 @@ HEADED=true npx playwright test e2e/your-test.spec.ts --headed
 
 ### 3. Test Results (Last Run)
 
-All 17 tests pass in headless mode (~6-7 minutes total):
+All 34 tests pass in headless mode (~10-11 minutes total):
 - `deterministic-winner.spec.ts` (3 tests) - Pocket Aces vs Kings, Flush vs Trips, 3-player Quads
 - `three-player-complete-hand.spec.ts` (1 test) - Full hand through all streets to showdown
 - `three-player-fold-to-win.spec.ts` (1 test) - Fold-to-win scenario with chip accounting
 - `fold-scenarios.spec.ts` (5 tests) - Various fold-to-win scenarios across all streets
 - `allin-scenarios.spec.ts` (3 tests) - All-in scenarios including heads-up showdowns
 - `elimination-continuation.spec.ts` (4 tests) - Player elimination, button rotation, consecutive hands
+- `check-raise.spec.ts` (3 tests) - Check-raise on flop/turn/river, fold to check-raise
+- `bb-option.spec.ts` (3 tests) - BB option to check or raise after limps
+- `min-raise-validation.spec.ts` (5 tests) - Min raise calculation, validation, all-in exception
+- `heads-up-blinds.spec.ts` (4 tests) - Heads-up blind structure, action order, transition
+- `player-rejoin.spec.ts` (2 tests) - Player disconnect mid-hand (2-player and 3-player scenarios)
 
 ## File Structure
 
@@ -69,6 +74,11 @@ e2e/
   fold-scenarios.spec.ts             # 5 tests - fold-to-win across all streets
   allin-scenarios.spec.ts            # 3 tests - all-in scenarios + showdowns
   elimination-continuation.spec.ts   # 4 tests - elimination + button rotation + consecutive hands
+  check-raise.spec.ts                # 3 tests - check-raise on flop/turn/river
+  bb-option.spec.ts                  # 3 tests - BB option to check/raise after limps
+  min-raise-validation.spec.ts       # 5 tests - min raise calculation + validation
+  heads-up-blinds.spec.ts            # 4 tests - heads-up blind structure + action order
+  player-rejoin.spec.ts              # 2 tests - player disconnect mid-hand (2-player + 3-player)
   README.md
   test-scenarios.md
 ```

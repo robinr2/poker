@@ -1,0 +1,160 @@
+{"time":"2025-11-25T20:36:06.826900324+01:00","level":"INFO","msg":"starting poker application","port":"8080","log_level":"info","test_mode":true}
+{"time":"2025-11-25T20:36:06.827025903+01:00","level":"INFO","msg":"test mode enabled - registered test endpoints"}
+{"time":"2025-11-25T20:36:06.827149535+01:00","level":"INFO","msg":"starting server","addr":"0.0.0.0:8080"}
+{"time":"2025-11-25T20:36:16.985226013+01:00","level":"INFO","msg":"table reset via test endpoint","tableId":"table-1"}
+{"time":"2025-11-25T20:36:17.275853377+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"::1","Port":36414,"Zone":""}}
+{"time":"2025-11-25T20:36:17.27592353+01:00","level":"INFO","msg":"client registered","total_clients":1}
+{"time":"2025-11-25T20:36:17.635341598+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"::1","Port":36442,"Zone":""}}
+{"time":"2025-11-25T20:36:17.635379181+01:00","level":"INFO","msg":"client registered","total_clients":2}
+{"time":"2025-11-25T20:36:18.000126845+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"::1","Port":36478,"Zone":""}}
+{"time":"2025-11-25T20:36:18.000205201+01:00","level":"INFO","msg":"client registered","total_clients":3}
+{"time":"2025-11-25T20:36:18.696227786+01:00","level":"INFO","msg":"session created","token":"12a656f7-3f17-4194-8c76-594b2aab1102","name":"Three_P1"}
+{"time":"2025-11-25T20:36:18.696293075+01:00","level":"INFO","msg":"session created via websocket","token":"12a656f7-3f17-4194-8c76-594b2aab1102","name":"Three_P1"}
+{"time":"2025-11-25T20:36:18.696349759+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-25T20:36:20.876405145+01:00","level":"INFO","msg":"session created","token":"b6256533-5831-4e9e-a886-51b9b53ebecd","name":"Three_P2"}
+{"time":"2025-11-25T20:36:20.876449554+01:00","level":"INFO","msg":"session created via websocket","token":"b6256533-5831-4e9e-a886-51b9b53ebecd","name":"Three_P2"}
+{"time":"2025-11-25T20:36:20.876468484+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-25T20:36:23.098788057+01:00","level":"INFO","msg":"session created","token":"10d26088-c14a-404e-b433-3a9e2c4b3e46","name":"Three_P3"}
+{"time":"2025-11-25T20:36:23.098831215+01:00","level":"INFO","msg":"session created via websocket","token":"10d26088-c14a-404e-b433-3a9e2c4b3e46","name":"Three_P3"}
+{"time":"2025-11-25T20:36:23.09886202+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-25T20:36:24.964253975+01:00","level":"INFO","msg":"session updated","token":"12a656f7-3f17-4194-8c76-594b2aab1102","tableID":"table-1","seatIndex":0}
+{"time":"2025-11-25T20:36:24.964330242+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-1","seatIndex":0}
+{"time":"2025-11-25T20:36:24.964477743+01:00","level":"INFO","msg":"DEBUG table_state payload","payload":"{\"tableId\":\"table-1\",\"seats\":[{\"index\":0,\"playerName\":\"Three_P1\",\"status\":\"waiting\",\"stack\":1000},{\"index\":1,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":2,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":3,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":4,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":5,\"playerName\":null,\"status\":\"empty\",\"stack\":null}],\"handInProgress\":false,\"canStartHand\":false}"}
+{"time":"2025-11-25T20:36:24.964498958+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-1"}
+{"time":"2025-11-25T20:36:24.964506214+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":1,"excludeClient":true}
+{"time":"2025-11-25T20:36:24.964528661+01:00","level":"INFO","msg":"player joined table","token":"12a656f7-3f17-4194-8c76-594b2aab1102","tableId":"table-1","seatIndex":0}
+{"time":"2025-11-25T20:36:27.347764427+01:00","level":"INFO","msg":"session updated","token":"b6256533-5831-4e9e-a886-51b9b53ebecd","tableID":"table-1","seatIndex":1}
+{"time":"2025-11-25T20:36:27.347816434+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-1","seatIndex":1}
+{"time":"2025-11-25T20:36:27.347862354+01:00","level":"INFO","msg":"DEBUG table_state payload","payload":"{\"tableId\":\"table-1\",\"seats\":[{\"index\":0,\"playerName\":\"Three_P1\",\"status\":\"waiting\",\"stack\":1000},{\"index\":1,\"playerName\":\"Three_P2\",\"status\":\"waiting\",\"stack\":1000},{\"index\":2,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":3,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":4,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":5,\"playerName\":null,\"status\":\"empty\",\"stack\":null}],\"handInProgress\":false,\"canStartHand\":true}"}
+{"time":"2025-11-25T20:36:27.347887429+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-1"}
+{"time":"2025-11-25T20:36:27.347897732+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":2,"excludeClient":true}
+{"time":"2025-11-25T20:36:27.347938306+01:00","level":"INFO","msg":"player joined table","token":"b6256533-5831-4e9e-a886-51b9b53ebecd","tableId":"table-1","seatIndex":1}
+{"time":"2025-11-25T20:36:29.724189583+01:00","level":"INFO","msg":"session updated","token":"10d26088-c14a-404e-b433-3a9e2c4b3e46","tableID":"table-1","seatIndex":2}
+{"time":"2025-11-25T20:36:29.724266112+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-1","seatIndex":2}
+{"time":"2025-11-25T20:36:29.724322975+01:00","level":"INFO","msg":"DEBUG table_state payload","payload":"{\"tableId\":\"table-1\",\"seats\":[{\"index\":0,\"playerName\":\"Three_P1\",\"status\":\"waiting\",\"stack\":1000},{\"index\":1,\"playerName\":\"Three_P2\",\"status\":\"waiting\",\"stack\":1000},{\"index\":2,\"playerName\":\"Three_P3\",\"status\":\"waiting\",\"stack\":1000},{\"index\":3,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":4,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":5,\"playerName\":null,\"status\":\"empty\",\"stack\":null}],\"handInProgress\":false,\"canStartHand\":true}"}
+{"time":"2025-11-25T20:36:29.72435253+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-1"}
+{"time":"2025-11-25T20:36:29.724365311+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":3,"excludeClient":true}
+{"time":"2025-11-25T20:36:29.724456043+01:00","level":"INFO","msg":"player joined table","token":"10d26088-c14a-404e-b433-3a9e2c4b3e46","tableId":"table-1","seatIndex":2}
+{"time":"2025-11-25T20:36:34.117074935+01:00","level":"INFO","msg":"broadcasting hand_started","tableID":"table-1","num_clients":3}
+{"time":"2025-11-25T20:36:34.11710405+01:00","level":"INFO","msg":"hand_started details","dealerSeat":0,"sbSeat":1,"bbSeat":2}
+{"time":"2025-11-25T20:36:34.11715157+01:00","level":"INFO","msg":"hand_started broadcast complete","tableID":"table-1","sentCount":3}
+{"time":"2025-11-25T20:36:34.11719927+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":3,"excludeClient":false}
+{"time":"2025-11-25T20:36:34.117280384+01:00","level":"INFO","msg":"hand started via temporary testing button","token":"12a656f7-3f17-4194-8c76-594b2aab1102","tableId":"table-1"}
+{"time":"2025-11-25T20:36:39.9071269+01:00","level":"INFO","msg":"session updated","token":"b6256533-5831-4e9e-a886-51b9b53ebecd","tableID":null,"seatIndex":null}
+{"time":"2025-11-25T20:36:39.907165894+01:00","level":"INFO","msg":"sending action request to current actor after disconnect","actorSeat":2,"tableId":"table-1"}
+{"time":"2025-11-25T20:36:39.907216125+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":2,"excludeClient":false}
+{"time":"2025-11-25T20:36:39.907287979+01:00","level":"INFO","msg":"player disconnected and seat cleared","token":"b6256533-5831-4e9e-a886-51b9b53ebecd","tableId":"table-1"}
+{"time":"2025-11-25T20:36:39.907302027+01:00","level":"INFO","msg":"client unregistered","total_clients":2}
+{"time":"2025-11-25T20:36:54.167302625+01:00","level":"INFO","msg":"showdown winner determined","tableID":"table-1","winner":0,"rank":1}
+{"time":"2025-11-25T20:36:54.167377511+01:00","level":"INFO","msg":"broadcasting showdown_result","tableID":"table-1","num_clients":2}
+{"time":"2025-11-25T20:36:54.167475459+01:00","level":"INFO","msg":"showdown_result broadcast complete","tableID":"table-1","sentCount":2}
+{"time":"2025-11-25T20:36:54.167482959+01:00","level":"INFO","msg":"broadcasting hand_complete","tableID":"table-1","num_clients":2}
+{"time":"2025-11-25T20:36:54.16750148+01:00","level":"INFO","msg":"hand_complete broadcast complete","tableID":"table-1","sentCount":2}
+{"time":"2025-11-25T20:36:54.167508268+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":2,"excludeClient":false}
+{"time":"2025-11-25T20:37:03.908336073+01:00","level":"INFO","msg":"session updated","token":"12a656f7-3f17-4194-8c76-594b2aab1102","tableID":null,"seatIndex":null}
+{"time":"2025-11-25T20:37:03.908387131+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":1,"excludeClient":false}
+{"time":"2025-11-25T20:37:03.90844515+01:00","level":"INFO","msg":"player disconnected and seat cleared","token":"12a656f7-3f17-4194-8c76-594b2aab1102","tableId":"table-1"}
+{"time":"2025-11-25T20:37:03.90846055+01:00","level":"INFO","msg":"client unregistered","total_clients":1}
+{"time":"2025-11-25T20:37:03.972102241+01:00","level":"INFO","msg":"session updated","token":"10d26088-c14a-404e-b433-3a9e2c4b3e46","tableID":null,"seatIndex":null}
+{"time":"2025-11-25T20:37:03.972180336+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":0,"excludeClient":false}
+{"time":"2025-11-25T20:37:03.972225087+01:00","level":"INFO","msg":"player disconnected and seat cleared","token":"10d26088-c14a-404e-b433-3a9e2c4b3e46","tableId":"table-1"}
+{"time":"2025-11-25T20:37:03.972246325+01:00","level":"INFO","msg":"client unregistered","total_clients":0}
+{"time":"2025-11-25T20:40:11.841740933+01:00","level":"INFO","msg":"table reset via test endpoint","tableId":"table-1"}
+{"time":"2025-11-25T20:40:11.939927974+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"::1","Port":44538,"Zone":""}}
+{"time":"2025-11-25T20:40:11.939979229+01:00","level":"INFO","msg":"client registered","total_clients":1}
+{"time":"2025-11-25T20:40:11.993486131+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"::1","Port":44560,"Zone":""}}
+{"time":"2025-11-25T20:40:11.99355769+01:00","level":"INFO","msg":"client registered","total_clients":2}
+{"time":"2025-11-25T20:40:12.073235164+01:00","level":"INFO","msg":"session created","token":"a3e9e223-6335-402c-9604-c24bf0bf5381","name":"Disconnect_P1"}
+{"time":"2025-11-25T20:40:12.073273684+01:00","level":"INFO","msg":"session created via websocket","token":"a3e9e223-6335-402c-9604-c24bf0bf5381","name":"Disconnect_P1"}
+{"time":"2025-11-25T20:40:12.07329649+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-25T20:40:13.641417264+01:00","level":"INFO","msg":"session created","token":"704f4aad-819f-483b-b252-3c4169e75788","name":"Disconnect_P2"}
+{"time":"2025-11-25T20:40:13.641457428+01:00","level":"INFO","msg":"session created via websocket","token":"704f4aad-819f-483b-b252-3c4169e75788","name":"Disconnect_P2"}
+{"time":"2025-11-25T20:40:13.641480986+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-25T20:40:15.205294528+01:00","level":"INFO","msg":"session updated","token":"a3e9e223-6335-402c-9604-c24bf0bf5381","tableID":"table-1","seatIndex":0}
+{"time":"2025-11-25T20:40:15.20532891+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-1","seatIndex":0}
+{"time":"2025-11-25T20:40:15.205349379+01:00","level":"INFO","msg":"DEBUG table_state payload","payload":"{\"tableId\":\"table-1\",\"seats\":[{\"index\":0,\"playerName\":\"Disconnect_P1\",\"status\":\"waiting\",\"stack\":1000},{\"index\":1,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":2,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":3,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":4,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":5,\"playerName\":null,\"status\":\"empty\",\"stack\":null}],\"handInProgress\":false,\"canStartHand\":false}"}
+{"time":"2025-11-25T20:40:15.205374168+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-1"}
+{"time":"2025-11-25T20:40:15.205379439+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":1,"excludeClient":true}
+{"time":"2025-11-25T20:40:15.205395423+01:00","level":"INFO","msg":"player joined table","token":"a3e9e223-6335-402c-9604-c24bf0bf5381","tableId":"table-1","seatIndex":0}
+{"time":"2025-11-25T20:40:17.27130833+01:00","level":"INFO","msg":"session updated","token":"704f4aad-819f-483b-b252-3c4169e75788","tableID":"table-1","seatIndex":1}
+{"time":"2025-11-25T20:40:17.271368774+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-1","seatIndex":1}
+{"time":"2025-11-25T20:40:17.271398098+01:00","level":"INFO","msg":"DEBUG table_state payload","payload":"{\"tableId\":\"table-1\",\"seats\":[{\"index\":0,\"playerName\":\"Disconnect_P1\",\"status\":\"waiting\",\"stack\":1000},{\"index\":1,\"playerName\":\"Disconnect_P2\",\"status\":\"waiting\",\"stack\":1000},{\"index\":2,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":3,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":4,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":5,\"playerName\":null,\"status\":\"empty\",\"stack\":null}],\"handInProgress\":false,\"canStartHand\":true}"}
+{"time":"2025-11-25T20:40:17.271423167+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-1"}
+{"time":"2025-11-25T20:40:17.271432285+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":2,"excludeClient":true}
+{"time":"2025-11-25T20:40:17.271486564+01:00","level":"INFO","msg":"player joined table","token":"704f4aad-819f-483b-b252-3c4169e75788","tableId":"table-1","seatIndex":1}
+{"time":"2025-11-25T20:40:21.33507411+01:00","level":"INFO","msg":"broadcasting hand_started","tableID":"table-1","num_clients":2}
+{"time":"2025-11-25T20:40:21.335113101+01:00","level":"INFO","msg":"hand_started details","dealerSeat":0,"sbSeat":0,"bbSeat":1}
+{"time":"2025-11-25T20:40:21.335151872+01:00","level":"INFO","msg":"hand_started broadcast complete","tableID":"table-1","sentCount":2}
+{"time":"2025-11-25T20:40:21.335190542+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":2,"excludeClient":false}
+{"time":"2025-11-25T20:40:21.335371766+01:00","level":"INFO","msg":"hand started via temporary testing button","token":"a3e9e223-6335-402c-9604-c24bf0bf5381","tableId":"table-1"}
+{"time":"2025-11-25T20:40:23.418801031+01:00","level":"INFO","msg":"session updated","token":"a3e9e223-6335-402c-9604-c24bf0bf5381","tableID":null,"seatIndex":null}
+{"time":"2025-11-25T20:40:23.41882901+01:00","level":"INFO","msg":"triggering showdown after disconnect (only one player remains)","token":"a3e9e223-6335-402c-9604-c24bf0bf5381","tableId":"table-1"}
+{"time":"2025-11-25T20:40:23.418834788+01:00","level":"INFO","msg":"early winner (all folded)","tableID":"table-1","winner":1}
+{"time":"2025-11-25T20:40:23.418846778+01:00","level":"INFO","msg":"broadcasting showdown_result","tableID":"table-1","num_clients":1}
+{"time":"2025-11-25T20:40:23.418869077+01:00","level":"INFO","msg":"showdown_result broadcast complete","tableID":"table-1","sentCount":1}
+{"time":"2025-11-25T20:40:23.418874452+01:00","level":"INFO","msg":"broadcasting hand_complete","tableID":"table-1","num_clients":1}
+{"time":"2025-11-25T20:40:23.418881013+01:00","level":"INFO","msg":"hand_complete broadcast complete","tableID":"table-1","sentCount":1}
+{"time":"2025-11-25T20:40:23.418885039+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":1,"excludeClient":false}
+{"time":"2025-11-25T20:40:23.418918667+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":1,"excludeClient":false}
+{"time":"2025-11-25T20:40:23.418941064+01:00","level":"INFO","msg":"player disconnected and seat cleared","token":"a3e9e223-6335-402c-9604-c24bf0bf5381","tableId":"table-1"}
+{"time":"2025-11-25T20:40:23.418958959+01:00","level":"INFO","msg":"client unregistered","total_clients":1}
+{"time":"2025-11-25T20:40:27.99738589+01:00","level":"INFO","msg":"session updated","token":"704f4aad-819f-483b-b252-3c4169e75788","tableID":null,"seatIndex":null}
+{"time":"2025-11-25T20:40:27.997413665+01:00","level":"INFO","msg":"table reset via test endpoint","tableId":"table-1"}
+{"time":"2025-11-25T20:40:28.057168492+01:00","level":"INFO","msg":"client unregistered","total_clients":0}
+{"time":"2025-11-25T20:40:28.140511167+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"::1","Port":35888,"Zone":""}}
+{"time":"2025-11-25T20:40:28.140561521+01:00","level":"INFO","msg":"client registered","total_clients":1}
+{"time":"2025-11-25T20:40:28.188806142+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"::1","Port":35914,"Zone":""}}
+{"time":"2025-11-25T20:40:28.188861505+01:00","level":"INFO","msg":"client registered","total_clients":2}
+{"time":"2025-11-25T20:40:28.236778856+01:00","level":"INFO","msg":"new websocket connection","remote_addr":{"IP":"::1","Port":35932,"Zone":""}}
+{"time":"2025-11-25T20:40:28.236820927+01:00","level":"INFO","msg":"client registered","total_clients":3}
+{"time":"2025-11-25T20:40:28.304106983+01:00","level":"INFO","msg":"session created","token":"f9108fcf-b9ef-42ab-8db7-16b555ac1cd2","name":"Three_P1"}
+{"time":"2025-11-25T20:40:28.304146654+01:00","level":"INFO","msg":"session created via websocket","token":"f9108fcf-b9ef-42ab-8db7-16b555ac1cd2","name":"Three_P1"}
+{"time":"2025-11-25T20:40:28.304219324+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-25T20:40:29.871164414+01:00","level":"INFO","msg":"session created","token":"a4259641-0a83-4138-8ef8-05340c822435","name":"Three_P2"}
+{"time":"2025-11-25T20:40:29.871206312+01:00","level":"INFO","msg":"session created via websocket","token":"a4259641-0a83-4138-8ef8-05340c822435","name":"Three_P2"}
+{"time":"2025-11-25T20:40:29.871229893+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-25T20:40:31.44050026+01:00","level":"INFO","msg":"session created","token":"063b591b-4ad0-4831-99c3-2956f81e375c","name":"Three_P3"}
+{"time":"2025-11-25T20:40:31.440527174+01:00","level":"INFO","msg":"session created via websocket","token":"063b591b-4ad0-4831-99c3-2956f81e375c","name":"Three_P3"}
+{"time":"2025-11-25T20:40:31.440542603+01:00","level":"INFO","msg":"lobby_state sent to client"}
+{"time":"2025-11-25T20:40:33.003621561+01:00","level":"INFO","msg":"session updated","token":"f9108fcf-b9ef-42ab-8db7-16b555ac1cd2","tableID":"table-1","seatIndex":0}
+{"time":"2025-11-25T20:40:33.003688595+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-1","seatIndex":0}
+{"time":"2025-11-25T20:40:33.003712708+01:00","level":"INFO","msg":"DEBUG table_state payload","payload":"{\"tableId\":\"table-1\",\"seats\":[{\"index\":0,\"playerName\":\"Three_P1\",\"status\":\"waiting\",\"stack\":1000},{\"index\":1,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":2,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":3,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":4,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":5,\"playerName\":null,\"status\":\"empty\",\"stack\":null}],\"handInProgress\":false,\"canStartHand\":false}"}
+{"time":"2025-11-25T20:40:33.003732349+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-1"}
+{"time":"2025-11-25T20:40:33.003739774+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":1,"excludeClient":true}
+{"time":"2025-11-25T20:40:33.003765306+01:00","level":"INFO","msg":"player joined table","token":"f9108fcf-b9ef-42ab-8db7-16b555ac1cd2","tableId":"table-1","seatIndex":0}
+{"time":"2025-11-25T20:40:35.073424977+01:00","level":"INFO","msg":"session updated","token":"a4259641-0a83-4138-8ef8-05340c822435","tableID":"table-1","seatIndex":1}
+{"time":"2025-11-25T20:40:35.073498199+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-1","seatIndex":1}
+{"time":"2025-11-25T20:40:35.073532145+01:00","level":"INFO","msg":"DEBUG table_state payload","payload":"{\"tableId\":\"table-1\",\"seats\":[{\"index\":0,\"playerName\":\"Three_P1\",\"status\":\"waiting\",\"stack\":1000},{\"index\":1,\"playerName\":\"Three_P2\",\"status\":\"waiting\",\"stack\":1000},{\"index\":2,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":3,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":4,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":5,\"playerName\":null,\"status\":\"empty\",\"stack\":null}],\"handInProgress\":false,\"canStartHand\":true}"}
+{"time":"2025-11-25T20:40:35.073557207+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-1"}
+{"time":"2025-11-25T20:40:35.073568098+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":2,"excludeClient":true}
+{"time":"2025-11-25T20:40:35.073624498+01:00","level":"INFO","msg":"player joined table","token":"a4259641-0a83-4138-8ef8-05340c822435","tableId":"table-1","seatIndex":1}
+{"time":"2025-11-25T20:40:37.116695466+01:00","level":"INFO","msg":"session updated","token":"063b591b-4ad0-4831-99c3-2956f81e375c","tableID":"table-1","seatIndex":2}
+{"time":"2025-11-25T20:40:37.116720268+01:00","level":"INFO","msg":"seat_assigned sent to client","tableId":"table-1","seatIndex":2}
+{"time":"2025-11-25T20:40:37.116734878+01:00","level":"INFO","msg":"DEBUG table_state payload","payload":"{\"tableId\":\"table-1\",\"seats\":[{\"index\":0,\"playerName\":\"Three_P1\",\"status\":\"waiting\",\"stack\":1000},{\"index\":1,\"playerName\":\"Three_P2\",\"status\":\"waiting\",\"stack\":1000},{\"index\":2,\"playerName\":\"Three_P3\",\"status\":\"waiting\",\"stack\":1000},{\"index\":3,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":4,\"playerName\":null,\"status\":\"empty\",\"stack\":null},{\"index\":5,\"playerName\":null,\"status\":\"empty\",\"stack\":null}],\"handInProgress\":false,\"canStartHand\":true}"}
+{"time":"2025-11-25T20:40:37.116743985+01:00","level":"INFO","msg":"table_state sent to client","tableId":"table-1"}
+{"time":"2025-11-25T20:40:37.116748739+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":3,"excludeClient":true}
+{"time":"2025-11-25T20:40:37.116769114+01:00","level":"INFO","msg":"player joined table","token":"063b591b-4ad0-4831-99c3-2956f81e375c","tableId":"table-1","seatIndex":2}
+{"time":"2025-11-25T20:40:41.171688272+01:00","level":"INFO","msg":"broadcasting hand_started","tableID":"table-1","num_clients":3}
+{"time":"2025-11-25T20:40:41.171712844+01:00","level":"INFO","msg":"hand_started details","dealerSeat":0,"sbSeat":1,"bbSeat":2}
+{"time":"2025-11-25T20:40:41.171731576+01:00","level":"INFO","msg":"hand_started broadcast complete","tableID":"table-1","sentCount":3}
+{"time":"2025-11-25T20:40:41.171756621+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":3,"excludeClient":false}
+{"time":"2025-11-25T20:40:41.171815224+01:00","level":"INFO","msg":"hand started via temporary testing button","token":"f9108fcf-b9ef-42ab-8db7-16b555ac1cd2","tableId":"table-1"}
+{"time":"2025-11-25T20:40:46.322313656+01:00","level":"INFO","msg":"session updated","token":"a4259641-0a83-4138-8ef8-05340c822435","tableID":null,"seatIndex":null}
+{"time":"2025-11-25T20:40:46.322345286+01:00","level":"INFO","msg":"sending action request to current actor after disconnect","actorSeat":2,"tableId":"table-1"}
+{"time":"2025-11-25T20:40:46.322373588+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":2,"excludeClient":false}
+{"time":"2025-11-25T20:40:46.322442226+01:00","level":"INFO","msg":"player disconnected and seat cleared","token":"a4259641-0a83-4138-8ef8-05340c822435","tableId":"table-1"}
+{"time":"2025-11-25T20:40:46.322455165+01:00","level":"INFO","msg":"client unregistered","total_clients":2}
+{"time":"2025-11-25T20:40:58.699098383+01:00","level":"INFO","msg":"showdown winner determined","tableID":"table-1","winner":2,"rank":3}
+{"time":"2025-11-25T20:40:58.69951189+01:00","level":"INFO","msg":"broadcasting showdown_result","tableID":"table-1","num_clients":2}
+{"time":"2025-11-25T20:40:58.699530201+01:00","level":"INFO","msg":"showdown_result broadcast complete","tableID":"table-1","sentCount":2}
+{"time":"2025-11-25T20:40:58.699533515+01:00","level":"INFO","msg":"broadcasting hand_complete","tableID":"table-1","num_clients":2}
+{"time":"2025-11-25T20:40:58.699537526+01:00","level":"INFO","msg":"hand_complete broadcast complete","tableID":"table-1","sentCount":2}
+{"time":"2025-11-25T20:40:58.699540963+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":2,"excludeClient":false}
+{"time":"2025-11-25T20:41:07.47300862+01:00","level":"INFO","msg":"session updated","token":"f9108fcf-b9ef-42ab-8db7-16b555ac1cd2","tableID":null,"seatIndex":null}
+{"time":"2025-11-25T20:41:07.473052162+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":1,"excludeClient":false}
+{"time":"2025-11-25T20:41:07.473098191+01:00","level":"INFO","msg":"player disconnected and seat cleared","token":"f9108fcf-b9ef-42ab-8db7-16b555ac1cd2","tableId":"table-1"}
+{"time":"2025-11-25T20:41:07.473105796+01:00","level":"INFO","msg":"client unregistered","total_clients":1}
+{"time":"2025-11-25T20:41:07.537866382+01:00","level":"INFO","msg":"session updated","token":"063b591b-4ad0-4831-99c3-2956f81e375c","tableID":null,"seatIndex":null}
+{"time":"2025-11-25T20:41:07.537893389+01:00","level":"INFO","msg":"broadcastTableState","tableID":"table-1","num_clients":0,"excludeClient":false}
+{"time":"2025-11-25T20:41:07.537926548+01:00","level":"INFO","msg":"player disconnected and seat cleared","token":"063b591b-4ad0-4831-99c3-2956f81e375c","tableId":"table-1"}
+{"time":"2025-11-25T20:41:07.537934699+01:00","level":"INFO","msg":"client unregistered","total_clients":0}

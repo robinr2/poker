@@ -490,6 +490,8 @@ func (c *Client) SendSeatAssigned(tableID string, seatIndex int, status string, 
 }
 
 // HandleLeaveTable processes a leave_table message and removes player from their seat
+// If a hand is in progress, the player is treated as folded.
+// If only one player remains after leaving, showdown is triggered (early winner).
 func (c *Client) HandleLeaveTable(sm *SessionManager, server *Server, logger *slog.Logger, payload []byte) error {
 	// Verify session exists
 	session, err := sm.GetSession(c.Token)
@@ -518,7 +520,10 @@ func (c *Client) HandleLeaveTable(sm *SessionManager, server *Server, logger *sl
 		return fmt.Errorf("table not found")
 	}
 
-	// Clear the seat
+	// Check if a hand is in progress before clearing seat
+	handInProgress := table.CurrentHand != nil
+
+	// Clear the seat (this also marks the player as folded if hand is active)
 	err = table.ClearSeat(&c.Token)
 	if err != nil {
 		return fmt.Errorf("failed to clear seat: %w", err)
@@ -534,6 +539,66 @@ func (c *Client) HandleLeaveTable(sm *SessionManager, server *Server, logger *sl
 	err = c.SendSeatCleared(logger)
 	if err != nil {
 		return fmt.Errorf("failed to send seat_cleared: %w", err)
+	}
+
+	// If a hand was in progress, handle game continuation
+	if handInProgress && table.CurrentHand != nil {
+		// Count remaining non-folded players
+		nonFoldedCount := 0
+		table.mu.RLock()
+		for i := 0; i < 6; i++ {
+			if table.Seats[i].Status == "active" && !table.CurrentHand.FoldedPlayers[i] {
+				nonFoldedCount++
+			}
+		}
+		table.mu.RUnlock()
+
+		// If only one player remains, trigger showdown (early winner)
+		if nonFoldedCount <= 1 {
+			logger.Info("triggering showdown after leave_table (only one player remains)", "token", c.Token, "tableId", table.ID)
+			table.HandleShowdown()
+		} else {
+			// Multiple players remain - check if betting round is complete
+			table.mu.Lock()
+			if table.CurrentHand.IsBettingRoundComplete(table.Seats) {
+				logger.Info("betting round complete after leave_table, advancing street", "tableId", table.ID)
+				currentStreet := table.CurrentHand.Street
+				table.mu.Unlock()
+
+				if currentStreet == "river" {
+					// River complete - go to showdown
+					table.HandleShowdown()
+				} else {
+					// Advance to next street
+					err = table.AdvanceToNextStreetWithBroadcast()
+					if err != nil {
+						logger.Warn("failed to advance street after leave_table", "error", err)
+					}
+				}
+			} else {
+				// Betting round not complete - ensure current actor has action
+				if table.CurrentHand.CurrentActor != nil {
+					actorSeat := *table.CurrentHand.CurrentActor
+					logger.Info("sending action request to current actor after leave_table", "actorSeat", actorSeat, "tableId", table.ID)
+
+					// Get valid actions for the current actor
+					validActions := table.CurrentHand.GetValidActions(actorSeat, table.Seats[actorSeat].Stack, table.Seats)
+					callAmount := table.CurrentHand.GetCallAmount(actorSeat)
+					currentBet := table.CurrentHand.CurrentBet
+					displayPot := table.CurrentHand.GetDisplayPot()
+
+					table.mu.Unlock()
+
+					// Broadcast action request to prompt the actor
+					err = server.BroadcastActionRequest(table.ID, actorSeat, validActions, callAmount, currentBet, displayPot)
+					if err != nil {
+						logger.Warn("failed to broadcast action_request after leave_table", "error", err)
+					}
+				} else {
+					table.mu.Unlock()
+				}
+			}
+		}
 	}
 
 	// Broadcast table_state to remaining players at the table BEFORE broadcasting lobby_state

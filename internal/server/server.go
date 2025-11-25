@@ -289,6 +289,9 @@ func (s *Server) FindPlayerSeat(token *string) *Seat {
 }
 
 // HandleDisconnect handles client disconnect by clearing their seat if they were seated
+// If a hand is in progress, the player is treated as folded.
+// If only one player remains after the disconnect, showdown is triggered (early winner).
+// If multiple players remain, the game continues: either advance the street or prompt next action.
 func (s *Server) HandleDisconnect(token string) error {
 	// Find player's seat
 	playerSeat := s.FindPlayerSeat(&token)
@@ -316,7 +319,10 @@ func (s *Server) HandleDisconnect(token string) error {
 		return nil
 	}
 
-	// Clear the seat
+	// Check if a hand is in progress before clearing seat
+	handInProgress := table.CurrentHand != nil
+
+	// Clear the seat (this also marks the player as folded if hand is active)
 	err := table.ClearSeat(&token)
 	if err != nil {
 		s.logger.Warn("failed to clear seat on disconnect", "token", token, "error", err)
@@ -327,6 +333,67 @@ func (s *Server) HandleDisconnect(token string) error {
 	_, err = s.sessionManager.UpdateSession(token, nil, nil)
 	if err != nil {
 		s.logger.Warn("failed to update session on disconnect", "token", token, "error", err)
+	}
+
+	// If a hand was in progress, handle game continuation
+	if handInProgress && table.CurrentHand != nil {
+		// Count remaining non-folded players
+		nonFoldedCount := 0
+		table.mu.RLock()
+		for i := 0; i < 6; i++ {
+			if table.Seats[i].Status == "active" && !table.CurrentHand.FoldedPlayers[i] {
+				nonFoldedCount++
+			}
+		}
+		table.mu.RUnlock()
+
+		// If only one player remains, trigger showdown (early winner)
+		if nonFoldedCount <= 1 {
+			s.logger.Info("triggering showdown after disconnect (only one player remains)", "token", token, "tableId", table.ID)
+			table.HandleShowdown()
+		} else {
+			// Multiple players remain - check if betting round is complete
+			table.mu.Lock()
+			if table.CurrentHand.IsBettingRoundComplete(table.Seats) {
+				s.logger.Info("betting round complete after disconnect, advancing street", "tableId", table.ID)
+				currentStreet := table.CurrentHand.Street
+				table.mu.Unlock()
+
+				if currentStreet == "river" {
+					// River complete - go to showdown
+					table.HandleShowdown()
+				} else {
+					// Advance to next street
+					err = table.AdvanceToNextStreetWithBroadcast()
+					if err != nil {
+						s.logger.Warn("failed to advance street after disconnect", "error", err)
+					}
+				}
+			} else {
+				// Betting round not complete - ensure current actor has action
+				// If there's a current actor, send them an action request
+				if table.CurrentHand.CurrentActor != nil {
+					actorSeat := *table.CurrentHand.CurrentActor
+					s.logger.Info("sending action request to current actor after disconnect", "actorSeat", actorSeat, "tableId", table.ID)
+
+					// Get valid actions for the current actor
+					validActions := table.CurrentHand.GetValidActions(actorSeat, table.Seats[actorSeat].Stack, table.Seats)
+					callAmount := table.CurrentHand.GetCallAmount(actorSeat)
+					currentBet := table.CurrentHand.CurrentBet
+					displayPot := table.CurrentHand.GetDisplayPot()
+
+					table.mu.Unlock()
+
+					// Broadcast action request to prompt the actor
+					err = s.BroadcastActionRequest(table.ID, actorSeat, validActions, callAmount, currentBet, displayPot)
+					if err != nil {
+						s.logger.Warn("failed to broadcast action_request after disconnect", "error", err)
+					}
+				} else {
+					table.mu.Unlock()
+				}
+			}
+		}
 	}
 
 	// Broadcast table_state to remaining players at the table BEFORE broadcasting lobby_state

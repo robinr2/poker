@@ -52,20 +52,50 @@
 - Button rotation verified to skip eliminated player's seat
 - **Tests:** Player elimination, continuation with fewer players, chip conservation, button rotation
 
+### 7. Check-Raise Scenarios
+**File:** `check-raise.spec.ts`
+- 3-player check-raise on flop - action reopens after raise
+- 2-player check-raise on turn
+- 2-player check-raise on river with fold (bluff scenario)
+- **Tests:** Check-raise action flow, action reopening after raise, fold to check-raise
+
+### 8. Big Blind Option Tests
+**File:** `bb-option.spec.ts`
+- BB can check after all players limp (BB option)
+- BB can raise after all players limp (BB option raise)
+- BB has no option after someone raises (must call/fold/re-raise)
+- **Tests:** BB option flag, action availability (check/raise) after limps, no check after raise
+
+### 9. Min Raise Validation
+**File:** `min-raise-validation.spec.ts`
+- Min raise equals 2x BB preflop (first raise)
+- Min re-raise equals previous raise + last raise increment
+- Raise button disabled when amount below minimum
+- Min raise resets to BB on new street
+- All-in below min raise is allowed (special exception)
+- **Tests:** Min raise calculation, preflop/postflop validation, all-in exception
+
+### 10. Heads-Up Blind Structure
+**File:** `heads-up-blinds.spec.ts`
+- Dealer posts SB in heads-up (dealer = SB, other = BB)
+- Dealer/SB acts first preflop in heads-up
+- BB acts first on flop (postflop action order)
+- Correct blinds when going from 3 to 2 players
+- **Tests:** Heads-up blind posting, action order, transition from 3+ players
+
+### 11. Player Disconnect/Rejoin
+**File:** `player-rejoin.spec.ts`
+- Session token preserves player identity (no re-login needed)
+- Disconnecting loses table seat (player returns to lobby)
+- Player can manually rejoin table after disconnect
+- Remaining player continues after opponent disconnects
+- **Tests:** Session persistence, seat loss on disconnect, manual rejoin flow
+
 ---
 
 ## To Implement
 
-### 7. Check-Raise Scenario
-**File:** `three-player-check-raise.spec.ts`
-- 3 players see flop
-- Player 1 checks, Player 2 bets, Player 3 folds
-- Player 1 check-raises
-- Player 2 calls
-- Play to showdown
-- **Tests:** Check-raise action flow, action reopening after raise
-
-### 8. All-In with Side Pots (BLOCKED)
+### 12. All-In with Side Pots (BLOCKED)
 **File:** `three-player-allin-sidepot.spec.ts`
 - Player 1 has 500 chips, Player 2 has 1000 chips, Player 3 has 200 chips
 - Player 3 goes all-in preflop (200)
@@ -76,7 +106,7 @@
 - **Tests:** All-in mechanics, side pot creation/distribution, short stack handling
 - **Status:** Blocked until side pot feature is implemented
 
-### 9. Player Disconnect/Rejoin Mid-Hand
+### 12. Player Disconnect/Rejoin Mid-Hand
 **File:** `three-player-rejoin.spec.ts`
 - 3 players in hand
 - Player 2 closes browser mid-hand
@@ -84,12 +114,25 @@
 - Verify they see correct game state and can continue playing
 - **Tests:** Identity persistence, mid-game state sync, reconnection handling
 
-### 10. Heads-Up After Elimination (COVERED)
-**File:** `elimination-continuation.spec.ts`
-- Start with 3 players
-- One player loses all chips and is eliminated
-- Verify game continues heads-up with 2 players
-- Play another hand heads-up
-- Second elimination results in game ending (1 player can't start new hand)
-- **Tests:** Player elimination, seat management, heads-up blind structure
-- **Status:** Fully covered by elimination-continuation tests
+### 13. Split Pot / Tie at Showdown
+**File:** `split-pot.spec.ts`
+- 2 players with identical hands (e.g., both have same straight from board)
+- Pot splits evenly between winners
+- Odd chip handling (101 chips split = 51/50)
+- 3-way tie split verification
+- **Tests:** Tie detection, even split, odd chip remainder handling
+- **Backend:** `table.go:169`, `hand_evaluator.go`
+
+### 14. Short Stack Posts Partial Blind
+**File:** `short-stack-blind.spec.ts`
+- Player has less chips than BB (e.g., 15 chips, BB is 20)
+- Player posts all 15 as their blind (all-in)
+- Player is still dealt in and can win main pot
+- **Tests:** Partial blind posting, all-in on blind, pot eligibility
+
+### 15. Multiple Streets with Raises
+**File:** `multi-street-raises.spec.ts`
+- Betting action with raises on flop, turn, AND river
+- Pot accumulates correctly across all streets
+- Street bets reset each street but pot grows
+- **Tests:** Multi-street pot accumulation, bet reset per street
