@@ -197,7 +197,7 @@ test.describe('Three Player Complete Hand', () => {
 
   // Window positioning for 3 players
   const windowWidth = 950;
-  const windowHeight = 1000;
+  const windowHeight = 1200;
   const positions = [
     { x: 0, y: 40 },      // Player 1 - left
     { x: 950, y: 40 },    // Player 2 - middle
@@ -208,7 +208,7 @@ test.describe('Three Player Complete Hand', () => {
     browser = await chromium.launch({
       headless: false,
       slowMo: 300,
-      args: ['--window-size=950,1000'],
+      args: ['--window-size=950,1200'],
     });
   });
 
