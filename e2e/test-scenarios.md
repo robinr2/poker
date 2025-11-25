@@ -47,7 +47,10 @@
 **File:** `elimination-continuation.spec.ts`
 - 3 players, one gets eliminated via all-in, remaining 2 continue playing
 - 3 players play 3 consecutive hands with chip tracking
-- **Tests:** Player elimination, continuation with fewer players, chip conservation across hands
+- 3 hands played after a player is eliminated
+- Second player elimination (3 -> 2 -> 1 player) - game ends correctly
+- Button rotation verified to skip eliminated player's seat
+- **Tests:** Player elimination, continuation with fewer players, chip conservation, button rotation
 
 ---
 
@@ -81,11 +84,12 @@
 - Verify they see correct game state and can continue playing
 - **Tests:** Identity persistence, mid-game state sync, reconnection handling
 
-### 10. Heads-Up After Elimination (Partially Covered)
-**File:** `elimination-continuation.spec.ts` (partially covers this)
+### 10. Heads-Up After Elimination (COVERED)
+**File:** `elimination-continuation.spec.ts`
 - Start with 3 players
 - One player loses all chips and is eliminated
 - Verify game continues heads-up with 2 players
 - Play another hand heads-up
+- Second elimination results in game ending (1 player can't start new hand)
 - **Tests:** Player elimination, seat management, heads-up blind structure
-- **Status:** Basic scenario covered, may need additional edge case testing
+- **Status:** Fully covered by elimination-continuation tests

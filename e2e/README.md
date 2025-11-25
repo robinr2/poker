@@ -21,31 +21,39 @@ Test mode enables special API endpoints:
 
 ### 2. Run Tests
 
-**Note:** Running the full test suite takes 4-5 minutes. Prefer running specific test files during development. Only run the full suite when verifying a fix or feature that could affect multiple areas, or before merging.
+**Note:** Running the full test suite takes 6-7 minutes. Prefer running specific test files during development. Only run the full suite when verifying a fix or feature that could affect multiple areas, or before merging.
 
 ```bash
 # Run a specific test file (PREFERRED for development)
 npx playwright test e2e/deterministic-winner.spec.ts
 
-# Run all e2e tests (headless - takes 4-5 minutes)
+# Run a specific test by name
+npx playwright test e2e/elimination-continuation.spec.ts -g "second player elimination"
+
+# Run all e2e tests (headless - takes 6-7 minutes)
 npx playwright test e2e/
 
 # Run with visible browser (headed mode - good for debugging)
-npx playwright test e2e/ --headed
+HEADED=true npx playwright test e2e/elimination-continuation.spec.ts --headed
 
 # Run with cleaner output
 npx playwright test e2e/ --reporter=line
 ```
 
+**Important:** To see browser windows in headed mode, you must set `HEADED=true`:
+```bash
+HEADED=true npx playwright test e2e/your-test.spec.ts --headed
+```
+
 ### 3. Test Results (Last Run)
 
-All 15 tests pass in headless mode (~5-6 minutes total):
+All 17 tests pass in headless mode (~6-7 minutes total):
 - `deterministic-winner.spec.ts` (3 tests) - Pocket Aces vs Kings, Flush vs Trips, 3-player Quads
 - `three-player-complete-hand.spec.ts` (1 test) - Full hand through all streets to showdown
 - `three-player-fold-to-win.spec.ts` (1 test) - Fold-to-win scenario with chip accounting
 - `fold-scenarios.spec.ts` (5 tests) - Various fold-to-win scenarios across all streets
 - `allin-scenarios.spec.ts` (3 tests) - All-in scenarios including heads-up showdowns
-- `elimination-continuation.spec.ts` (2 tests) - Player elimination and multiple consecutive hands
+- `elimination-continuation.spec.ts` (4 tests) - Player elimination, button rotation, consecutive hands
 
 ## File Structure
 
@@ -60,7 +68,7 @@ e2e/
   three-player-fold-to-win.spec.ts   # 1 test - fold-to-win + chip accounting
   fold-scenarios.spec.ts             # 5 tests - fold-to-win across all streets
   allin-scenarios.spec.ts            # 3 tests - all-in scenarios + showdowns
-  elimination-continuation.spec.ts   # 2 tests - elimination + consecutive hands
+  elimination-continuation.spec.ts   # 4 tests - elimination + button rotation + consecutive hands
   README.md
   test-scenarios.md
 ```
