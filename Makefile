@@ -1,11 +1,20 @@
 .PHONY: dev-backend dev-frontend build-frontend build-backend build test clean install-tools help
 .PHONY: docker-dev docker-down docker-build docker-test docker-clean docker-logs
 .PHONY: lint lint-fix format format-check
+.PHONY: test-backend test-frontend test-e2e test-e2e-headed test-integration
 
 # Default target
 help:
 	@echo "Poker Application - Available Targets"
 	@echo "======================================"
+	@echo ""
+	@echo "Testing:"
+	@echo "  test             - Run all unit tests (Go + Frontend)"
+	@echo "  test-backend     - Run backend unit tests (Go)"
+	@echo "  test-frontend    - Run frontend unit tests (vitest)"
+	@echo "  test-e2e         - Run E2E tests in headless mode"
+	@echo "  test-e2e-headed  - Run E2E tests in headed mode (visible browser)"
+	@echo "  test-integration - Run integration tests"
 	@echo ""
 	@echo "Local Development:"
 	@echo "  dev-backend      - Run backend with 'go run cmd/server/main.go'"
@@ -13,7 +22,6 @@ help:
 	@echo "  build-frontend   - Build frontend 'cd frontend && npm run build'"
 	@echo "  build-backend    - Build Go binary to bin/poker"
 	@echo "  build            - Build both frontend and backend"
-	@echo "  test             - Run all tests (Go + Frontend)"
 	@echo "  lint             - Run all linters (Go + Frontend)"
 	@echo "  lint-fix         - Fix ESLint issues in frontend"
 	@echo "  format           - Format code with Prettier"
@@ -48,10 +56,34 @@ build-backend: bin
 # Build both frontend and backend
 build: build-frontend build-backend
 
-# Run all tests
+# ============================================
+# Testing Targets
+# ============================================
+
+# Run all unit tests (Go + Frontend)
 test:
 	go test ./internal/... -v
 	cd frontend && npm test
+
+# Run backend unit tests only
+test-backend:
+	go test ./internal/... -v
+
+# Run frontend unit tests only (vitest)
+test-frontend:
+	cd frontend && npm test
+
+# Run E2E tests in headless mode (default)
+test-e2e:
+	npx playwright test
+
+# Run E2E tests in headed mode (visible browser)
+test-e2e-headed:
+	HEADED=true npx playwright test --headed
+
+# Run integration tests
+test-integration:
+	./scripts/test-integration.sh
 
 # Run all linters
 lint:
